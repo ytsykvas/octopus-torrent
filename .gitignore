@@ -8,6 +8,8 @@
 
 # Залежності frontend (відтворюються з lockfile)
 node_modules/
+# Кеш Wails CLI: контрольна сума package.json для пропуску npm install
+/frontend/package.json.md5
 
 # Робочі бази SQLite: бібліотека застосунку, piece completion рушія, журнали WAL
 *.db

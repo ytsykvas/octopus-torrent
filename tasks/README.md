@@ -147,7 +147,7 @@ flowchart TD
 |---|---|---|---|---|---|
 | [001](001-scope-and-decision-register.md) | Зафіксувати вихідний обсяг і відкриті рішення | P0 | — | AI-06, DATA-01, QA-07 | `done` |
 | [002](002-repository-and-agent-entrypoint.md) | Підготувати Git-репозиторій і точку входу для АІ | P0 | [001](001-scope-and-decision-register.md) | AI-01, AI-02, AI-03, AI-04, AI-09, QA-01, QA-03, QA-04, QA-07, QA-08 | `done` |
-| [003](003-wails-macos-build-spike.md) | Зібрати першу Wails .app на власному Mac | P1 | [002](002-repository-and-agent-entrypoint.md) | REL-01, REL-02, STACK-05, UI-04, AI-07, QA-01, QA-02, QA-05 | `planned` |
+| [003](003-wails-macos-build-spike.md) | Зібрати першу Wails .app на власному Mac | P1 | [002](002-repository-and-agent-entrypoint.md) | REL-01, REL-02, STACK-05, UI-04, AI-07, QA-01, QA-02, QA-05 | `in_progress` |
 | [004](004-reproducible-check-commands.md) | Зафіксувати команди збірки й локальних перевірок | P1 | [003](003-wails-macos-build-spike.md) | AI-07, AI-08, QA-01, QA-02, QA-05 | `planned` |
 | [005](005-domain-dto-and-bridge-contract.md) | Описати власні Go–TS контракти й помилки | P1 | [003](003-wails-macos-build-spike.md) | AI-05, AI-02, STACK-01, STACK-02, STACK-03 | `planned` |
 | [006](006-controlled-torrent-fixtures.md) | Створити контрольовані торренти й локальний swarm | P1 | [004](004-reproducible-check-commands.md) | AI-08, TR-02 | `planned` |

@@ -4,20 +4,17 @@
 
 ## Поточний стан
 
-**Етап P0 завершено: є специфікації, інтерактивний HTML-макет, план задач і реєстр рішень. Коду застосунку ще немає** — жодного Go-, TypeScript- чи Wails-файла, жодної робочої команди збірки чи тестів.
+**Етап P1 розпочато.** Є специфікації, макет, план, реєстр рішень і **перша мінімальна `.app`** (задача 003): вікно Wails з React-кнопкою, що викликає Go-метод. Продуктових функцій (торренти, бібліотека) ще немає.
 
 | Що | Стан |
 |---|---|
-| Вимоги, концепт, архітектура, дослідження рушія | готові, див. нижче |
-| Задачі [001](tasks/001-scope-and-decision-register.md), [002](tasks/002-repository-and-agent-entrypoint.md) | `done` |
-| **Наступна задача** | [003 — перша Wails `.app` на власному Mac](tasks/003-wails-macos-build-spike.md) (потрібно встановити Go і Wails CLI — їх ще немає на Mac, див. [baseline §5](docs/decisions/project-baseline.md#5-середовище-розробки)) |
-| Покриття коду | `not_applicable` — виконуваного коду немає |
-
-Актуальні статуси всіх 68 задач — у [навігації плану](tasks/README.md#навігація-всіх-задач).
+| Задачі [001](tasks/001-scope-and-decision-register.md), [002](tasks/002-repository-and-agent-entrypoint.md), [003](tasks/003-wails-macos-build-spike.md) | див. [навігацію](tasks/README.md#навігація-всіх-задач) |
+| **Наступні задачі** | [004 — єдина команда перевірок](tasks/004-reproducible-check-commands.md), [005 — DTO і bridge-контракт](tasks/005-domain-dto-and-bridge-contract.md) |
+| Покриття власного коду | 100% Go (оператори, сирі лічильники) і 100% TS (4 метрики на файл) — [звіт 003](docs/verification/003-wails-macos-build-spike.md) |
 
 ## Стек
 
-React + TypeScript (strict) і Vite · Wails v2 (системний WebView) · Go · [anacrolix/torrent](https://github.com/anacrolix/torrent) · SQLite через repository. Точні версії ще не зафіксовані — це рішення O2 задач 003/004/007.
+React 19 + TypeScript 7 (strict) і Vite 8 · Wails v2.16.0 (системний WebView) · Go 1.27.2 · [anacrolix/torrent](https://github.com/anacrolix/torrent) (версію фіксує 007) · SQLite через repository (драйвер — 008). Точні версії, **політика оновлення** (остання стабільна версія не молодша за 14 днів; patch-релізи Go/Node — одразу) і причини — [toolchain-versions](docs/decisions/toolchain-versions.md); ціль macOS і bundle ID — [macos-target](docs/decisions/macos-target.md).
 
 ## Документи
 
@@ -41,44 +38,72 @@ React + TypeScript (strict) і Vite · Wails v2 (системний WebView) · 
 
 ```text
 README.md, AGENTS.md          точка входу й правила агента
+CLAUDE.md                     вхід для Claude Code: імпортує AGENTS.md, команди, загальна картина
 PROJECT_REQUIREMENTS.md, PRODUCT_CONCEPT.md, APPLICATION_ARCHITECTURE.md,
 ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md, MOCKUP.html   специфікації й макет
+main.go, main_test.go         точка входу Wails: вбудований frontend/dist, run(start, stderr)
+go.mod, go.sum                Go 1.27.2, Wails v2.16.0 (бібліотека + CLI як go tool)
+wails.json                    конфігурація Wails (npm ci, npm run build)
+internal/app/                 Wails facade (AppAPI): GetRuntimeInfo
+frontend/src/bridge/          власна обгортка згенерованих bindings
+frontend/src/features/        UI за функціями (зараз runtime-check)
+frontend/src/test/            налаштування тестів
+frontend/wailsjs/             bindings, згенеровані Wails — не редагувати вручну
+frontend/package.json, package-lock.json, vite.config.ts, tsconfig.json
+build/darwin/, build/appicon.png   Info.plist (bundle ID, мінімальна macOS), іконка
 tasks/                        план і 68 numbered tasks
-docs/engineering/             інженерна політика
-docs/decisions/               рішення (ADR) і шаблон _ADR_TEMPLATE.md
-docs/verification/            докази виконання задач
-docs/features/                документація фіч (поки лише шаблон)
+docs/                         політика, рішення (ADR), докази, фічі
 archive/                      історичні матеріали, лише читання
 ```
 
-**Ще не створено** — запланована структура з [архітектури §3](APPLICATION_ARCHITECTURE.md#3-структура-репозиторію-для-ai-first); фактичні шляхи підтвердить 003:
+**Ще не створено** — з [архітектури §3](APPLICATION_ARCHITECTURE.md#3-структура-репозиторію-для-ai-first): `internal/torrentengine/`, `internal/library/`, `internal/files/`, `internal/automation/`, `internal/platform/`, `internal/diagnostics/`, `frontend/src/{state,i18n,styles}/`, `scripts/`.
 
-```text
-main.go, wails.json, go.mod, go.sum    запуск, конфігурація Wails, Go-залежності
-internal/app/                          Wails facade, lifecycle, координація команд
-internal/torrentengine/                інтерфейс і адаптер anacrolix/torrent
-internal/library/                      SQLite repositories і migrations
-internal/files/                        шляхи, папки, безпечне видалення
-internal/automation/                   правила й папка спостереження
-internal/platform/                     Finder, URL, системні діалоги
-internal/diagnostics/                  локальна діагностика
-frontend/src/{features,bridge,state,i18n,styles}/   React UI
-frontend/wailsjs/                      bindings, згенеровані Wails (не редагувати вручну)
-scripts/                               відтворювані команди збірки й перевірок
-```
-
-Простежити один сценарій: вимога (наприклад, [TR-01 пауза](PROJECT_REQUIREMENTS.md#22-завантаження-й-роздача)) → основна задача в [матриці вимог](tasks/README.md#повне-покриття-80-вимог) ([025](tasks/025-pause-resume-application.md)) → майбутні модулі `internal/app` → `internal/torrentengine` / `internal/library` → `frontend/src/features`.
+Простежити сценарій від UI до Go: [desktop-shell-build](docs/features/desktop-shell-build.md) — кнопка в `frontend/src/features/runtime-check` → `frontend/src/bridge/runtimeInfo.ts` → `frontend/wailsjs/go/app/App.js` → `internal/app.App.GetRuntimeInfo`. Для майбутньої вимоги: [TR-01](PROJECT_REQUIREMENTS.md#22-завантаження-й-роздача) → [матриця](tasks/README.md#повне-покриття-80-вимог) → [025](tasks/025-pause-resume-application.md) → `internal/app` → `internal/torrentengine` / `internal/library`.
 
 ## Команди збірки й перевірок
 
-**Жодна команда ще не працює і не перевірена.** Набір команд створюється й перевіряється в [003](tasks/003-wails-macos-build-spike.md) (перша збірка `.app`) і [004](tasks/004-reproducible-check-commands.md) (єдина локальна перевірка: тести, 100% покриття, аналізатори, bindings, документація). До цього не вважати робочими навіть стандартні `wails build`, `go test ./...` чи `npm test`.
+Перевірено в задачі 003 на Apple M4 / macOS 27.0.1 ([звіт](docs/verification/003-wails-macos-build-spike.md)). Усі команди виконуються з кореня репозиторію й не залежать від абсолютного шляху. Єдину команду для всіх перевірок створить [004](tasks/004-reproducible-check-commands.md).
 
-Вимоги до майбутніх скриптів і команд (AI-07):
+**Передумови розробки** (готовій `.app` вони не потрібні): Xcode Command Line Tools (`xcode-select --install`), Go ≥ 1.27 (`brew install go`; точну 1.27.2 підтягне `go.mod`), Node.js ≥ 22.12 з npm ≥ 11.20 (перевірено 26.11.1 / 11.20.0; `frontend/.npmrc` задає `min-release-age=14`, тож npm не встановить версію, молодшу за 14 днів). Глобальний Wails CLI **не потрібен**: `go tool wails` бере версію з `go.mod`.
 
-- Запускаються з кореня репозиторію й не залежать від абсолютного шляху розробника, домашнього каталогу чи прихованих кроків; шляхи — відносно кореня.
-- Версії Go/Wails CLI/Node.js задокументовані тут, Go-залежності — в `go.mod`/`go.sum`, frontend — у lockfile.
-- Native prerequisites Mac (Xcode Command Line Tools тощо) перелічені тут після перевірки в 003.
-- Згенеровані bindings відтворюються командою й не редагуються вручну.
+```sh
+go tool wails doctor                          # перевірка середовища
+
+# Frontend: залежності, типи, тести з порогом 100% на кожен файл, збірка
+npm --prefix frontend ci
+npm --prefix frontend run typecheck
+npm --prefix frontend run test:coverage
+npm --prefix frontend run build               # потрібно до go test: main вбудовує frontend/dist
+
+# Go: формат, аналізатор, тести
+gofmt -l .                                    # має бути порожньо
+go vet ./...
+go test ./...
+
+# Bindings після зміни Go-facade (результат комітиться)
+go tool wails generate module
+
+# Релізна збірка → build/bin/OctopusTorrent.app (arm64, ad-hoc підпис)
+go tool wails build -clean -trimpath
+
+# Розробка з гарячим перезавантаженням frontend
+go tool wails dev
+```
+
+**100% покриття Go** вимірюється разом із реальним запуском `.app`, бо `main()` виконується лише у справжньому застосунку:
+
+```sh
+C="$PWD/build/coverage"; rm -rf "$C"; mkdir -p "$C/go-unit" "$C/go-app"
+go test -cover -coverpkg=./... ./... -args -test.gocoverdir="$C/go-unit"
+GOFLAGS="-cover -coverpkg=./..." go tool wails build -clean -trimpath
+open -n --env GOCOVERDIR="$C/go-app" build/bin/OctopusTorrent.app
+# натиснути «Check Go connection», потім закрити застосунок (⌘Q)
+go tool covdata textfmt -i="$C/go-unit,$C/go-app" -o "$C/go.out"
+awk 'NR>1 && $NF==0' "$C/go.out"              # має бути порожньо: жодного непокритого блоку
+go tool wails build -clean -trimpath          # повернути звичайну релізну збірку
+```
+
+Правила для майбутніх скриптів (AI-07): запуск із кореня, шляхи відносно кореня, без прихованих кроків; версії — у `go.mod`/`go.sum` і `frontend/package-lock.json`; згенеровані bindings відтворюються командою, а не редагуються.
 
 ## Робота з репозиторієм
 
