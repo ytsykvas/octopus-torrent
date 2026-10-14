@@ -115,6 +115,31 @@ func TestHookBlocksWhenTheAskCannotBeWritten(t *testing.T) {
 	}
 }
 
+func TestHookReadsACommandGivenAsAnArgumentList(t *testing.T) {
+	sys := &fakeSystem{files: guardedRepo}
+	code, stderr := runMain(t, sys, env(nil), `{"cwd":"/repo","tool_name":"Bash","tool_input":{"command":["npx","cowsay"]}}`, "hook", "release-guard")
+	if code != 2 || !strings.Contains(stderr, "npx") {
+		t.Errorf("got code %d stderr %q, want 2 naming npx", code, stderr)
+	}
+}
+
+// A tool the guard checks, with input it cannot read, is blocked rather than let through unchecked.
+func TestHookBlocksAKnownToolWithUnreadableInput(t *testing.T) {
+	for _, input := range []string{
+		`{"tool_name":"Bash","tool_input":"npx cowsay"}`,
+		`{"tool_name":"Bash","tool_input":{"command":42}}`,
+	} {
+		code, stderr := runMain(t, &fakeSystem{}, env(nil), input, "hook", "release-guard")
+		if code != 2 || !strings.Contains(stderr, "cannot read") {
+			t.Errorf("%s: got code %d stderr %q, want 2", input, code, stderr)
+		}
+	}
+	code, stderr := runMain(t, &fakeSystem{}, env(nil), `{"tool_name":"Read","tool_input":"anything"}`, "hook", "release-guard")
+	if code != 0 || stderr != "" {
+		t.Errorf("other tool: got code %d stderr %q, want 0", code, stderr)
+	}
+}
+
 func TestHookWithUnreadableInputWarnsButDoesNotBlock(t *testing.T) {
 	code, stderr := runMain(t, &fakeSystem{}, env(nil), "not json", "hook", "release-guard")
 	if code != 0 || !strings.Contains(stderr, "could not parse") {

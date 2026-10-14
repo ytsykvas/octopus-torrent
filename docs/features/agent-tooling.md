@@ -26,8 +26,10 @@ replace the process).
   `tool_input.file_path`, `content`, `old_string`, `new_string`, `replace_all`.
 - **Hook output:** exit 0 allows; exit 2 with `release-guard: <reason> Policy: …` on stderr blocks;
   exit 0 with `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask",…}}` on
-  stdout hands the call to the owner (every `.npmrc` and hook-config change that does not weaken the
-  cooldown); unparseable input is allowed with a warning; an ask that cannot be written blocks.
+  stdout hands the call to the owner (every `.npmrc` change that does not weaken the cooldown, and
+  every change to the guard's settings, source or module files); input that is not JSON is allowed with
+  a warning; a guarded tool whose input cannot be read is blocked; an ask that cannot be written
+  blocks. A command may arrive as a string or a list of arguments.
 - **Doc checks:** `devtool check-docs` prints `DEAD <file>: <target>` per broken link, anchor or
   `.claude/**.md` pointer and exits 1; `devtool codex-agents` writes `.codex/agents/<name>.toml` from
   `.claude/agents/<name>.md`.
@@ -44,7 +46,7 @@ replace the process).
 | Setup order and first failure; run port and `exec` | `TestWorkspace…` | undefined `Main` |
 | Real binary, `exec` replaces the process, runner scripts | `cmd/devtool/main_test.go` | no `main.go`, no scripts |
 | Configured hook commands block with exit 2 | `TestConfiguredHooksBlockWithExitStatusTwo` | exit 1 with `go run` |
-| Review findings (two rounds) | guard tables, `TestDecideAsksTheOwner…` | 34, then 39 failing cases |
+| Review findings (two rounds, then the commit security review) | guard tables, `TestDecideAsksTheOwner…`, `TestHookReads…`, `TestHookBlocksAKnownTool…` | 34, 39, then 29 failing cases |
 | Owner `ask` as JSON | `TestHookAsksTheOwnerThroughJSONOnStdout`, `TestHookBlocksWhenTheAskCannotBeWritten` | empty stdout |
 | Links, pointers, Codex mirrors | `docs_test.go`, `codexagents_test.go`, `TestCodexAgentMirrorsAreUpToDate` | undefined functions |
 

@@ -132,6 +132,12 @@ var cooldownKeys = map[string]bool{"min-release-age": true, "before": true, "min
 var otherManagers = map[string]bool{"pnpm": true, "yarn": true, "bun": true, "bunx": true}
 
 func decideCommand(command, cwd string, readFile func(string) ([]byte, error)) Decision {
+	command = stripHeredocBodies(command)
+	for _, inner := range substitutions(command) {
+		if d := decideCommand(inner, cwd, readFile); d.Deny {
+			return d
+		}
+	}
 	dir := cwd
 	for _, words := range shellSegments(command) {
 		if redirectsIntoProtected(words) {
@@ -151,8 +157,12 @@ func decideCommand(command, cwd string, readFile func(string) ([]byte, error)) D
 		switch {
 		case (name == "cd" || name == "pushd") && len(program) > 1:
 			dir = resolve(dir, program[1])
-		case name == "sh" || name == "bash" || name == "zsh":
+		case strings.HasPrefix(program[0], "$"):
+			d = deny("A command name taken from a variable (" + program[0] + ") cannot be checked; write the program name.")
+		case shells[name]:
 			d = decideShell(program[1:], dir, readFile)
+		case name == "eval":
+			d = decideCommand(strings.Join(program[1:], " "), dir, readFile)
 		case name == "export":
 			d = decideAssignments(program[1:])
 		case name == "npx":
@@ -172,7 +182,7 @@ func decideCommand(command, cwd string, readFile func(string) ([]byte, error)) D
 }
 
 func denyProtectedShellWrite() Decision {
-	return deny("Shell writes to .npmrc or to the release-guard hook configuration are blocked; change them with the Edit tool, which checks the result and asks the owner.")
+	return deny("Shell writes to .npmrc or to the release-guard hook, its configuration or module files are blocked; change them with the Edit tool, which checks the result and asks the owner.")
 }
 
 // shellSegments splits a command line into the words of each simple command. Quotes group words
@@ -221,15 +231,27 @@ func shellSegments(command string) [][]string {
 	return segments
 }
 
-// isProtected reports a file only the owner may change: any .npmrc, and the hook configurations.
+// isProtected reports a file only the owner may change: any .npmrc, and the guard itself.
 func isProtected(path string) bool {
-	return strings.EqualFold(filepath.Base(path), ".npmrc") || isHookConfig(path)
+	return strings.EqualFold(filepath.Base(path), ".npmrc") || isGuard(path)
 }
 
-func isHookConfig(path string) bool {
-	p := strings.ToLower(filepath.ToSlash(path))
-	return p == ".claude/settings.json" || p == ".codex/hooks.json" ||
-		strings.HasSuffix(p, "/.claude/settings.json") || strings.HasSuffix(p, "/.codex/hooks.json")
+// guardFiles can define, disable or rewrite the hook: agent settings that hold hooks, the guard's
+// source, and the module files that make it a go tool.
+var guardFiles = []string{
+	".claude/settings.json", ".claude/settings.local.json", ".codex/hooks.json", ".codex/config.toml",
+}
+
+func isGuard(path string) bool {
+	p := "/" + strings.TrimPrefix(strings.ToLower(filepath.ToSlash(path)), "/")
+	for _, f := range guardFiles {
+		if strings.HasSuffix(p, "/"+f) {
+			return true
+		}
+	}
+	base := filepath.Base(p)
+	return strings.Contains(p, "/internal/devtool/") || strings.Contains(p, "/cmd/devtool/") ||
+		base == "go.mod" || base == "go.sum"
 }
 
 // redirectsIntoProtected reports an output redirection (>, >>, >|, 2>) into a protected file.
@@ -297,13 +319,83 @@ func isNumber(s string) bool {
 	return err == nil
 }
 
+var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true}
+
+// decideShell checks the script a shell runs: a -c string (also inside combined flags such as -lc) is
+// decided like any command line; a script file is outside the guard; a shell with neither reads its
+// commands from stdin — a pipe or a here-document the guard cannot see — and is refused.
 func decideShell(args []string, dir string, readFile func(string) ([]byte, error)) Decision {
 	for i, arg := range args {
-		if arg == "-c" && i+1 < len(args) {
+		switch {
+		case strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && strings.Contains(arg, "c") && i+1 < len(args):
 			return decideCommand(args[i+1], dir, readFile)
+		case !strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "<"):
+			return Decision{}
 		}
 	}
-	return Decision{}
+	return deny("A shell reading commands from stdin (a pipe or a here-document) cannot be checked; run the commands directly.")
+}
+
+var heredocStart = regexp.MustCompile(`<<(-?)\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?`)
+
+// stripHeredocBodies removes the text of here-documents, which is data for the receiving program
+// (a commit message, a file), not commands. A here-document fed to a shell is refused separately.
+func stripHeredocBodies(command string) string {
+	var out strings.Builder
+	lines := strings.Split(command, "\n")
+	for i := 0; i < len(lines); i++ {
+		out.WriteString(lines[i])
+		if i < len(lines)-1 {
+			out.WriteString("\n")
+		}
+		for _, m := range heredocStart.FindAllStringSubmatch(lines[i], -1) {
+			for i+1 < len(lines) {
+				i++
+				body := lines[i]
+				if m[1] == "-" {
+					body = strings.TrimLeft(body, "\t")
+				}
+				if body == m[2] {
+					break
+				}
+			}
+		}
+	}
+	return out.String()
+}
+
+// substitutions returns the commands inside $(...) and `...` outside single quotes, outermost first;
+// nested ones are found when those are decided in turn.
+func substitutions(command string) []string {
+	var found []string
+	inSingle := false
+	for i := 0; i < len(command); i++ {
+		switch c := command[i]; {
+		case c == '\'':
+			inSingle = !inSingle
+		case inSingle:
+		case c == '`':
+			if end := strings.IndexByte(command[i+1:], '`'); end >= 0 {
+				found = append(found, command[i+1:i+1+end])
+				i += end + 1
+			}
+		case c == '$' && i+1 < len(command) && command[i+1] == '(':
+			depth := 0
+			for j := i + 1; j < len(command); j++ {
+				if command[j] == '(' {
+					depth++
+				} else if command[j] == ')' {
+					depth--
+					if depth == 0 {
+						found = append(found, command[i+2:j])
+						i = j
+						break
+					}
+				}
+			}
+		}
+	}
+	return found
 }
 
 func decideAssignments(words []string) Decision {
@@ -581,8 +673,8 @@ func resolve(base, path string) string {
 // change goes to the owner; an .npmrc change is denied if it weakens the cooldown and otherwise also
 // goes to the owner, because npm's own parser, not this one, decides what the file means.
 func decideFileChange(in ToolInput, readFile func(string) ([]byte, error)) Decision {
-	if isHookConfig(in.FilePath) {
-		return ask("Changing the release-guard hook configuration (" + in.FilePath + ") is the owner's decision.")
+	if isGuard(in.FilePath) {
+		return ask("Changing the release-guard hook, its configuration or its module files (" + in.FilePath + ") is the owner's decision.")
 	}
 	if !isProtected(in.FilePath) {
 		return Decision{}

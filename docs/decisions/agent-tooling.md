@@ -65,19 +65,26 @@ PreToolUse on Bash, Edit, MultiEdit and Write (Codex: Bash). Three outcomes:
     `-mod=mod` (both add missing modules at their latest version);
   - any `GOSUMDB` but the default, `GONOSUMDB`, `GONOSUMCHECK`, `GOINSECURE`, `GOPRIVATE`,
     `-insecure` — as an assignment, `export` or `go env -w`;
-  - shell writes (redirection, `tee`, `cp`, `mv`, `rm`, `sed -i`, …) to any `.npmrc` or to the hook
-    configuration;
+  - shell writes (redirection, `tee`, `cp`, `mv`, `rm`, `sed -i`, …) to any `.npmrc` or to the guard
+    (see "Ask the owner");
+  - a shell that reads its commands from stdin (`… | sh`, `bash <<EOF`) and a command name taken from a
+    variable (`$PM install …`) — neither can be checked;
   - an `.npmrc` edit whose result has `min-release-age` below 14, `before`, `min-release-age-exclude`,
     sections, arrays or quotes.
-- **Ask the owner** (JSON `permissionDecision: "ask"` on stdout): every other change to an `.npmrc` and
-  every change to `.claude/settings.json` or `.codex/hooks.json`. npm's own parser decides what an
-  `.npmrc` means, so the owner — not this parser — approves any change to one.
+- **Ask the owner** (JSON `permissionDecision: "ask"` on stdout): every other change to an `.npmrc`, and
+  every change to what can define, disable or rewrite the guard — `.claude/settings.json`,
+  `.claude/settings.local.json`, `.codex/hooks.json`, `.codex/config.toml`, `internal/devtool/`,
+  `cmd/devtool/`, `go.mod`, `go.sum`. npm's own parser decides what an `.npmrc` means, so the owner —
+  not this parser — approves any change to one.
 - **Allow** everything else.
 
 Commands are parsed with quotes: wrappers (`env`, `sudo`, `time`, `nice`, `command`, `exec`,
-`xargs`), `sh|bash|zsh -c`, subshells, `cd`/`pushd` and absolute program paths are followed, and only
-real npm flags and real assignments are checked, so commit messages and greps that mention the
-settings are not refused.
+`xargs`), `sh|bash|zsh|dash|ksh -c` (also inside combined flags such as `-lc`), `eval`, `$(…)` and
+backtick substitutions (also inside double quotes), subshells, `cd`/`pushd` and absolute program paths
+are followed. Here-document bodies are data and are skipped, and only real npm flags and real
+assignments are checked, so commit messages and greps that mention the settings are not refused. A
+command given as an argument list is joined; a guarded tool whose input cannot be read is blocked,
+while a payload that is not JSON at all is let through with a warning.
 
 ### Workspaces
 
@@ -98,13 +105,13 @@ policy, including the ones npm suggests in its own error message. It does not se
 
 - Codex file edits (`apply_patch`); the Codex hook payload itself is unverified (no Codex session was
   used) — if Codex names its shell tool differently, the guard allows everything there.
-- Shell constructions beyond the parser (`eval`, here-documents, scripts the agent writes and runs),
-  writes to an `.npmrc` by programs it does not know, or a dependency added by hand to
-  `package.json` / `go.mod` and resolved later.
+- Script files the agent writes and runs (`bash script.sh`, `source`), shell forms beyond the parser,
+  writes to protected files by programs it does not know (an interpreter such as `python3` writing a
+  file), or a dependency added by hand to `package.json` / `go.mod` and resolved later.
 - A Go version that is explicit and full but younger than 14 days.
-- Its own source: `internal/devtool` is ordinary code an agent can edit, reviewed like any change. If
-  it fails to compile, the hook exits 1 and agents continue (fail-open, so a broken hook cannot lock
-  an agent out of the tools it needs to fix it).
+- Its own source when changed outside the Edit tools (see above); Edit/Write changes ask the owner. If
+  devtool fails to compile, the hook exits 1 and agents continue (fail-open, so a broken hook cannot
+  lock an agent out of the tools it needs to fix it).
 
 The guarantee therefore comes from checking results: **task 004** adds a release-age check of every
 locked npm package and Go module and of npm's effective cooldown settings, implemented in

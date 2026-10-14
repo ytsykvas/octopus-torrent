@@ -28,8 +28,9 @@ you touched, and never stop at the first failure: a later check often explains a
   weaken the 14-day release cooldown or checksum verification. Use the exact-version, `--prefix
   frontend` or `--no-install` form it names, or ask the owner.
 - **The hook asks the owner** (Claude Code shows a permission prompt) for any change to an `.npmrc`,
-  `.claude/settings.json` or `.codex/hooks.json`. Wait for the answer; do not route the change around
-  the Edit tool.
+  the agent settings that hold hooks (`.claude/settings*.json`, `.codex/hooks.json`,
+  `.codex/config.toml`), the guard's source (`internal/devtool/`, `cmd/devtool/`) or `go.mod` /
+  `go.sum`. Wait for the answer; never route the change around the Edit tool.
 - **`go test` fails with "`.codex/agents/<name>.toml` is out of date".** An agent in `.claude/agents/`
   changed: run `go tool devtool codex-agents` and commit the result.
 - **`npm ci` refuses a version.** `min-release-age=14` holds back a release younger than 14 days. Pick
