@@ -53,6 +53,8 @@ Create the base schema of the local library and migrations that do not destroy e
 
 The schema contains library data, not internal engine objects. Migrations run through the defined SQLite access layer. An unsupported version or a migration error requires an explicit message; automatically creating an empty DB in place of the existing one is unacceptable.
 
+**Parallel workspaces (added 2026-10-15, [agent-tooling ADR](../../docs/decisions/agent-tooling.md)):** several octopus/Conductor worktrees run `wails dev` at once. The library location must be configurable (for example an environment variable that `go tool devtool workspace run` sets per worktree) so a workspace, a test or a spike never opens the owner's real library; record the contract in the architecture.
+
 **Basis for technical decisions:** [SQLite WAL](https://www.sqlite.org/wal.html), [PRAGMA checks](https://www.sqlite.org/pragma.html#pragma_integrity_check). During implementation, reconcile signatures and constraints with the pinned version. Reading the API documentation does not replace a performed integration check.
 
 ## Mandatory TDD cycle and architecture review

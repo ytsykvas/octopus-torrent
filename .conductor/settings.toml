@@ -1,0 +1,61 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+# Gitignored local files copied into every new workspace. Only the local Claude Code permission
+# allowlist, so workspace agents do not re-prompt for already-approved commands; the app has no secrets.
+file_include_globs = """
+.claude/settings.local.json
+"""
+
+[scripts]
+# The same two-command hand-overs octopus uses (build devtool, exec it); the logic is tested Go in cmd/devtool.
+# Setup: npm ci, frontend/dist (embedded by main.go), Go module cache.
+setup = "sh .octopus/scripts/setup.sh"
+
+# wails dev on the workspace's CONDUCTOR_PORT; each workspace opens its own dev window.
+run = "sh .octopus/scripts/run.sh"
+
+# Several workspaces may run wails dev at once: each has its own port, Vite picks a free one.
+run_mode = "concurrent"
+
+[git]
+archive_on_merge = true
+# Keep the branch when the workspace is archived (push local-only work first).
+delete_branch_on_archive = false
+
+# Instructions injected into Conductor's built-in actions.
+#
+# Each prompt carries only the invariants that must hold even unread, plus a PLAIN path to the rules.
+# Never write these as @path: Claude Code expands an @ mention into the file's contents before the
+# agent runs, turning a conditional cost into an unconditional one on every click. New rules go into
+# .claude/docs/actions/, never here.
+[prompts]
+
+code_review = """
+Read-only review of this branch vs main. Never delete or move the owner's files; never Read a screenshot.
+
+Scope first: the workspace diff stat, then per-file diffs. Skip package-lock.json, go.sum and generated frontend/wailsjs/ unless they are out of sync with their source. Don't run the app.
+
+Blockers — tag them [BLOCKER]: file deletion or overwrite without an explicit list and confirmation (DEL-01–05); a filesystem path from React used without validation in Go; React calling bindings outside frontend/src/bridge or deciding a write succeeded; engine types, pointers or channels crossing the Wails facade; SQL outside internal/library or anacrolix outside internal/torrentengine; behavior without a test written first; own code below 100% coverage, lowered thresholds, ignore directives or skipped tests; hand-edited frontend/wailsjs/; a package younger than 14 days or a pre-release; a behavior change without its docs; non-English repository text.
+
+Each finding: file:line, the concrete path that triggers it, the fix. Rules in full: .claude/docs/actions/review.md, plus review-style.md or review-security.md for that lens. If nothing qualifies, say so in one line.
+"""
+
+create_pr = """
+Base branch main. If the repository has no remote, say so and stop — do not create one.
+
+Title: English, imperative, under 80 chars, with the task number when there is one. Body, two sections: `## Summary` (under five sentences: behavior change, modules touched, tests added — the whole branch diff) and `## Verification` (commands that passed, raw coverage, every not_run or fail with its reason, link to the docs/verification report).
+
+Fine print: .claude/docs/actions/pull-request.md and commit-message.md.
+"""
+
+fix_errors = """
+Fix the narrowest set of files, then re-run the failing check and the full suite. Never lower coverage thresholds, narrow the coverage include list, add ignore directives, skip or delete tests, hand-edit frontend/wailsjs/, or lower min-release-age.
+
+Suite: .claude/commands/check.md. Failures that are not code problems: .claude/docs/actions/fix-checks.md.
+"""
+
+resolve_merge_conflicts = """
+Base branch main; once a PR exists, merge main in rather than rebasing. Work out what BOTH sides intended. Regenerate frontend/wailsjs/ with `go tool wails generate module` and lockfiles from their manifests instead of merging them by hand.
+
+Detail: .claude/docs/actions/resolve-conflicts.md.
+"""

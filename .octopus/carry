@@ -1,0 +1,6 @@
+# One path per line, relative to the checkout. Each is copied into a new workspace unless that
+# workspace already has one. Lines starting with # are ignored.
+#
+# The local Claude Code permission allowlist, so a workspace agent does not re-prompt for commands
+# already approved in the main checkout. Nothing else is needed: the app has no secrets or .env.
+.claude/settings.local.json

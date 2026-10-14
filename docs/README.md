@@ -29,6 +29,7 @@
 | [Tool and frontend dependency versions](decisions/toolchain-versions.md) (O2) | accepted, [003](../product/tasks/003-wails-macos-build-spike.md); [report](verification/003-wails-macos-build-spike.md) |
 | [Target macOS and application identity](decisions/macos-target.md) (O1) | accepted, [003](../product/tasks/003-wails-macos-build-spike.md); review — 066 |
 | [Repository language: English only](decisions/repository-language.md) | accepted, owner's decision of 15 October 2026 |
+| [Agent tooling: Claude Code, Codex, octopus and Conductor](decisions/agent-tooling.md) | accepted, owner's decision of 15 October 2026; [report](verification/agent-tooling.md) |
 
 ## Feature index
 
@@ -37,6 +38,7 @@ Before implementing a feature, create its document from the template and add a l
 | Feature | Status | Tasks |
 |---|---|---|
 | [Desktop shell, `.app` build and the first React → Go connection](features/desktop-shell-build.md) | `implemented` (prototype) | [003](../product/tasks/003-wails-macos-build-spike.md) |
+| [Agent tooling and the release-guard hook](features/agent-tooling.md) (developer tooling) | `implemented` | — |
 
 No product capability (import, transfer, library) is implemented yet.
 

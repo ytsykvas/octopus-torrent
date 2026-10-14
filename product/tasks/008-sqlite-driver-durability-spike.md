@@ -51,6 +51,8 @@ Choose the SQLite driver based on the results of building on the Mac, checking p
 
 SQL `PRAGMA` parameters must apply to all connections that need them. If WAL gives no practical benefit, a simpler mode may be chosen, describing its data persistence guarantees. Default settings must not be treated as verified guarantees.
 
+**Parallel workspaces (added 2026-10-15, [agent-tooling ADR](../../docs/decisions/agent-tooling.md)):** several octopus/Conductor worktrees run `wails dev` at once. The library location must be configurable (for example an environment variable that `go tool devtool workspace run` sets per worktree) so a workspace, a test or a spike never opens the owner's real library; record the contract in the architecture.
+
 **Basis for technical decisions:** [SQLite WAL](https://www.sqlite.org/wal.html), [database/sql](https://pkg.go.dev/database/sql). During implementation, check signatures and constraints against the pinned version. Reading API documentation does not replace a performed integration check.
 
 ## Mandatory TDD cycle and architecture review

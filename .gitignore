@@ -50,3 +50,6 @@ downloads/
 
 # macOS (after the testdata exception, so it stays out of Git there too)
 .DS_Store
+
+# Personal Claude Code permission allowlist (copied into workspaces by .octopus/carry)
+/.claude/settings.local.json

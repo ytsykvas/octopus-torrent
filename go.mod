@@ -2,7 +2,10 @@ module octopustorrent
 
 go 1.27.2
 
-tool github.com/wailsapp/wails/v2/cmd/wails
+tool (
+	github.com/wailsapp/wails/v2/cmd/wails
+	octopustorrent/cmd/devtool
+)
 
 require github.com/wailsapp/wails/v2 v2.16.0
 

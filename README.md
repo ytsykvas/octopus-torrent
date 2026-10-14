@@ -31,6 +31,7 @@ React 19 + TypeScript 7 (strict) and Vite 8 · Wails v2.16.0 (system WebView) ·
 | [docs/engineering/TDD_AND_QUALITY.md](docs/engineering/TDD_AND_QUALITY.md) | TDD, 100% coverage, no debt — mandatory for every change. |
 | [docs/decisions/project-baseline.md](docs/decisions/project-baseline.md) | Agreed scope, requirement inventory, discrepancies, environment, open-decision register O1–O18. |
 | [archive/](product/archive/LIBTORRENT_TECHNICAL_RESEARCH.md) | History of the rejected stack (libtorrent). Read-only, not a requirement. |
+| [.claude/docs/README.md](.claude/docs/README.md) | Agent tooling: review agents, commands, action instructions shared with Codex, octopus and Conductor. |
 
 ## Directory map
 
@@ -48,6 +49,9 @@ main.go, main_test.go         Wails entry point: embedded frontend/dist, run(sta
 go.mod, go.sum                Go 1.27.2, Wails v2.16.0 (library + CLI as go tool)
 wails.json                    Wails configuration (npm ci, npm run build)
 internal/app/                 Wails facade (AppAPI): GetRuntimeInfo
+cmd/devtool/, internal/devtool/   agent hook (release-guard) and workspace setup/run, run as go tool devtool
+.claude/, .codex/             agents, commands, hook and action instructions for Claude Code and Codex
+.octopus/, .conductor/        parallel-workspace runners: setup/run scripts, action prompts
 frontend/src/bridge/          our own wrapper over generated bindings
 frontend/src/features/        UI by feature (currently runtime-check)
 frontend/src/test/            test setup
@@ -89,13 +93,21 @@ go tool wails build -clean -trimpath
 
 # Development with frontend hot reload
 go tool wails dev
+
+# Documentation links and agent-instruction pointers; Codex agents from .claude/agents
+go tool devtool check-docs
+go tool devtool codex-agents
+
+# Workspace preparation and dev server for octopus / Conductor (logic in cmd/devtool)
+sh .octopus/scripts/setup.sh
+OCTOPUS_PORT=34115 sh .octopus/scripts/run.sh
 ```
 
 **100% Go coverage** is measured together with a real `.app` launch, because `main()` runs only in the real application:
 
 ```sh
 C="$PWD/build/coverage"; rm -rf "$C"; mkdir -p "$C/go-unit" "$C/go-app"
-go test -cover -coverpkg=./... ./... -args -test.gocoverdir="$C/go-unit"
+go test -cover -coverpkg=./... ./... -args -test.gocoverdir="$C/go-unit"   # includes the devtool binary
 GOFLAGS="-cover -coverpkg=./..." go tool wails build -clean -trimpath
 open -n --env GOCOVERDIR="$C/go-app" build/bin/OctopusTorrent.app
 # click "Check Go connection", then quit the application (⌘Q)
