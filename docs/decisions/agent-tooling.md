@@ -78,7 +78,8 @@ PreToolUse on Bash, Edit, MultiEdit and Write (Codex: Bash). Three outcomes:
   not this parser — approves any change to one.
 - **Allow** everything else.
 
-Commands are parsed with quotes: wrappers (`env`, `sudo`, `time`, `nice`, `command`, `exec`,
+Commands are parsed the way the shell reads them — single and double quotes, backslash escapes,
+here-documents (not `<<<`, not quoted `<<`, not arithmetic) — and wrappers (`env`, `sudo`, `time`, `nice`, `command`, `exec`,
 `xargs`), `sh|bash|zsh|dash|ksh -c` (also inside combined flags such as `-lc`), `eval`, `$(…)` and
 backtick substitutions (also inside double quotes), subshells, `cd`/`pushd` and absolute program paths
 are followed. Here-document bodies are data and are skipped, and only real npm flags and real
@@ -112,6 +113,11 @@ policy, including the ones npm suggests in its own error message. It does not se
 - Its own source when changed outside the Edit tools (see above); Edit/Write changes ask the owner. If
   devtool fails to compile, the hook exits 1 and agents continue (fail-open, so a broken hook cannot
   lock an agent out of the tools it needs to fix it).
+
+The parser is hand-written and small, so some shell constructions will always read differently from
+the real shell; two automated reviews each found a handful. Replacing it with a full shell parser
+(for example `mvdan.cc/sh/v3/syntax`, used by `shfmt`) would close that class of gaps, at the cost of a
+new third-party dependency — the owner's decision under the dependency policy.
 
 The guarantee therefore comes from checking results: **task 004** adds a release-age check of every
 locked npm package and Go module and of npm's effective cooldown settings, implemented in

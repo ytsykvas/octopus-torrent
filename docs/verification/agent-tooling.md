@@ -52,12 +52,13 @@ Configuration (not executable code): `.claude/settings.json`, `.codex/hooks.json
 | 7 | `ask` delivered as JSON; blocked when it cannot be written | `go test ./internal/devtool/ -run Asks` | `stdout "" is not JSON` |
 | 8 | `CheckLinks`, `CheckPointers`, `CodexAgentTOML`, `check-docs`, `codex-agents` | `go test ./internal/devtool/` | `undefined: CodexAgentTOML`, `undefined: CheckLinks`, `undefined: CheckPointers` |
 | 9 | automated security review of the commit: guard sources and other settings layers not protected, `$(…)`/backticks in double quotes, `eval`, `bash -lc`, `dash`, shells reading stdin, `$VAR` as the program, a command given as an argument list, unreadable input of a guarded tool let through | `go test ./internal/devtool/` | 29 failing cases |
+| 10 | second automated security review: an argument list joined without quoting (a `-c` script split apart), `bash -o pipefail -c`, `+o`, `--rcfile`, `-c -e`, `/dev/stdin` and `/dev/fd/*` scripts, `source /dev/stdin`, `<<<` and `"<<EOF"` taken as here-documents, an apostrophe inside double quotes hiding `$(…)`, backslash escapes | `go test ./internal/devtool/` | 14 failing cases |
 
 ## GREEN: actual checks
 
 | # | Check | Command | Result |
 |---|---|---|---|
-| 1 | Unit tests | `go test ./internal/devtool/` | `pass`, 35 tests (58 allowed and 104 denied commands, `.npmrc` write/edit/MultiEdit and guard-file cases) |
+| 1 | Unit tests | `go test ./internal/devtool/` | `pass`, 36 tests (64 allowed and 122 denied commands, `.npmrc` write/edit/MultiEdit and guard-file cases) |
 | 2 | Binary, script, hook-config and Codex-mirror tests | `go test ./cmd/devtool/` | `pass`, 5 tests; the binary is built once per run and removed afterwards |
 | 3 | Full Go suite | `go test ./...` | `pass` |
 | 4 | Merged Go coverage | README procedure: unit + devtool binary + instrumented `.app` | `pass`: 0 blocks with a zero count; every package 100.0% |
@@ -93,7 +94,9 @@ was done:
   tasks 004, 008 and 014.
 - **After the commit**, an automated security review found four more gaps (guard sources and other
   settings layers, substitutions inside quotes and other unanalysed shell forms, argument-list
-  commands, fail-open on unreadable input of a guarded tool); all fixed test-first (RED 9).
+  commands, fail-open on unreadable input of a guarded tool); all fixed test-first (RED 9). A second
+  automated review found five places where the hand-written parser read a command differently from
+  the shell; fixed test-first (RED 10).
 - **Accepted as limits** ([ADR](../decisions/agent-tooling.md)): Codex `apply_patch`, script files and
   unparsed shell forms, writes by unknown programs such as interpreters, explicit-but-young Go
   versions, fail-open when devtool does not compile. The guarantee is task 004's release-age check of
@@ -114,6 +117,6 @@ Conductor applications themselves; one because it would wait on the owner.
 
 ## Summary
 
-The tooling works as configured: the hook blocks in a live session and passes 162 command cases, the
+The tooling works as configured: the hook blocks in a live session and passes 186 command cases, the
 runner scripts prepare and start a fresh workspace and stop cleanly, the documentation and Codex
 mirrors are checked by Go, and all own Go code stays at 100% by raw counters.

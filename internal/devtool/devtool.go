@@ -246,6 +246,6 @@ func decodeHookEvent(r io.Reader) (HookEvent, error) {
 	if err := json.Unmarshal(input.Command, &argv); err != nil {
 		return ev, errors.New("command is neither a string nor a list of strings")
 	}
-	ev.ToolInput.Command = strings.Join(argv, " ")
+	ev.ToolInput.Command = joinArgv(argv)
 	return ev, nil
 }

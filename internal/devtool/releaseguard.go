@@ -163,6 +163,8 @@ func decideCommand(command, cwd string, readFile func(string) ([]byte, error)) D
 			d = decideShell(program[1:], dir, readFile)
 		case name == "eval":
 			d = decideCommand(strings.Join(program[1:], " "), dir, readFile)
+		case (name == "source" || name == ".") && len(program) > 1 && readsStdin(program[1]):
+			d = denyStdinShell()
 		case name == "export":
 			d = decideAssignments(program[1:])
 		case name == "npx":
@@ -186,14 +188,14 @@ func denyProtectedShellWrite() Decision {
 }
 
 // shellSegments splits a command line into the words of each simple command. Quotes group words
-// and are removed; unquoted ;, &, |, parentheses and newlines end a command, except in a redirection
-// such as >| or 2>&1. It is deliberately small: enough to see programs and their arguments, not a
-// shell parser.
+// and are removed, a backslash escapes the next character as the shell does; unquoted ;, &, |,
+// parentheses and newlines end a command, except in a redirection such as >| or 2>&1. It is
+// deliberately small: enough to see programs and their arguments, not a shell parser.
 func shellSegments(command string) [][]string {
 	var segments [][]string
 	var words []string
 	var word strings.Builder
-	inWord, quote := false, rune(0)
+	inWord, quote, escaped := false, rune(0), false
 	endWord := func() {
 		if inWord {
 			words = append(words, word.String())
@@ -210,9 +212,24 @@ func shellSegments(command string) [][]string {
 	}
 	for _, r := range command {
 		switch {
-		case quote != 0 && r == quote:
+		case escaped:
+			if quote == '"' && !strings.ContainsRune("$`\"\\\n", r) {
+				word.WriteRune('\\')
+			}
+			if r != '\n' {
+				word.WriteRune(r)
+				inWord = true
+			}
+			escaped = false
+		case quote == '\'' && r == '\'':
 			quote = 0
-		case quote != 0:
+		case quote == '\'':
+			word.WriteRune(r)
+		case r == '\\':
+			escaped = true
+		case quote == '"' && r == '"':
+			quote = 0
+		case quote == '"':
 			word.WriteRune(r)
 		case r == '\'' || r == '"':
 			quote, inWord = r, true
@@ -321,59 +338,191 @@ func isNumber(s string) bool {
 
 var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true}
 
-// decideShell checks the script a shell runs: a -c string (also inside combined flags such as -lc) is
-// decided like any command line; a script file is outside the guard; a shell with neither reads its
-// commands from stdin — a pipe or a here-document the guard cannot see — and is refused.
+// shellValueOptions take the next argument as their value.
+var shellValueOptions = map[string]bool{"-o": true, "+o": true, "-O": true, "+O": true, "--rcfile": true, "--init-file": true}
+
+var redirectionWord = regexp.MustCompile(`^[0-9]*[<>]`)
+
+// decideShell checks the script a shell runs, reading the arguments the way the shell does: options
+// (and their values) come first; with -c — also inside combined flags such as -lc — the first operand
+// is the command line, decided like any other; otherwise the first operand is a script file, outside
+// the guard unless it is stdin in disguise. A shell with no operand reads its commands from stdin — a
+// pipe or a here-document the guard cannot see — and is refused.
 func decideShell(args []string, dir string, readFile func(string) ([]byte, error)) Decision {
-	for i, arg := range args {
+	withCommand := false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		switch {
-		case strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && strings.Contains(arg, "c") && i+1 < len(args):
-			return decideCommand(args[i+1], dir, readFile)
-		case !strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "<"):
-			return Decision{}
+		case arg == "--":
+			if i+1 < len(args) {
+				return decideShellOperand(args[i+1], withCommand, dir, readFile)
+			}
+			i = len(args)
+		case shellValueOptions[arg]:
+			i++
+		case strings.HasPrefix(arg, "--") || redirectionWord.MatchString(arg):
+		case len(arg) > 1 && (arg[0] == '-' || arg[0] == '+'):
+			withCommand = withCommand || (arg[0] == '-' && strings.Contains(arg, "c"))
+		default:
+			return decideShellOperand(arg, withCommand, dir, readFile)
 		}
 	}
-	return deny("A shell reading commands from stdin (a pipe or a here-document) cannot be checked; run the commands directly.")
+	if withCommand {
+		return Decision{} // -c without a command line: the shell itself fails
+	}
+	return denyStdinShell()
 }
 
-var heredocStart = regexp.MustCompile(`<<(-?)\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?`)
+func decideShellOperand(operand string, withCommand bool, dir string, readFile func(string) ([]byte, error)) Decision {
+	if withCommand {
+		return decideCommand(operand, dir, readFile)
+	}
+	if readsStdin(operand) {
+		return denyStdinShell()
+	}
+	return Decision{}
+}
+
+// readsStdin reports a script path that is really the shell's standard input.
+func readsStdin(path string) bool {
+	return path == "-" || path == "/dev/stdin" || strings.HasPrefix(path, "/dev/fd/") || strings.HasPrefix(path, "/proc/self/fd/")
+}
+
+func denyStdinShell() Decision {
+	return deny("A shell reading commands from stdin (a pipe, a here-document or /dev/stdin) cannot be checked; run the commands directly.")
+}
+
+var safeWord = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
+
+// joinArgv renders an argument list as one command line, quoting each argument so it stays one word.
+func joinArgv(argv []string) string {
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		if safeWord.MatchString(a) {
+			quoted[i] = a
+		} else {
+			quoted[i] = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
+		}
+	}
+	return strings.Join(quoted, " ")
+}
+
+var heredocOperator = regexp.MustCompile(`^<<(-?)[ \t]*(?:'([A-Za-z_]\w*)'|"([A-Za-z_]\w*)"|([A-Za-z_]\w*))`)
 
 // stripHeredocBodies removes the text of here-documents, which is data for the receiving program
-// (a commit message, a file), not commands. A here-document fed to a shell is refused separately.
+// (a commit message, a file), not commands. Only an unquoted, unescaped << outside arithmetic counts
+// (not <<<, not "<<" in quotes); a here-document fed to a shell or to source is refused separately.
 func stripHeredocBodies(command string) string {
 	var out strings.Builder
-	lines := strings.Split(command, "\n")
-	for i := 0; i < len(lines); i++ {
-		out.WriteString(lines[i])
-		if i < len(lines)-1 {
-			out.WriteString("\n")
-		}
-		for _, m := range heredocStart.FindAllStringSubmatch(lines[i], -1) {
-			for i+1 < len(lines) {
-				i++
-				body := lines[i]
-				if m[1] == "-" {
-					body = strings.TrimLeft(body, "\t")
-				}
-				if body == m[2] {
-					break
+	type heredoc struct {
+		word string
+		tabs bool
+	}
+	var pending []heredoc
+	var quote byte
+	escaped, arithmetic := false, 0
+	for i := 0; i < len(command); i++ {
+		c := command[i]
+		switch {
+		case escaped:
+			escaped = false
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			} else if c == '\\' && quote == '"' {
+				escaped = true
+			}
+		case c == '\\':
+			escaped = true
+		case c == '\'' || c == '"':
+			quote = c
+		case strings.HasPrefix(command[i:], "$(("):
+			arithmetic++
+		case arithmetic > 0 && strings.HasPrefix(command[i:], "))"):
+			arithmetic--
+		case strings.HasPrefix(command[i:], "<<<"):
+			out.WriteString("<<<")
+			i += 2
+			continue
+		case arithmetic == 0 && heredocOperator.MatchString(command[i:]):
+			m := heredocOperator.FindStringSubmatch(command[i:])
+			pending = append(pending, heredoc{word: m[2] + m[3] + m[4], tabs: m[1] == "-"})
+			out.WriteString(m[0])
+			i += len(m[0]) - 1
+			continue
+		case c == '\n' && len(pending) > 0:
+			out.WriteByte('\n')
+			pos := i + 1
+			for _, h := range pending {
+				for pos < len(command) {
+					line, next := command[pos:], len(command)
+					if end := strings.IndexByte(line, '\n'); end >= 0 {
+						line, next = line[:end], pos+end+1
+					}
+					pos = next
+					if h.tabs {
+						line = strings.TrimLeft(line, "\t")
+					}
+					if line == h.word {
+						break
+					}
 				}
 			}
+			pending = nil
+			i = pos - 1
+			continue
 		}
+		out.WriteByte(c)
 	}
 	return out.String()
 }
 
-// substitutions returns the commands inside $(...) and `...` outside single quotes, outermost first;
-// nested ones are found when those are decided in turn.
+// quoteActive reports, for each byte, whether the shell would expand $(...) and `...` there: outside
+// single quotes and not escaped.
+func quoteActive(command string) []bool {
+	active := make([]bool, len(command))
+	var quote byte
+	escaped := false
+	for i := 0; i < len(command); i++ {
+		c := command[i]
+		switch {
+		case escaped:
+			escaped = false
+		case quote == '\'':
+			if c == '\'' {
+				quote = 0
+			}
+		case c == '\\':
+			escaped = true
+		case quote == '"':
+			if c == '"' {
+				quote = 0
+			} else {
+				active[i] = true
+			}
+		case c == '\'' || c == '"':
+			quote = c
+		default:
+			active[i] = true
+		}
+	}
+	return active
+}
+
+// substitutions returns the commands inside $(...) and `...` where the shell expands them, outermost
+// first; nested ones are found when those are decided in turn. $((...)) is arithmetic, not a command.
 func substitutions(command string) []string {
 	var found []string
-	inSingle := false
+	active := quoteActive(command)
 	for i := 0; i < len(command); i++ {
+		if !active[i] {
+			continue
+		}
 		switch c := command[i]; {
-		case c == '\'':
-			inSingle = !inSingle
-		case inSingle:
+		case strings.HasPrefix(command[i:], "$(("):
+			if end := strings.Index(command[i:], "))"); end >= 0 {
+				i += end + 1
+			}
 		case c == '`':
 			if end := strings.IndexByte(command[i+1:], '`'); end >= 0 {
 				found = append(found, command[i+1:i+1+end])

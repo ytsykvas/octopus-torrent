@@ -123,6 +123,15 @@ func TestHookReadsACommandGivenAsAnArgumentList(t *testing.T) {
 	}
 }
 
+// Joining an argument list must keep each argument one word, so a -c script stays whole.
+func TestHookKeepsEachArgumentOfAListWhole(t *testing.T) {
+	sys := &fakeSystem{files: guardedRepo}
+	code, stderr := runMain(t, sys, env(nil), `{"cwd":"/repo","tool_name":"Bash","tool_input":{"command":["bash","-c","npm i -g x"]}}`, "hook", "release-guard")
+	if code != 2 || !strings.Contains(stderr, "global") {
+		t.Errorf("got code %d stderr %q, want 2 naming the global install", code, stderr)
+	}
+}
+
 // A tool the guard checks, with input it cannot read, is blocked rather than let through unchecked.
 func TestHookBlocksAKnownToolWithUnreadableInput(t *testing.T) {
 	for _, input := range []string{
