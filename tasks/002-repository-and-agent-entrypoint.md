@@ -1,84 +1,84 @@
-# 002 — Підготувати Git-репозиторій і точку входу для АІ
+# 002 — Prepare the Git repository and the AI entry point
 
-**Статус:** `done`  
-**Фаза:** P0 — Контекст і старт репозиторію  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [001](001-scope-and-decision-register.md)  
-**Вимоги:** `AI-01`, `AI-02`, `AI-03`, `AI-04`, `AI-09`, `QA-01`, `QA-03`, `QA-04`, `QA-07`, `QA-08`
+**Status:** `done`  
+**Phase:** P0 — Context and repository start  
+**Priority:** critical path of the main scenario or completion  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [001](001-scope-and-decision-register.md)  
+**Requirements:** `AI-01`, `AI-02`, `AI-03`, `AI-04`, `AI-09`, `QA-01`, `QA-03`, `QA-04`, `QA-07`, `QA-08`
 
-## Результат
+## Outcome
 
-Підготувати Git-репозиторій та документацію, за якими новий АІ-агент зможе знайти актуальні вимоги, зрозуміти межі модулів і продовжити наступну задачу без історії чату.
+Prepare a Git repository and documentation with which a new AI agent can find the current requirements, understand module boundaries and continue with the next task without the chat history.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `AI-01`, `AI-02`, `AI-03`, `AI-04`, `AI-09`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): conditions for starting and finishing a task, statuses and verification evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `AI-01`, `AI-02`, `AI-03`, `AI-04`, `AI-09`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- The results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Перевірити обраний каталог, наявний Git-репозиторій і незбережені зміни. Використати придатний наявний репозиторій або ініціалізувати новий у погодженому місці; зберегти Markdown-документи, макет та сторонні зміни.
-2. Створити кореневий README з поточним станом розробки, обраним стеком, посиланнями на специфікації та tasks і картою майбутніх модулів. Чітко позначити, які каталоги й команди ще не створені.
-3. Створити AGENTS.md з межами React, Go-сервісів, адаптера рушія та repository, правилами роботи з файлами й згенерованими bindings. Описати, як знаходити критерії задачі, зберігати рішення та передавати результат наступному агенту.
-4. Налаштувати .gitignore для результатів збірки, робочих БД, тимчасових файлів і локальних журналів. Не приховувати потрібні вихідні файли чи безпечні тестові матеріали; особисті торренти й завантажені дані до репозиторію не додавати.
-5. Створити короткий шаблон ADR: питання, рішення, розглянуті альтернативи, перевірені підстави та наслідки. Додати посилання на вихідні рішення з 001.
+1. Check the chosen directory, an existing Git repository and uncommitted changes. Use a suitable existing repository or initialize a new one in the agreed location; keep the Markdown documents, the mockup and other people's changes.
+2. Create a root README with the current development state, the chosen stack, links to the specifications and tasks, and a map of future modules. Clearly mark which directories and commands do not exist yet.
+3. Create AGENTS.md with the boundaries of React, Go services, the engine adapter and the repository, rules for working with files and generated bindings. Describe how to find a task's criteria, store decisions and hand the result off to the next agent.
+4. Configure .gitignore for build outputs, working databases, temporary files and local logs. Do not hide required source files or safe test materials; do not add personal torrents and downloaded data to the repository.
+5. Create a short ADR template: question, decision, alternatives considered, verified grounds and consequences. Add links to the initial decisions from 001.
 
-6. Зберегти й уточнити вже створені AGENTS.md та docs/: інженерну політику, індекс, шаблон фічі, місця рішень і перевірок. Не перезаписувати їх порожнім scaffold. Передбачити в кожній сесії архітектурний аналіз, TDD, 100% покриття й усунення боргу; документація фічі починається до коду.
+6. Keep and refine the already created AGENTS.md and docs/: the engineering policy, the index, the feature template, the locations of decisions and verification. Do not overwrite them with an empty scaffold. Provide for architecture analysis, TDD, 100% coverage and debt removal in every session; feature documentation starts before the code.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `README.md; AGENTS.md; .gitignore; docs/decisions/`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/002-repository-and-agent-entrypoint.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `README.md; AGENTS.md; .gitignore; docs/decisions/`. This is a map of future code; after the initial setup, check the actual paths and update the architecture if needed.
+**Evidence of completion:** an entry `docs/verification/002-repository-and-agent-entrypoint.md` or an exact link to a test or build report in the context handoff. One report can be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [x] Із кореневого README можна перейти до актуальних вимог, архітектури, концепту, технічного плану рушія та наступної задачі.
-- [x] AGENTS.md пояснює межі модулів, роботу зі згенерованим кодом і порядок перевірки результату без посилань на недоступний чат.
-- [x] Документація відрізняє майбутню структуру від уже створених файлів; команди, які буде перевірено в 004, не названі робочими.
-- [x] Для майбутніх скриптів зафіксовано вимогу незалежності від абсолютного шляху розробника.
-- [x] Налаштування Git зберігають потрібні джерела й не включають робочі БД, особисті дані або сторонні незаплановані зміни.
+- [x] From the root README you can navigate to the current requirements, architecture, concept, the engine technical plan and the next task.
+- [x] AGENTS.md explains module boundaries, working with generated code and the order of verifying the result without links to an unavailable chat.
+- [x] The documentation distinguishes the future structure from files already created; commands that will be verified in 004 are not described as working.
+- [x] For future scripts, the requirement of independence from the developer's absolute path is recorded.
+- [x] The Git settings keep the required sources and do not include working databases, personal data or unrelated unplanned changes.
 
-## Перевірки
+## Checks
 
-- Пройти від README до однієї вимоги, відповідного майбутнього модуля та наступної задачі; виправити відсутні або хибні посилання.
-- Перевірити стан Git і різницю файлів: немає особистих шляхів, журналів, завантажених даних або випадково змінених сторонніх файлів.
-- Перевірити правила ігнорування на прикладах робочої БД, результату збірки та тестового вихідного файла; останній має залишатися доступним для збереження в Git.
+- Navigate from the README to one requirement, the corresponding future module and the next task; fix missing or incorrect links.
+- Check the Git state and the file diff: no personal paths, logs, downloaded data or accidentally changed third-party files.
+- Check the ignore rules on examples of a working database, a build output and a test source file; the latter must remain available for storing in Git.
 
-**Як перевіряти:** достатньо ручного огляду документації та стану репозиторію. Майбутні команди задачі [004](004-reproducible-check-commands.md) не є передумовою 002.
+**How to check:** a manual review of the documentation and the repository state is enough. The future commands of task [004](004-reproducible-check-commands.md) are not a prerequisite of 002.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Не перетворювати AGENTS.md на дубль усіх специфікацій: зберігати короткі правила й посилання на джерела. Не ініціалізувати вкладений Git-репозиторій і не скидати наявні зміни. Ця задача готує місце для коду; працездатність стеку та команд перевіряється в наступних задачах.
+Do not turn AGENTS.md into a duplicate of all specifications: keep short rules and links to the sources. Do not initialize a nested Git repository and do not discard existing changes. This task prepares a place for code; whether the stack and commands work is checked in the following tasks.
 
-**Підстава для технічних рішень:** [Go modules](https://go.dev/doc/modules/managing-dependencies). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [Go modules](https://go.dev/doc/modules/managing-dependencies). Reconcile signatures and constraints with the pinned version; reading the API is not a passed integration check.
 
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run a test/check of the expected result and record the proper reason for the failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** a minimal correct implementation, tests and the required regression; **100% of all owned executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are performed; the absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring done, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and verification evidence.
+- Write a short result: what was changed, the exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock it and the independent tasks that can continue.
+- Update the documentation, the contract and the README if the API, structure or build commands changed; do not leave required context only in the chat.
 
-### Результат виконання (14 жовтня 2026)
+### Execution result (14 October 2026)
 
-- **Статус:** `done`. Доказ — [звіт 002](../docs/verification/002-repository-and-agent-entrypoint.md).
-- **Створено:** Git-репозиторій (гілка `main`) у корені `/Users/tsykvas/projects/torrent`; [README.md](../README.md); [.gitignore](../.gitignore); [шаблон ADR](../docs/decisions/_ADR_TEMPLATE.md). **Доповнено:** [AGENTS.md](../AGENTS.md) (межі модулів, файлові операції, bindings, передача задачі), [docs/README.md](../docs/README.md).
-- **Перевірки:** `.gitignore` на 35 зразкових реальних файлах; усі відносні посилання й якорі; маршрут README → вимога → задача → модуль; індекс Git без БД, журналів і особистих даних — `pass`. Покриття коду — `not_applicable`.
-- **Обмеження:** команди збірки й перевірок ще не існують (003/004). Скрипти перевірки посилань і `.gitignore` цієї сесії не додані в репозиторій: постійну перевірку документації створює 004.
-- **Наступна задача:** [003](003-wails-macos-build-spike.md); перед нею встановити Go і Wails CLI.
+- **Status:** `done`. Evidence: [report 002](../docs/verification/002-repository-and-agent-entrypoint.md).
+- **Created:** a Git repository (branch `main`) at the root `/Users/tsykvas/projects/torrent`; [README.md](../README.md); [.gitignore](../.gitignore); [ADR template](../docs/decisions/_ADR_TEMPLATE.md). **Extended:** [AGENTS.md](../AGENTS.md) (module boundaries, file operations, bindings, task handoff), [docs/README.md](../docs/README.md).
+- **Checks:** `.gitignore` on 35 sample real files; all relative links and anchors; the route README → requirement → task → module; the Git index without databases, logs and personal data: `pass`. Code coverage: `not_applicable`.
+- **Limitations:** build and check commands do not exist yet (003/004). This session's link-check and `.gitignore` scripts were not added to the repository: the permanent documentation check is created by 004.
+- **Next task:** [003](003-wails-macos-build-spike.md); install Go and Wails CLI before it.

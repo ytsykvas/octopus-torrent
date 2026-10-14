@@ -1,72 +1,72 @@
-# 024 — Керувати вибором файлів і всіх нащадків папки
+# 024 — Manage selection of files and all descendants of a folder
 
-**Статус:** `planned`  
-**Фаза:** P3 — Імпорт, передавання й безпека даних  
-**Пріоритет:** обов’язкова функція або перевірка погодженого обсягу  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [023](023-durable-import-commit.md), [013](013-transfer-policy-state-machine.md)  
-**Вимоги:** `TR-06`, `TR-07`, `UI-09`, `UI-18`
+**Status:** `planned`  
+**Phase:** P3 — Import, transfer and data safety  
+**Priority:** mandatory feature or check of the agreed scope  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [023](023-durable-import-commit.md), [013](013-transfer-policy-state-machine.md)  
+**Requirements:** `TR-06`, `TR-07`, `UI-09`, `UI-18`
 
-## Результат
+## Outcome
 
-Зберігати вибір файлів і застосовувати його до окремого файла або всіх нащадків папки незалежно від ручної паузи торрента.
+Persist the file selection and apply it to a single file or to all descendants of a folder independently of the torrent's manual pause.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення, статуси та докази виконання.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `TR-06`, `TR-07`, `UI-09`, `UI-18`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових попередніх задач. Якщо потрібний доказ відсутній, залежну частину роботи починати не можна.
+- [Task execution rules](README.md): conditions for starting and finishing, statuses and evidence of completion.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `TR-06`, `TR-07`, `UI-09`, `UI-18`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): the API and assumptions not yet confirmed by a prototype.
+- Results and ADRs of all mandatory preceding tasks. If the required evidence is missing, the dependent part of the work must not be started.
 
-## Порядок роботи
+## Work order
 
-1. Зберігати `wanted` і попередній пріоритет файла; застосовувати `PiecePriorityNone` або відновлювати попередній пріоритет.
-2. Для команди папки визначати всіх нащадків за перевіреною моделлю, включно зі згорнутими папками й уже завершеними файлами.
-3. Записувати бажаний вибір однією транзакцією та послідовно застосовувати його в рушії.
-4. Явно повідомляти про відсутність вибраних файлів і часткову помилку застосування; зберігати `manualPaused` незмінним.
-5. Не створювати прихованих читачів для виключених файлів; перевірити поведінку частин торрента, спільних для меж сусідніх файлів.
+1. Persist `wanted` and the file's previous priority; apply `PiecePriorityNone` or restore the previous priority.
+2. For a folder command, determine all descendants according to the verified model, including collapsed folders and already completed files.
+3. Write the desired selection in a single transaction and apply it to the engine sequentially.
+4. Explicitly report the absence of selected files and a partial application error; keep `manualPaused` unchanged.
+5. Do not create hidden readers for excluded files; verify the behavior of torrent pieces shared across the boundaries of adjacent files.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `internal/app/file_policy.go`. Це карта майбутнього коду; після створення каркаса проєкту перевірити фактичні шляхи й оновити карту в архітектурі.
-**Доказ виконання:** запис `docs/verification/024-file-folder-wanted-commands.md` або точне посилання на вже наявний звіт перевірки чи збірки в підсумку передачі роботи. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `internal/app/file_policy.go`. This is a map of future code; after the project skeleton is created, verify the actual paths and update the map in the architecture.
+**Evidence of completion:** a `docs/verification/024-file-folder-wanted-commands.md` record or an exact reference to an existing verification or build report in the work handoff summary. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Для частково вибраної папки команда запуску вибирає всіх нащадків; для повністю вибраної команда паузи виключає всіх.
-- [ ] Виключення файла не видаляє вже отримані байти й не обнуляє його прогрес.
-- [ ] Картка та панель деталей отримують узгоджений знімок з однією ревізією.
-- [ ] Усі наведені нижче перевірки виконано на відповідному рівні; невиконані або невдалі перевірки не позначено як успішні.
+- [ ] For a partially selected folder, the start command selects all descendants; for a fully selected one, the pause command excludes all of them.
+- [ ] Excluding a file does not delete already received bytes and does not reset its progress to zero.
+- [ ] The card and the details panel receive a consistent snapshot with a single revision.
+- [ ] All checks listed below have been performed at the appropriate level; checks that were not run or failed are not marked as successful.
 
-## Перевірки
+## Checks
 
-- Виключити файл зі спільною граничною частиною й окремо вже завершений файл; інші вибрані файли мають продовжити завантаження, а наявні байти — залишитися.
-- Змінити вибір згорнутих нащадків, виключити всі файли й аварійно завершити процес після запису БД, але до зміни рушія; відновлення має застосувати збережений вибір без втрати ручної паузи.
+- Exclude a file with a shared boundary piece and, separately, an already completed file; the other selected files must continue downloading, and the existing bytes must remain.
+- Change the selection of collapsed descendants, exclude all files and crash the process after the DB write but before the engine change; the restore must apply the persisted selection without losing the manual pause.
 
-**Як запускати:** використати фактичні команди, зафіксовані у [004](004-reproducible-check-commands.md) та кореневому README після створення каркаса проєкту. До появи цих команд перевірки залишаються планом. Записати точну команду, робочий каталог, тестові дані, конфігурацію, код завершення й результат. Системні сценарії виконувати у зібраній `.app`; перевірки інтерфейсу з тестовими замінами та перевірки справжнього рушія позначати окремо.
+**How to run:** use the actual commands recorded in [004](004-reproducible-check-commands.md) and the root README after the project skeleton is created. Until those commands exist, the checks remain a plan. Record the exact command, working directory, test data, configuration, exit code and result. Run system scenarios in the built `.app`; mark interface checks with test doubles and checks of the real engine separately.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Кнопка паузи файла означає припинення його подальшого цільового завантаження. Спільна частина торрента може вимагати запису граничних байтів виключеного файла для сусіднього вибраного. Виключення завершеного файла не гарантує припинення його віддачі.
+The file pause button means stopping its further targeted download. A shared torrent piece may require writing boundary bytes of an excluded file for the adjacent selected one. Excluding a completed file does not guarantee that its upload stops.
 
-**Підстава для технічних рішень:** [File source](https://raw.githubusercontent.com/anacrolix/torrent/master/file.go). Під час реалізації звірити сигнатури й обмеження із зафіксованою версією. Читання документації API не замінює виконаної інтеграційної перевірки.
+**Basis for technical decisions:** [File source](https://raw.githubusercontent.com/anacrolix/torrent/master/file.go). During implementation, check the signatures and constraints against the pinned version. Reading the API documentation does not replace a performed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run a test/check of the expected result and record the proper reason for the failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** according to the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; rerun the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` ставити лише після виконання критеріїв і запису доказів.
-- Записати короткий результат: що змінено, точні перевірки зі статусами `pass`, `fail` або `not_run`, ADR, фактичні місця змін у коді й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст лише в чаті.
+- Update the status in this file and in the README navigation table at the same time; set `done` only after the criteria are met and the evidence is recorded.
+- Record a short result: what was changed, the exact checks with the statuses `pass`, `fail` or `not_run`, ADRs, actual code change locations and known limitations.
+- For `blocked`, state the concrete reason, the missing evidence/decision, how to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

@@ -1,17 +1,17 @@
-# OctopusTorrent — правила ігнорування.
-# Не приховувати вихідний код, згенеровані Wails bindings (frontend/wailsjs/),
-# конфігурацію пакета (build/darwin/, build/appicon.png) і штучні тестові дані (testdata/).
+# OctopusTorrent — ignore rules.
+# Do not hide source code, generated Wails bindings (frontend/wailsjs/),
+# package configuration (build/darwin/, build/appicon.png) or synthetic test data (testdata/).
 
-# Результати збірки Wails і Vite
+# Wails and Vite build output
 /build/bin/
 /frontend/dist/
 
-# Залежності frontend (відтворюються з lockfile)
+# Frontend dependencies (reproduced from the lockfile)
 node_modules/
-# Кеш Wails CLI: контрольна сума package.json для пропуску npm install
+# Wails CLI cache: package.json checksum used to skip npm install
 /frontend/package.json.md5
 
-# Робочі бази SQLite: бібліотека застосунку, piece completion рушія, журнали WAL
+# Working SQLite databases: application library, engine piece completion, WAL journals
 *.db
 *.db-shm
 *.db-wal
@@ -22,31 +22,31 @@ node_modules/
 *.sqlite-journal
 *.sqlite3
 
-# Профілі й звіти покриття (зберігаються як докази лише в docs/verification/ за потреби)
+# Coverage profiles and reports (kept as evidence only in docs/verification/ when needed)
 coverage.out
 *.coverprofile
 cover.html
 coverage/
 
-# Локальні журнали, тимчасові файли
+# Local logs, temporary files
 *.log
 logs/
 tmp/
 *.tmp
 
-# Особисті торренти й завантажені дані не потрапляють у Git.
+# Personal torrents and downloaded data never go into Git.
 *.torrent
 downloads/
 
-# Локальні налаштування середовища й редакторів
+# Local environment and editor settings
 .env
 .env.*
 .vscode/
 .idea/
 
-# Штучні тестові дані (торренти, пошкоджені БД тощо) завжди відстежуються.
+# Synthetic test data (torrents, corrupted databases, etc.) is always tracked.
 !testdata/**
 !**/testdata/**
 
-# macOS (після винятку testdata, щоб не потрапляти в Git і звідти)
+# macOS (after the testdata exception, so it stays out of Git there too)
 .DS_Store

@@ -1,90 +1,90 @@
-# 004 — Зафіксувати команди збірки й локальних перевірок
+# 004 — Record the build and local check commands
 
-**Статус:** `planned`  
-**Фаза:** P1 — Прототипи ризикових контрактів  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [003](003-wails-macos-build-spike.md)  
-**Вимоги:** `AI-07`, `AI-08`, `QA-01`, `QA-02`, `QA-05`
+**Status:** `planned`  
+**Phase:** P1 — Prototypes of risky contracts  
+**Priority:** critical path of the main scenario or completion  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [003](003-wails-macos-build-spike.md)  
+**Requirements:** `AI-07`, `AI-08`, `QA-01`, `QA-02`, `QA-05`
 
-## Результат
+## Outcome
 
-Створити й перевірити єдиний набір команд для розробки, збірки та локальних перевірок, щоб наступні задачі могли посилатися на відтворювані дії з однозначним результатом.
+Create and verify a single set of commands for development, build and local checks, so that subsequent tasks can refer to reproducible actions with an unambiguous result.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `AI-07`, `AI-08`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): conditions for starting and completing a task, statuses and evidence of checks.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `AI-07`, `AI-08`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- Outcomes and ADRs of all mandatory prerequisites above; without the required evidence, do not start the dependent part.
 
-## Порядок роботи
+## Work order
 
-1. На основі успішної збірки 003 налаштувати команди запуску розробки, збірки `.app`, перевірки TypeScript, frontend-тестів, Go-тестів, форматування, `go vet` та генерації Wails bindings.
-2. Створити спільний скрипт локальних перевірок. Він має запускатися з документованого місця, передавати ненульовий код завершення при помилці та не продовжувати виконання так, ніби невдала перевірка успішна.
-3. Відокремити швидкі перевірки від перевірок конкурентності через Go race detector, майбутніх тестів реального рушія й тестів UI з тестовим bridge. Якщо відповідних тестів ще немає, прямо позначити це; порожній запуск не є доказом роботи функції.
-4. Перевірити встановлення за зафіксованими залежностями, генерацію bindings і команди з чистої копії репозиторію. Прибрати залежність скриптів від особистих абсолютних шляхів і прихованих ручних налаштувань.
-5. Оновити README: вказати команду, робочий каталог, передумови, призначення та перевірений результат. Окремо описати дії, для яких потрібні інтернет, справжній Mac або ручна перевірка `.app`.
+1. Based on the successful build from 003, set up commands for running development, building the `.app`, TypeScript checking, frontend tests, Go tests, formatting, `go vet` and Wails bindings generation.
+2. Create a shared local check script. It must run from a documented location, return a non-zero exit code on error and not continue as though a failed check had succeeded.
+3. Separate fast checks from concurrency checks via the Go race detector, future real-engine tests and UI tests with the test bridge. If the corresponding tests do not exist yet, mark this explicitly; an empty run is not evidence that a feature works.
+4. Verify installation from the pinned dependencies, bindings generation and the commands from a clean copy of the repository. Remove the scripts' dependence on personal absolute paths and hidden manual settings.
+5. Update the README: state the command, working directory, prerequisites, purpose and verified result. Separately describe actions that require the internet, a real Mac or a manual check of the `.app`.
 
-6. Додати локальну перевірку плану: унікальні ID задач і вимог, наявні посилання, граф без циклів, узгоджені статуси й покриття. Статус, назва та залежності у файлі задачі є джерелом для навігаційної таблиці; її відтворення має змінювати лише позначений блок README. Не вимагати, щоб кожна залежність мала менший номер: після майбутнього поділу це перевіряється топологічним сортуванням.
-7. Навести команди окремо для короткої перевірки зміненого модуля, інтеграції зі справжнім рушієм та повної збірки. Не запускати весь довгий набір для кожної невеликої зміни; обирати перевірки за конкретним ризиком.
+6. Add a local plan check: unique task and requirement IDs, existing links, an acyclic graph, consistent statuses and coverage. The status, title and dependencies in the task file are the source for the navigation table; regenerating it must change only the marked block of the README. Do not require every dependency to have a smaller number: after a future split this is checked by topological sorting.
+7. Give commands separately for a quick check of a changed module, integration with the real engine and a full build. Do not run the whole long suite for every small change; choose checks by the specific risk.
 
-8. До реалізації засобу перевірки додати негативні приклади: непокритий файл, непроімпортований TS-модуль, непокритий Go startup, відсоток нижче 100%, відсутній/застарілий профіль і неприпустиме виключення. Кожний має дати ненульовий код завершення.
-9. Реалізувати перевірку повного інвентарю й сирих лічильників за інженерною політикою: Go та frontend перевіряються окремо, на файл і загалом; об’єднувати лише сумісні профілі тих самих джерел. Порожній набір не називати успішним coverage.
-10. **Додано 2026-10-15 рішенням власника** (політика [toolchain-versions](../docs/decisions/toolchain-versions.md)): перевірка залежностей у складі локальної команди — вік кожної заблокованої версії npm і Go-модуля ≥ 14 днів (помилка, якщо молодша), `npm audit` і `govulncheck` (помилка при вразливості), звіт `npm outdated` / `go list -m -u all` про оновлення, що вийшли з карантину. Мережеві перевірки позначити окремо від офлайн-перевірок.
-10. Спільна локальна команда якості блокує приймання при невдалих тестах, покритті нижче 100%, помилці типів/аналізаторів, невідтворюваних bindings або неактуальній документації. Швидкі запуски допомагають TDD, але не замінюють повний блокувальний прогін перед інтеграцією. Зберігати докази RED/GREEN для самого засобу перевірки.
+8. Before implementing the check tool, add negative examples: an uncovered file, an unimported TS module, uncovered Go startup, a percentage below 100%, a missing/stale profile and an impermissible exclusion. Each must produce a non-zero exit code.
+9. Implement the check of the full inventory and raw counters according to the engineering policy: Go and frontend are checked separately, per file and in total; merge only compatible profiles of the same sources. Do not call an empty set successful coverage.
+10. **Added on 2026-10-15 by the owner's decision** (policy [toolchain-versions](../docs/decisions/toolchain-versions.md)): a dependency check as part of the local command — the age of every locked npm and Go module version ≥ 14 days (error if younger), `npm audit` and `govulncheck` (error on a vulnerability), a `npm outdated` / `go list -m -u all` report on updates that have left quarantine. Mark network checks separately from offline checks.
+10. The shared local quality command blocks acceptance on failed tests, coverage below 100%, a type/analyzer error, non-reproducible bindings or outdated documentation. Fast runs help TDD but do not replace the full blocking run before integration. Keep RED/GREEN evidence for the check tool itself.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `scripts/; README.md; go.mod/go.sum; frontend lockfile`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/004-reproducible-check-commands.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `scripts/; README.md; go.mod/go.sum; frontend lockfile`. This is a map of future code; after the initial setup, check the actual paths and update the architecture if needed.
+**Evidence of completion:** the record `docs/verification/004-reproducible-check-commands.md` or an exact link to a test or build report in the context handoff. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Задокументовані команди виконуються з чистої копії за вказаними передумовами, без прихованих ручних кроків.
-- [ ] Контрольна помилка TypeScript і контрольна помилка Go спричиняють невдалий результат відповідної перевірки та спільного скрипту.
-- [ ] Wails bindings можна повторно згенерувати без ручного редагування; результат не містить незрозумілих змін від тих самих джерел.
-- [ ] README відрізняє вже наявні перевірки від майбутніх тестів рушія, тестового bridge та перевірок справжньої `.app`.
-- [ ] Недоступні або ще не реалізовані перевірки позначаються `not_run`, а не успіхом.
+- [ ] The documented commands run from a clean copy with the stated prerequisites, without hidden manual steps.
+- [ ] A control TypeScript error and a control Go error cause a failed result of the corresponding check and of the shared script.
+- [ ] Wails bindings can be regenerated without manual editing; the result contains no unexplained changes from the same sources.
+- [ ] The README distinguishes existing checks from future engine tests, test bridge tests and checks of the real `.app`.
+- [ ] Unavailable or not yet implemented checks are marked `not_run`, not as success.
 
-- [ ] Перевірка плану виявляє зламане посилання, цикл, невідомий ID, розбіжний статус і втрату покриття; на поточному плані завершується успішно.
-- [ ] Навігація відтворюється зі стану задач без перезапису вручну підтримуваних матриць, пояснень і відкритих рішень.
+- [ ] The plan check detects a broken link, a cycle, an unknown ID, a mismatched status and lost coverage; on the current plan it finishes successfully.
+- [ ] The navigation is regenerated from the task state without overwriting manually maintained matrices, explanations and open decisions.
 
-- [ ] Непокритий власний файл і показник нижче точних 100% блокують спільну команду; округлення, зміна include/exclude або відсутній звіт не дозволяють обхід.
-- [ ] Перевірені повний список джерел, усі визначені метрики, сумісність профілів і одна версія коду; результати відтворювані.
-- [ ] Початкові команди 003 збережені або перенесені без послаблення TDD/100%; до появи фічі не вигадано її успішних тестів.
+- [ ] An uncovered own file and a metric below exactly 100% block the shared command; rounding, changing include/exclude or a missing report do not allow a bypass.
+- [ ] The full list of sources, all defined metrics, profile compatibility and a single code version are verified; the results are reproducible.
+- [ ] The initial commands from 003 are kept or moved without weakening TDD/100%; no successful tests of a feature are invented before the feature exists.
 
-## Перевірки
+## Checks
 
-- Виконати повний задокументований набір команд із чистої копії та записати коди завершення.
-- По черзі тимчасово додати безпечну помилку TypeScript і Go, переконатися в ненульовому коді перевірки, потім прибрати помилки й повторити успішний запуск. Не залишати ці зміни в результаті задачі.
-- Повторити генерацію bindings і порівняти результат; перевірити роботу скриптів у каталозі з іншим абсолютним шляхом.
-- Якщо зовнішня перевірка безпеки не може отримати потрібні дані, записати причину та `not_run`; локальну компіляцію не видавати за її заміну.
+- Run the full documented set of commands from a clean copy and record the exit codes.
+- One at a time, temporarily add a safe TypeScript error and a Go error, make sure the check exits non-zero, then remove the errors and repeat a successful run. Do not leave these changes in the task result.
+- Repeat bindings generation and compare the result; verify that the scripts work in a directory with a different absolute path.
+- If an external security check cannot obtain the required data, record the reason and `not_run`; do not present local compilation as its replacement.
 
-**Як перевіряти:** запускати скрипти, які створюються в цій задачі, та зберегти фактичні команди й результати. Майбутні тести не повинні блокувати створення набору команд, але їхня відсутність має бути видимою.
+**How to check:** run the scripts created in this task and keep the actual commands and results. Future tests must not block creating the command set, but their absence must be visible.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Команди перевірок мають бути простими та придатними для виконання АІ-агентом без знання історії проєкту. Не приховувати помилки через ігнорування кодів завершення або загальне повідомлення про успіх. Ця задача створює основу перевірок, а не доводить роботу ще не реалізованого рушія, UI чи файлових операцій.
+Check commands must be simple and runnable by an AI agent without knowledge of the project history. Do not hide errors by ignoring exit codes or by a generic success message. This task creates the foundation for checks; it does not prove that the not yet implemented engine, UI or file operations work.
 
-**Підстава для технічних рішень:** [Go security practices](https://go.dev/doc/security/best-practices). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [Go security practices](https://go.dev/doc/security/best-practices). Reconcile signatures and constraints with the pinned version; reading the API is not a passed integration check.
 
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for the failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all our own executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architectural decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architectural conclusion, RED/GREEN, the refactoring done, the inventory/profile and the check that no debt remains. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and evidence of checks.
+- Record a short outcome: what changed, exact checks with pass/fail/not_run, ADR, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

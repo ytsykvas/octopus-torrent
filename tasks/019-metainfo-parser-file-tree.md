@@ -1,72 +1,72 @@
-# 019 — Розібрати метадані й побудувати узгоджене дерево файлів
+# 019 — Parse metadata and build a consistent file tree
 
-**Статус:** `planned`  
-**Фаза:** P3 — Імпорт, передавання й безпека даних  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [018](018-torrent-engine-adapter.md), [006](006-controlled-torrent-fixtures.md)  
-**Вимоги:** `ADD-01`, `ADD-04`, `ADD-09`, `UI-18`, `STACK-01`
+**Status:** `planned`  
+**Phase:** P3 — Import, transfer and data safety  
+**Priority:** critical path of the main scenario or completion  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [018](018-torrent-engine-adapter.md), [006](006-controlled-torrent-fixtures.md)  
+**Requirements:** `ADD-01`, `ADD-04`, `ADD-09`, `UI-18`, `STACK-01`
 
-## Результат
+## Outcome
 
-Створити єдину перевірену модель реальних файлів торрента, з якої будуються дерево, підсумки вибору й відповідності індексам рушія.
+Create a single verified model of a torrent's real files, from which the tree, selection totals and mappings to engine indices are built.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення, статуси та докази виконання.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `ADD-01`, `ADD-04`, `ADD-09`, `UI-18`, `STACK-01`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових попередніх задач. Якщо потрібний доказ відсутній, залежну частину роботи починати не можна.
+- [Task execution rules](README.md): start and completion conditions, statuses and evidence of completion.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `ADD-01`, `ADD-04`, `ADD-09`, `UI-18`, `STACK-01`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTO, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API and assumptions not confirmed by a prototype.
+- Results and ADRs of all mandatory preceding tasks. If the required evidence is missing, the dependent part of the work must not start.
 
-## Порядок роботи
+## Work order
 
-1. Прочитати metainfo в установлених межах обсягу й зберегти початкові байти словника `info`.
-2. Побудувати дерево v1, v2 і гібридних торрентів без повторного кореня; перевіряти арифметику розмірів на переповнення.
-3. Не показувати службові файли доповнення в інтерфейсі, але зберегти точну відповідність індексам файлів у рушії.
-4. Перевірити складові шляхів і обмеження глибини, кількості й обсягу; трактувати назви як недовірений текст.
-5. Для пошкодженого або непідтримуваного вмісту повертати типізовану помилку до створення запису бібліотеки.
+1. Read metainfo within the set size limits and keep the original bytes of the `info` dictionary.
+2. Build the tree for v1, v2 and hybrid torrents without a duplicated root; check size arithmetic for overflow.
+3. Do not show padding service files in the interface, but keep the exact mapping to the file indices in the engine.
+4. Check path components and the limits on depth, count and size; treat names as untrusted text.
+5. For corrupted or unsupported content, return a typed error before a library entry is created.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `internal/app/metainfo; canonical file model`. Це карта майбутнього коду; після створення каркаса проєкту перевірити фактичні шляхи й оновити карту в архітектурі.
-**Доказ виконання:** запис `docs/verification/019-metainfo-parser-file-tree.md` або точне посилання на вже наявний звіт перевірки чи збірки в підсумку передачі роботи. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `internal/app/metainfo; canonical file model`. This is a map of future code; after the project skeleton is created, verify the actual paths and update the map in the architecture.
+**Evidence of completion:** an entry `docs/verification/019-metainfo-parser-file-tree.md` or an exact link to an existing verification or build report in the handoff summary. One report can be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Дерево, суми вибраних байтів і відповідності індексам рушія походять з однієї узгодженої моделі.
-- [ ] Некоректні метадані не створюють запису бібліотеки.
-- [ ] Файли нульової довжини обробляються без ділення на нуль.
-- [ ] Усі наведені нижче перевірки виконано на відповідному рівні; невиконані або невдалі перевірки не позначено як успішні.
+- [ ] The tree, the sums of selected bytes and the mappings to engine indices come from one consistent model.
+- [ ] Invalid metadata does not create a library entry.
+- [ ] Zero-length files are handled without division by zero.
+- [ ] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as successful.
 
-## Перевірки
+## Checks
 
-- Розібрати глибоке дерево, однакові назви в різних папках і назви Unicode; перевірити структуру й відповідності індексів без втрати файлів.
-- Передати неузгоджений гібридний опис, пошкоджені шари хешів, значення з переповненням і небезпечні шляхи; кожен неприйнятний вхід має бути відхилений до створення запису.
+- Parse a deep tree, identical names in different folders and Unicode names; verify the structure and index mappings without losing files.
+- Pass an inconsistent hybrid description, corrupted hash layers, overflowing values and unsafe paths; every unacceptable input must be rejected before an entry is created.
 
-**Як запускати:** використати фактичні команди, зафіксовані у [004](004-reproducible-check-commands.md) та кореневому README після створення каркаса проєкту. До появи цих команд перевірки залишаються планом. Записати точну команду, робочий каталог, тестові дані, конфігурацію, код завершення й результат. Системні сценарії виконувати у зібраній `.app`; перевірки інтерфейсу з тестовими замінами та перевірки справжнього рушія позначати окремо.
+**How to run:** use the actual commands recorded in [004](004-reproducible-check-commands.md) and the root README after the project skeleton is created. Until these commands exist, the checks remain a plan. Record the exact command, working directory, test data, configuration, exit code and result. Run system scenarios in the built `.app`; mark interface checks with test doubles and checks of the real engine separately.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Усі назви й шляхи походять із недовірених метаданих. Перевірка інтерфейсу не замінює розбір, обмеження ресурсів і перевірку шляхів у Go. Перетворення моделі не повинно змінювати початкові байти, від яких залежить ідентичність торрента.
+All names and paths come from untrusted metadata. An interface check does not replace parsing, resource limits and path checks in Go. Transforming the model must not change the original bytes on which the torrent's identity depends.
 
-**Підстава для технічних рішень:** [Metainfo API](https://pkg.go.dev/github.com/anacrolix/torrent/metainfo), [BEP52](https://www.bittorrent.org/beps/bep_0052.html). Під час реалізації звірити сигнатури й обмеження із зафіксованою версією. Читання документації API не замінює виконаної інтеграційної перевірки.
+**Basis for technical decisions:** [Metainfo API](https://pkg.go.dev/github.com/anacrolix/torrent/metainfo), [BEP52](https://www.bittorrent.org/beps/bep_0052.html). During implementation, cross-check signatures and limitations against the pinned version. Reading API documentation does not replace a performed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of each session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** under the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are performed; absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` ставити лише після виконання критеріїв і запису доказів.
-- Записати короткий результат: що змінено, точні перевірки зі статусами `pass`, `fail` або `not_run`, ADR, фактичні місця змін у коді й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст лише в чаті.
+- Update the status in this file and in the README navigation table at the same time; set `done` only after the criteria are met and the evidence is recorded.
+- Record a short result: what was changed, exact checks with statuses `pass`, `fail` or `not_run`, ADRs, actual change locations in the code and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

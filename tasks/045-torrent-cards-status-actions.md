@@ -1,71 +1,71 @@
-# 045 — Побудувати картки, статуси й основні дії
+# 045 — Build cards, statuses and main actions
 
-**Статус:** `planned`  
-**Фаза:** P4 — React UI й native інтеграція  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [040](040-app-shell-fixed-geometry.md), [041](041-six-languages-formatters.md), [027](027-metrics-status-snapshots.md), [025](025-pause-resume-application.md)  
-**Вимоги:** `UI-01`, `UI-08`, `UI-13`, `UI-19`, `UI-12`, `UI-15`
+**Status:** `planned`  
+**Phase:** P4 — React UI and native integration  
+**Priority:** critical path of the main scenario or completion  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [040](040-app-shell-fixed-geometry.md), [041](041-six-languages-formatters.md), [027](027-metrics-status-snapshots.md), [025](025-pause-resume-application.md)  
+**Requirements:** `UI-01`, `UI-08`, `UI-13`, `UI-19`, `UI-12`, `UI-15`
 
-## Результат
+## Outcome
 
-Картка показує точний знімок стану й результат справжніх дій.
+The card shows an exact state snapshot and the result of real actions.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `UI-01`, `UI-08`, `UI-13`, `UI-19`, `UI-12`, `UI-15`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): task start and completion conditions, statuses and check evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `UI-01`, `UI-08`, `UI-13`, `UI-19`, `UI-12`, `UI-15`, the relevant criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Використати сталі UUID ключі та окремі controls деталей, вибору і згортання без вкладених buttons.
-2. Показати ↓ при завантаженні, ↑ при роздачі й pause для зупиненого/завершеного передавання.
-3. Бейджі завантаження/роздачі мають однаковий колір із різними стрілками; завершення червоне, пауза нейтральна.
-4. Швидкості видно лише під час передавання; обсяг і відсоток стоять біля кінця заповнення progress bar з обмеженням позиції.
-5. Дії чекають підтвердження Go; фокус і доступ до повного тексту зберігаються під час оновлень.
+1. Use stable UUID keys and separate controls for details, selection and collapsing, without nested buttons.
+2. Show ↓ while downloading, ↑ while seeding and pause for stopped/completed transfer.
+3. Download/seeding badges have the same color with different arrows; completed is red, paused is neutral.
+4. Speeds are visible only during transfer; size and percentage sit near the end of the progress bar fill, with a clamped position.
+5. Actions wait for Go confirmation; focus and access to the full text are preserved during updates.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `frontend/src/features/torrents/TorrentCard`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/045-torrent-cards-status-actions.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `frontend/src/features/torrents/TorrentCard`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** the record `docs/verification/045-torrent-cards-status-actions.md` or an exact link to a test or build report in the context handoff. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Пауза/завершення не мають швидкості або прочерку.
-- [ ] Статус, іконка й кнопки походять з однієї revision.
-- [ ] Очікування metadata, перевірка, помилка й відсутність wanted не видаються за завершення.
-- [ ] Потрібні перевірки виконані на належній межі; невиконаний або невдалий тест не названо успішним.
+- [ ] Paused/completed show no speed and no dash.
+- [ ] Status, icon and buttons come from the same revision.
+- [ ] Waiting for metadata, checking, error and no wanted files are not presented as completion.
+- [ ] The required checks are performed at the proper boundary; a test that was not run or failed is not called successful.
 
-## Перевірки
+## Checks
 
-- Перевірити progress 0/1/99/100 і переходи download/pause/seeding.
-- Перевірити довгі назви, клавіатурний фокус і часті snapshots.
+- Check progress 0/1/99/100 and the download/pause/seeding transitions.
+- Check long names, keyboard focus and frequent snapshots.
 
-**Як запускати:** використати фактичні команди з [004](004-reproducible-check-commands.md) та кореневого README. Записати команду, робочий каталог, конфігурацію, тестові дані, код завершення й спостереження. Перевірки справжнього рушія, тестового UI та системних можливостей у зібраній `.app` ведуться окремо.
+**How to run:** use the actual commands from [004](004-reproducible-check-commands.md) and the root README. Record the command, working directory, configuration, test data, exit code and observations. Checks of the real engine, the test UI and system capabilities in the built `.app` are kept separate.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Дотримуватися меж власних DTO, repository та адаптера рушія. Помилка має явний результат; прийняття команди не означає завершення операції. Нові продуктові можливості не додавати приховано. Зміни контракту й невизначені параметри записувати в ADR разом із реалізацією.
+Respect the boundaries of our own DTOs, the repository and the engine adapter. An error has an explicit result; accepting a command does not mean the operation is complete. Do not add new product capabilities covertly. Record contract changes and undefined parameters in an ADR together with the implementation.
 
-**Підстава для технічних рішень:** [Wails events](https://wails.io/docs/reference/runtime/events/). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [Wails events](https://wails.io/docs/reference/runtime/events/). Check signatures and constraints against the pinned version; reading the API is not a passed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architectural decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architectural conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and check evidence.
+- Write a short result: what changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, how to unblock it and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave necessary context only in the chat.

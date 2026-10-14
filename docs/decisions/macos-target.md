@@ -1,36 +1,36 @@
-# Цільова macOS і ідентичність застосунку
+# Target macOS and application identity
 
-**Статус:** `accepted` (мінімальну версію переглядає [066](../../tasks/066-personal-build-install-license-audit.md))  
-**Дата:** 2026-10-14  
-**Задача:** [003](../../tasks/003-wails-macos-build-spike.md)  
-**Пункт реєстру:** O1 із [базового опису](project-baseline.md#6-реєстр-відкритих-рішень)  
-**Вимоги:** REL-01, REL-02, STACK-05
+**Status:** `accepted` (the minimum version is reviewed by [066](../../tasks/066-personal-build-install-license-audit.md))  
+**Date:** 2026-10-14  
+**Task:** [003](../../tasks/003-wails-macos-build-spike.md)  
+**Register item:** O1 from the [baseline description](project-baseline.md#6-open-decision-register)  
+**Requirements:** REL-01, REL-02, STACK-05
 
-## Питання
+## Question
 
-Яку версію macOS і архітектуру Mac застосунок заявляє підтримуваними та з яким ідентифікатором пакета він реєструється в системі. Ідентифікатор потрібен надовго: типовий застосунок для `.torrent`, папка даних, дозволи macOS.
+Which macOS version and Mac architecture the application declares as supported, and which bundle identifier it registers with the system. The identifier is long-lived: the default application for `.torrent`, the data folder, macOS permissions.
 
-## Рішення
+## Decision
 
-- **Підтримувана конфігурація — тільки перевірена:** macOS 27.0.1 (26A434), Apple Silicon `arm64` (Apple M4). `LSMinimumSystemVersion` = `27.0` у `build/darwin/Info.plist` та `Info.dev.plist`. Старіші версії macOS і Intel Mac не заявляються, доки їх не перевірено.
-- **Архітектура пакета:** лише `arm64` (`darwin/arm64`, типова ціль `wails build` на цьому Mac). Universal-збірка не потрібна (вимоги §1).
-- **Bundle identifier:** `dev.tsykvas.octopustorrent` — рішення власника від 2026-10-14. Шаблон Wails `com.wails.<name>` замінено в обох plist.
-- **Підпис:** ad-hoc, автоматично під час `wails build` («Self-signing application»); `TeamIdentifier` не задано. Gatekeeper (`spctl -a`) відхиляє такий пакет, але локально зібрана `.app` не має атрибута карантину й відкривається з Finder. Developer ID і notarization не потрібні для особистої збірки (REL-02) і розглядаються в 066.
+- **Supported configuration is only the verified one:** macOS 27.0.1 (26A434), Apple Silicon `arm64` (Apple M4). `LSMinimumSystemVersion` = `27.0` in `build/darwin/Info.plist` and `Info.dev.plist`. Older macOS versions and Intel Macs are not declared until they are verified.
+- **Bundle architecture:** `arm64` only (`darwin/arm64`, the default `wails build` target on this Mac). A Universal build is not needed (requirements §1).
+- **Bundle identifier:** `dev.tsykvas.octopustorrent` — owner's decision of 2026-10-14. The Wails template `com.wails.<name>` is replaced in both plists.
+- **Signing:** ad-hoc, automatically during `wails build` ("Self-signing application"); `TeamIdentifier` is not set. Gatekeeper (`spctl -a`) rejects such a bundle, but a locally built `.app` has no quarantine attribute and opens from Finder. Developer ID and notarization are not needed for a personal build (REL-02) and are considered in 066.
 
-## Розглянуті альтернативи
+## Alternatives considered
 
-| Варіант | Переваги | Недоліки | Чому не обрано |
+| Option | Advantages | Disadvantages | Why not chosen |
 |---|---|---|---|
-| Типове значення Wails `LSMinimumSystemVersion 10.13.0` | Нічого не змінювати | Заявляє сумісність, яку ніхто не перевіряв; Go 1.27 вимагає новішу macOS | Порушує правило «неперевірене не називається підтримуваним» |
-| Universal (`arm64` + `amd64`) | Працює й на Intel Mac | Довша збірка, неперевірена ціль | Інших Mac немає в обсязі |
-| `com.wails.OctopusTorrent` | Значення за замовчуванням | Простір імен не належить власнику | Рішення власника — `dev.tsykvas.octopustorrent` |
+| Wails default `LSMinimumSystemVersion 10.13.0` | Nothing to change | Declares compatibility that nobody has verified; Go 1.27 requires a newer macOS | Violates the rule "unverified is not called supported" |
+| Universal (`arm64` + `amd64`) | Also works on Intel Macs | Longer build, unverified target | Other Macs are not in scope |
+| `com.wails.OctopusTorrent` | Default value | The namespace does not belong to the owner | Owner's decision is `dev.tsykvas.octopustorrent` |
 
-## Перевірені підстави
+## Verified grounds
 
-[Звіт 003](../verification/003-wails-macos-build-spike.md): `plutil -p` показує `CFBundleIdentifier = dev.tsykvas.octopustorrent` і `LSMinimumSystemVersion = 27.0`; `lipo -archs` → `arm64`; `codesign -dv` → `Signature=adhoc`, `codesign --verify --deep --strict` — `pass`; `spctl -a` → `rejected`; запуск із Finder (подвійний клік власника) і через `open` — `pass`.
+[Report 003](../verification/003-wails-macos-build-spike.md): `plutil -p` shows `CFBundleIdentifier = dev.tsykvas.octopustorrent` and `LSMinimumSystemVersion = 27.0`; `lipo -archs` → `arm64`; `codesign -dv` → `Signature=adhoc`, `codesign --verify --deep --strict` — `pass`; `spctl -a` → `rejected`; launch from Finder (owner's double-click) and via `open` — `pass`.
 
-## Наслідки
+## Consequences
 
-- Під час встановлення на іншу версію macOS система відмовить у запуску, доки 066 не перевірить і не знизить мінімум.
-- Зміна bundle ID після появи бібліотеки потребує міграції даних і повторного вибору типового застосунку, тому ID вважається сталим.
-- `CFBundleDocumentTypes` для `.torrent` і схема `magnet:` додаються в ці plist у [036](../../tasks/036-finder-magnet-open-queue.md) (O13).
+- When installed on a different macOS version, the system will refuse to launch it until 066 verifies and lowers the minimum.
+- Changing the bundle ID after the library exists requires data migration and choosing the default application again, so the ID is considered stable.
+- `CFBundleDocumentTypes` for `.torrent` and the `magnet:` scheme are added to these plists in [036](../../tasks/036-finder-magnet-open-queue.md) (O13).

@@ -1,56 +1,56 @@
-# Звіт 001 — вихідний обсяг і реєстр відкритих рішень
+# Report 001: initial scope and open-decision register
 
-**Задача:** [001](../../tasks/001-scope-and-decision-register.md)  
-**Дата:** 14 жовтня 2026 року  
-**Версія змін:** перший коміт репозиторію (задача 002); до 001 Git не існував  
-**Результат:** [docs/decisions/project-baseline.md](../decisions/project-baseline.md)
+**Task:** [001](../../tasks/001-scope-and-decision-register.md)  
+**Date:** 14 October 2026  
+**Change version:** the first repository commit (task 002); before 001, Git did not exist  
+**Result:** [docs/decisions/project-baseline.md](../decisions/project-baseline.md)
 
-## Архітектурний план сесії
+## Session architecture plan
 
-- **Фактичний стан:** `/Users/tsykvas/projects/torrent` був порожнім, без Git; документація існувала тільки в `~/Desktop/OctopusTorrent`. Виконуваного коду немає.
-- **Вплив:** лише документація. Межі модулів, контракти й стек не змінюються; архітектура не потребує оновлення, бо 001 фіксує вже погоджену карту (§3 архітектури) як майбутню.
-- **Повторне використання:** матриці вимог/сценаріїв і стисла таблиця відкритих рішень у `tasks/README.md` — джерело відповідальних задач; базовий опис посилається на них, а не копіює 80 рядків.
-- **Перевірки до зміни (RED):** відсутність результатів 001; підрахунок ID/сценаріїв; перевірка посилань.
-- **Документація:** новий `docs/decisions/project-baseline.md`, цей звіт, індекс `docs/README.md`, статус у задачі й навігації.
+- **Actual state:** `/Users/tsykvas/projects/torrent` was empty, without Git; the documentation existed only in `~/Desktop/OctopusTorrent`. There is no executable code.
+- **Impact:** documentation only. Module boundaries, contracts and the stack do not change; the architecture does not need an update, because 001 records the already agreed map (architecture §3) as the future one.
+- **Reuse:** the requirement/scenario matrices and the condensed table of open decisions in `tasks/README.md` are the source of responsible tasks; the baseline links to them instead of copying 80 rows.
+- **Checks before the change (RED):** absence of the 001 results; counting of IDs/scenarios; link check.
+- **Documentation:** the new `docs/decisions/project-baseline.md`, this report, the `docs/README.md` index, the status in the task and in the navigation.
 
-## RED — очікуваний стан до зміни
+## RED: expected state before the change
 
-| Перевірка | Команда | Результат |
+| Check | Command | Result |
 |---|---|---|
-| Результат 001 відсутній | `ls docs/decisions/project-baseline.md docs/verification/001-scope-and-decision-register.md` | `fail` (очікувано): `No such file or directory` для обох |
-| Копія документації ідентична джерелу | `rsync -a --exclude=.DS_Store ~/Desktop/OctopusTorrent/ ./ && diff -rq -x .DS_Store ~/Desktop/OctopusTorrent .` | `pass`: розбіжностей немає (`COPY OK`) |
-| Посилання в специфікаціях | `python3 -I check_links.py .` (скрипт перевірки посилань сесії; перенесення в репозиторій — задача 004) | первинний прогін після чернетки baseline: 1 `fail` — ще не створений цей звіт |
+| The 001 result is absent | `ls docs/decisions/project-baseline.md docs/verification/001-scope-and-decision-register.md` | `fail` (expected): `No such file or directory` for both |
+| The documentation copy is identical to the source | `rsync -a --exclude=.DS_Store ~/Desktop/OctopusTorrent/ ./ && diff -rq -x .DS_Store ~/Desktop/OctopusTorrent .` | `pass`: no differences (`COPY OK`) |
+| Links in the specifications | `python3 -I check_links.py .` (the session's link-check script; moving it into the repository is task 004) | initial run after the baseline draft: 1 `fail`, this report not yet created |
 
-## GREEN — фактичні перевірки
+## GREEN: actual checks
 
-| # | Перевірка | Команда / спосіб | Результат |
+| # | Check | Command / method | Result |
 |---|---|---|---|
-| 1 | Унікальні ID у таблицях вимог | `grep -oE '^\| [A-Z]+-[0-9]{2} \|' PROJECT_REQUIREMENTS.md \| tr -d '\| ' \| sort -u \| wc -l` | `pass`: **80** (ADD 8, AI 10, AUTO 2, COL 1, DATA 3, DEL 5, NEXT 2, QA 8, REL 3, SET 8, STACK 5, TR 8, UI 17) |
-| 2 | Матриця «Повне покриття 80 вимог» = набір вимог | `diff` відсортованих ID вимог і рядків матриці `tasks/README.md` | `pass`: збігаються, 80 = 80 |
-| 3 | Усі ID згадано в задачах; немає вигаданих ID | `comm` ID із `tasks/*.md` (у зворотних лапках) і ID вимог | `pass`: різниця порожня в обидва боки |
-| 4 | Будь-які згадки ID у вимогах поза таблицями | `grep -ohE '\b[A-Z]+-[0-9]{2}\b'` порівняно з табличним набором | `pass`: нових ID немає |
-| 5 | Пропуски нумерації | перебір номерів кожного префікса | зафіксовано: ADD-05, UI-05, UI-14 відсутні у джерелі |
-| 6 | 19 наскрізних сценаріїв | `grep -c '^[0-9]\{1,2\}\. \*\*' PROJECT_REQUIREMENTS.md`; рядки `AS-NN` у матриці | `pass`: 19 і 19 |
-| 7 | 68 задач, усі `planned` на старті | `ls tasks/[0-9]*.md \| wc -l`; `grep -h '^\*\*Статус:\*\*'` | `pass`: 68, усі `planned` |
-| 8 | Відкриті параметри §7 вимог мають власника | ручне зіставлення 6 пунктів §7 і таблиці tasks/README з реєстром O1–O18 | `pass`: §7 п.1→O1, п.2→O2, п.3→O6, п.4→O9, п.5→O4/O5, п.6→O18 |
-| 9 | Середовище | `sw_vers; uname -m; sysctl -n machdep.cpu.brand_string hw.memsize; df -h; xcode-select -p; clang --version; git/node/npm/sqlite3/gh/brew --version; command -v go wails` | записано в baseline §5; `go`, `wails` — відсутні |
-| 10 | Особисті межі без входу, оплат, хмари й вбудованого ШІ | ручний огляд вимог §1, §3, §4, §5.2, концепту, архітектури §1 | `pass`: межі підтверджені посиланнями в baseline §2 |
-| 11 | Порівняння специфікацій із макетом | огляд `MOCKUP.html` проти вимог і концепту | результати — baseline §4 |
-| 12 | Посилання й якорі в усіх Markdown-файлах | `python3 -I check_links.py .` | `pass` (фінальний прогін — див. «Підсумок») |
-| 13 | Джерела лише для читання не змінено | `diff -rq` з `~/Desktop/OctopusTorrent` після змін | `pass`: відрізняються лише файли, змінені 001/002 свідомо (див. «Підсумок») |
+| 1 | Unique IDs in the requirement tables | `grep -oE '^\| [A-Z]+-[0-9]{2} \|' PROJECT_REQUIREMENTS.md \| tr -d '\| ' \| sort -u \| wc -l` | `pass`: **80** (ADD 8, AI 10, AUTO 2, COL 1, DATA 3, DEL 5, NEXT 2, QA 8, REL 3, SET 8, STACK 5, TR 8, UI 17) |
+| 2 | The "Full coverage of 80 requirements" matrix = the set of requirements | `diff` of the sorted requirement IDs and the matrix rows of `tasks/README.md` | `pass`: they match, 80 = 80 |
+| 3 | All IDs are mentioned in tasks; no invented IDs | `comm` of the IDs from `tasks/*.md` (in backticks) and the requirement IDs | `pass`: the difference is empty in both directions |
+| 4 | Any mentions of IDs in the requirements outside the tables | `grep -ohE '\b[A-Z]+-[0-9]{2}\b'` compared with the table set | `pass`: no new IDs |
+| 5 | Gaps in numbering | enumeration of the numbers of each prefix | recorded: ADD-05, UI-05, UI-14 are absent in the source |
+| 6 | 19 end-to-end scenarios | `grep -c '^[0-9]\{1,2\}\. \*\*' PROJECT_REQUIREMENTS.md`; `AS-NN` rows in the matrix | `pass`: 19 and 19 |
+| 7 | 68 tasks, all `planned` at the start | `ls tasks/[0-9]*.md \| wc -l`; `grep -h '^\*\*Status:\*\*'` (the label was Ukrainian when this ran) | `pass`: 68, all `planned` |
+| 8 | The open parameters of requirements §7 have an owner | manual mapping of the 6 items of §7 and the tasks/README table to the register O1–O18 | `pass`: §7 item 1→O1, item 2→O2, item 3→O6, item 4→O9, item 5→O4/O5, item 6→O18 |
+| 9 | Environment | `sw_vers; uname -m; sysctl -n machdep.cpu.brand_string hw.memsize; df -h; xcode-select -p; clang --version; git/node/npm/sqlite3/gh/brew --version; command -v go wails` | recorded in baseline §5; `go`, `wails` are absent |
+| 10 | Personal limits without sign-in, payments, cloud and built-in AI | manual review of requirements §1, §3, §4, §5.2, the concept, architecture §1 | `pass`: the limits are confirmed by links in baseline §2 |
+| 11 | Comparison of the specifications with the mockup | review of `MOCKUP.html` against the requirements and the concept | results in baseline §4 |
+| 12 | Links and anchors in all Markdown files | `python3 -I check_links.py .` | `pass` (final run: see "Summary") |
+| 13 | The read-only sources are unchanged | `diff -rq` with `~/Desktop/OctopusTorrent` after the changes | `pass`: only the files deliberately changed by 001/002 differ (see "Summary") |
 
-**Покриття коду:** `not_applicable` — власного виконуваного коду немає.
+**Code coverage:** `not_applicable`: there is no owned executable code.
 
-## REFACTOR і перевірка боргу
+## REFACTOR and debt check
 
-- Інвентар ID і відповідальних задач не дублює матриці `tasks/README.md`: baseline містить підсумок і посилання. Стисла таблиця відкритих рішень у плані лишається оглядом; реєстр baseline додає перевірку й документ рішення.
-- Розбіжність R2 (назва макета) виправлена у вимогах як перевірювана зміна посилання. R1 не виправляється перенумерацією; пояснення в передачі контексту задачі.
-- Нового технічного боргу немає; TODO не додавались. Відкриті рішення O1–O18 мають власників і не є боргом 001.
+- The inventory of IDs and responsible tasks does not duplicate the `tasks/README.md` matrices: the baseline contains a summary and links. The condensed table of open decisions in the plan remains an overview; the baseline register adds the check and the decision document.
+- The R2 discrepancy (the mockup name) is fixed in the requirements as a verifiable link change. R1 is not fixed by renumbering; the explanation is in the task's context handoff.
+- There is no new technical debt; no TODOs were added. The open decisions O1–O18 have owners and are not debt of 001.
 
-## Підсумок
+## Summary
 
-Фінальний прогін (після 001 і 002): перевірка посилань — `pass`, 1692 відносних посилання у 83 Markdown-файлах, 0 помилок. `diff -rq` із `~/Desktop/OctopusTorrent` показує лише свідомі зміни: змінено `PROJECT_REQUIREMENTS.md` (R2), `AGENTS.md`, `docs/README.md`, `tasks/README.md`, `tasks/001…`, `tasks/002…`; додано `README.md`, `.gitignore`, `docs/decisions/{project-baseline,_ADR_TEMPLATE}.md`, `docs/verification/00{1,2}-…md`. `archive/`, `MOCKUP.html`, концепт, архітектура, дослідження й задачі 003–068 не змінені.
+Final run (after 001 and 002): link check `pass`, 1692 relative links in 83 Markdown files, 0 errors. `diff -rq` with `~/Desktop/OctopusTorrent` shows only deliberate changes: changed `PROJECT_REQUIREMENTS.md` (R2), `AGENTS.md`, `docs/README.md`, `tasks/README.md`, `tasks/001…`, `tasks/002…`; added `README.md`, `.gitignore`, `docs/decisions/{project-baseline,_ADR_TEMPLATE}.md`, `docs/verification/00{1,2}-…md`. `archive/`, `MOCKUP.html`, the concept, the architecture, the research and tasks 003–068 are unchanged.
 
-Критерії 001 виконані: 80 ID і 19 сценаріїв перелічені й звірені, розбіжності записані, кожне відкрите рішення має задачу, критерій, перевірку й документ, особисті межі підтверджені, каталог коду й наступна задача (002) визначені, факти відокремлені від припущень.
+The 001 criteria are met: 80 IDs and 19 scenarios are listed and reconciled, discrepancies are recorded, every open decision has a task, a criterion, a check and a document, the personal limits are confirmed, the code directory and the next task (002) are defined, facts are separated from assumptions.
 
-Наступна задача: [002](../../tasks/002-repository-and-agent-entrypoint.md). Незалежно від 002 нічого виконувати не можна: 003 потребує 002 та встановлених Go і Wails CLI.
+Next task: [002](../../tasks/002-repository-and-agent-entrypoint.md). Nothing can be executed independently of 002: 003 requires 002 and installed Go and Wails CLI.

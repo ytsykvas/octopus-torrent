@@ -1,184 +1,184 @@
-# Базовий опис проєкту й реєстр відкритих рішень
+# Project baseline and open-decision register
 
-**Статус:** прийнято, задача [001](../../tasks/001-scope-and-decision-register.md), 14 жовтня 2026 року.  
-**Доказ:** [docs/verification/001-scope-and-decision-register.md](../verification/001-scope-and-decision-register.md).  
-**Природа документа:** упорядковує вже погоджений обсяг. Не змінює стек, вимоги чи продуктові межі й не додає нових можливостей.
+**Status:** accepted, task [001](../../tasks/001-scope-and-decision-register.md), 14 October 2026.  
+**Evidence:** [docs/verification/001-scope-and-decision-register.md](../verification/001-scope-and-decision-register.md).  
+**Nature of the document:** organizes the already agreed scope. It does not change the stack, requirements or product boundaries and does not add new capabilities.
 
-Позначки достовірності в цьому документі:
+Reliability markers in this document:
 
-- **Перевірено** — факт встановлено командою або підрахунком під час 001; команду наведено у звіті.
-- **Погоджено** — рішення власника, записане в специфікаціях; експериментально ще не доведене.
-- **Відкрито** — потрібен дослід або рішення в названій задачі; до того будь-яке значення є лише припущенням.
+- **Verified** — the fact was established by a command or a count during 001; the command is given in the verification report.
+- **Agreed** — an owner decision recorded in the specifications; not yet proven experimentally.
+- **Open** — a spike or a decision is needed in the named task; until then any value is only an assumption.
 
-## 1. Джерела вимог і порядок авторитетності
+## 1. Requirement sources and order of authority
 
-Погоджено ([tasks/README.md](../../tasks/README.md), розділ «Стек, обсяг і джерело правди»):
+Agreed ([tasks/README.md](../../tasks/README.md), section "Stack, scope and source of truth"):
 
-1. [PROJECT_REQUIREMENTS.md](../../PROJECT_REQUIREMENTS.md) — поведінка, критерії, 80 ID вимог і 19 наскрізних сценаріїв.
-2. [PRODUCT_CONCEPT.md](../../PRODUCT_CONCEPT.md) — ідея, особисті межі, порядок реалізації.
-3. [APPLICATION_ARCHITECTURE.md](../../APPLICATION_ARCHITECTURE.md) — компоненти, DTO, життєві цикли, дані.
-4. [ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md](../../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md) — API рушія та ще не доведені прототипом припущення.
-5. [MOCKUP.html](../../MOCKUP.html) — орієнтир оформлення й взаємодій; демонстраційні перемикачі не є продуктом.
-6. [TDD_AND_QUALITY.md](../engineering/TDD_AND_QUALITY.md), [AGENTS.md](../../AGENTS.md), [docs/README.md](../README.md) — обов’язкові правила кожної сесії.
-7. [tasks/README.md](../../tasks/README.md) і numbered tasks — спосіб виконання, а не зміна вимог.
+1. [PROJECT_REQUIREMENTS.md](../../PROJECT_REQUIREMENTS.md) — behavior, criteria, 80 requirement IDs and 19 end-to-end scenarios.
+2. [PRODUCT_CONCEPT.md](../../PRODUCT_CONCEPT.md) — idea, personal limits, implementation order.
+3. [APPLICATION_ARCHITECTURE.md](../../APPLICATION_ARCHITECTURE.md) — components, DTO, lifecycles, data.
+4. [ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md](../../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md) — engine API and assumptions not yet proven by a prototype.
+5. [MOCKUP.html](../../MOCKUP.html) — reference for styling and interactions; demo toggles are not the product.
+6. [TDD_AND_QUALITY.md](../engineering/TDD_AND_QUALITY.md), [AGENTS.md](../../AGENTS.md), [docs/README.md](../README.md) — mandatory rules for every session.
+7. [tasks/README.md](../../tasks/README.md) and numbered tasks — the way of execution, not a change of requirements.
 
-[archive/LIBTORRENT_TECHNICAL_RESEARCH.md](../../archive/LIBTORRENT_TECHNICAL_RESEARCH.md) — лише історична довідка про відхилений стек (libtorrent + SwiftUI).
+[archive/LIBTORRENT_TECHNICAL_RESEARCH.md](../../archive/LIBTORRENT_TECHNICAL_RESEARCH.md) — only a historical reference about the rejected stack (libtorrent + SwiftUI).
 
-## 2. Погоджений обсяг і особисті межі
+## 2. Agreed scope and personal limits
 
-Погоджено:
+Agreed:
 
-- Особистий локальний desktop BitTorrent-клієнт для macOS, перша ціль — власний Apple Silicon Mac ([вимоги §1](../../PROJECT_REQUIREMENTS.md#1-мета-та-межі-особистої-версії)).
-- Стек: React + TypeScript strict / Vite, Wails v2 (стабільна гілка), Go, anacrolix/torrent, SQLite через repository. Wails v3 не входить у поточне рішення ([концепт](../../PRODUCT_CONCEPT.md), «Обраний стек»).
-- **Немає:** акаунтів і входу, планів Free/Pro, підписок, платежів, сервера ліцензій, хмарної синхронізації, власного сервера, продуктової аналітики, публічного сайту ([вимоги §1](../../PROJECT_REQUIREMENTS.md#1-мета-та-межі-особистої-версії), DATA-01, DATA-02; [архітектура §1](../../APPLICATION_ARCHITECTURE.md#1-стек-і-межа-системи)).
-- **Немає вбудованої моделі ШІ.** AI-first означає читабельний код і відтворюваний контекст у репозиторії для агентів-розробників ([вимоги §5.2](../../PROJECT_REQUIREMENTS.md#52-ai-first-код-для-подальшої-роботи-аі), [tasks/README.md](../../tasks/README.md)).
-- Не входять у погоджений обсяг: каталог контенту, телевізійний стрімінг, вебверсія, мобільні застосунки, обмін бібліотекою між Mac, розширена аналітика мережі, випуски для інших платформ ([вимоги §4](../../PROJECT_REQUIREMENTS.md#4-заплановано-після-mvp), [концепт](../../PRODUCT_CONCEPT.md), «Етапи»).
-- Мережа потрібна лише для BitTorrent; список і налаштування доступні офлайн (DATA-01).
+- A personal local desktop BitTorrent client for macOS; the first target is the owner's own Apple Silicon Mac ([requirements §1](../../PROJECT_REQUIREMENTS.md#1-goal-and-boundaries-of-the-personal-version)).
+- Stack: React + TypeScript strict / Vite, Wails v2 (stable branch), Go, anacrolix/torrent, SQLite through a repository. Wails v3 is not part of the current decision ([concept](../../PRODUCT_CONCEPT.md), "Chosen stack").
+- **None of:** accounts and sign-in, Free/Pro plans, subscriptions, payments, license server, cloud sync, own server, product analytics, public website ([requirements §1](../../PROJECT_REQUIREMENTS.md#1-goal-and-boundaries-of-the-personal-version), DATA-01, DATA-02; [architecture §1](../../APPLICATION_ARCHITECTURE.md#1-stack-and-system-boundary)).
+- **No built-in AI model.** AI-first means readable code and reproducible context in the repository for developer agents ([requirements §5.2](../../PROJECT_REQUIREMENTS.md#52-ai-first-code-for-further-ai-work), [tasks/README.md](../../tasks/README.md)).
+- Not part of the agreed scope: content catalog, TV streaming, web version, mobile apps, library sharing between Macs, advanced network analytics, releases for other platforms ([requirements §4](../../PROJECT_REQUIREMENTS.md#4-planned-after-mvp), [concept](../../PRODUCT_CONCEPT.md), "Stages").
+- The network is needed only for BitTorrent; the list and settings are available offline (DATA-01).
 
-## 3. Інвентар вимог
+## 3. Requirement inventory
 
-Перевірено: таблиці `PROJECT_REQUIREMENTS.md` містять **80 унікальних ID**; той самий набір має матриця [«Повне покриття 80 вимог»](../../tasks/README.md#повне-покриття-80-вимог), кожен ID має основну задачу; кожен ID згадано принаймні в одній задачі, і задачі не посилаються на неіснуючі ID.
+Verified: the tables of `PROJECT_REQUIREMENTS.md` contain **80 unique IDs**; the matrix ["Full coverage of the 80 requirements"](../../tasks/README.md#full-coverage-of-the-80-requirements) has the same set, and each ID has a primary task; each ID is mentioned in at least one task, and tasks do not reference non-existent IDs.
 
-| Розділ вимог | Префікс | К-сть | ID |
+| Requirements section | Prefix | Count | ID |
 |---|---|---|---|
-| 2.1 Додавання | ADD | 8 | ADD-01–04, ADD-06–09 |
-| 2.2 Завантаження й роздача | TR | 8 | TR-01–08 |
-| 2.3 Список і деталі | UI | 17 | UI-01–04, UI-06–13, UI-15–19 |
-| 2.4 Видалення | DEL | 5 | DEL-01–05 |
-| 2.5 Налаштування | SET | 8 | SET-01–08 |
-| 2.6 Дистрибуція | REL | 3 | REL-01–03 |
-| 2.7 Бібліотека й автоматизація | COL, AUTO | 1 + 2 | COL-01, AUTO-01–02 |
-| 3 Дані й приватність | DATA | 3 | DATA-01–03 |
-| 4 Після MVP | NEXT | 2 | NEXT-01–02 |
-| 5.1 Контракти стеку | STACK | 5 | STACK-01–05 |
+| 2.1 Adding | ADD | 8 | ADD-01–04, ADD-06–09 |
+| 2.2 Downloading and seeding | TR | 8 | TR-01–08 |
+| 2.3 List and details | UI | 17 | UI-01–04, UI-06–13, UI-15–19 |
+| 2.4 Deletion | DEL | 5 | DEL-01–05 |
+| 2.5 Settings | SET | 8 | SET-01–08 |
+| 2.6 Distribution | REL | 3 | REL-01–03 |
+| 2.7 Library and automation | COL, AUTO | 1 + 2 | COL-01, AUTO-01–02 |
+| 3 Data and privacy | DATA | 3 | DATA-01–03 |
+| 4 After MVP | NEXT | 2 | NEXT-01–02 |
+| 5.1 Stack contracts | STACK | 5 | STACK-01–05 |
 | 5.2 AI-first | AI | 10 | AI-01–10 |
-| 5.3 Інженерна дисципліна | QA | 8 | QA-01–08 |
-| **Разом** | | **80** | |
+| 5.3 Engineering discipline | QA | 8 | QA-01–08 |
+| **Total** | | **80** | |
 
-Пропуски нумерації **ADD-05, UI-05, UI-14** існують у джерелі; їх не заповнювати й не перенумеровувати.
+The numbering gaps **ADD-05, UI-05, UI-14** exist in the source; do not fill them or renumber.
 
-**Наскрізні сценарії.** Перевірено: розділ 6 вимог має **19** пунктів; матриця [«Покриття 19 наскрізних сценаріїв»](../../tasks/README.md#покриття-19-наскрізних-сценаріїв) містить AS-01…AS-19 із задачами реалізації й приймання. AS-NN — позначення пункту N розділу 6, а не нові ID вимог.
+**End-to-end scenarios.** Verified: section 6 of the requirements has **19** items; the matrix ["Coverage of the 19 end-to-end scenarios"](../../tasks/README.md#coverage-of-the-19-end-to-end-scenarios) contains AS-01…AS-19 with implementation and acceptance tasks. AS-NN denotes item N of section 6, not new requirement IDs.
 
-Відповідальні задачі для кожного ID і сценарію не дублюються тут: їхнє джерело — матриці `tasks/README.md`.
+The responsible tasks for each ID and scenario are not duplicated here: their source is the matrices in `tasks/README.md`.
 
-## 4. Розбіжності між документами
+## 4. Discrepancies between documents
 
-Записано явно; жодну не вирішено приховано на користь зручнішого варіанта.
+Recorded explicitly; none was resolved silently in favor of the more convenient option.
 
-| # | Розбіжність | Джерела | Вирішення |
+| # | Discrepancy | Sources | Resolution |
 |---|---|---|---|
-| R1 | Задача 001 вимагає «усі 72 ID», а вимоги й план містять 80. | [001](../../tasks/001-scope-and-decision-register.md), «Порядок роботи» п. 1 і критерії; [tasks/README.md](../../tasks/README.md#перевірка-самого-плану) | Причина: QA-01–QA-08 додані в редакції 3 плану (72 + 8 = 80), текст 001 не оновлено. Авторитетні вимоги (джерело 1) → чинне число **80**. Примітку додано в передачу контексту 001; нумерацію не змінено. |
-| R2 | Вимоги посилаються на макет як `OctopusTorrent-mockup.html`, фактичний файл — `MOCKUP.html`. | [Вимоги](../../PROJECT_REQUIREMENTS.md), рядок «Пов’язані матеріали» | Фактичну назву файла виправлено в рядку посилання (перевірювана зміна посилання, не зміна поведінки). |
-| R3 | Концепт перелічує пошук і фільтри серед «Основних можливостей», а вимоги відносять їх до NEXT-01/02 «після MVP». | [Концепт](../../PRODUCT_CONCEPT.md), «Основні можливості»; [вимоги §4](../../PROJECT_REQUIREMENTS.md#4-заплановано-після-mvp) | Не суперечність обсягу: обидва джерела лишають їх у проєкті. Межу MVP визначають вимоги — NEXT-01/02 у фазі P6 ([055](../../tasks/055-search-status-filters.md)), після [054](../../tasks/054-global-upload-ui-mvp-gate.md). |
-| R4 | Архітектура: `.app` реєструє `.torrent` **і magnet**; вимоги §5 згадують лише `CFBundleDocumentTypes` для `.torrent`. | [Архітектура §9](../../APPLICATION_ARCHITECTURE.md#9-macos-та-frontend); [вимоги §5](../../PROJECT_REQUIREMENTS.md#5-технічні-й-якісні-вимоги), ADD-02 | ADD-02 вимагає системного відкриття magnet, тож потрібна й реєстрація URL-схеми. Відкрито для [036](../../tasks/036-finder-magnet-open-queue.md): механізм реєстрації `magnet:` перевіряється у зібраній `.app`. |
-| R5 | Термін «Кошик» (назва 012) і «Смітник» (tasks/README, архітектура §8) для macOS Trash. | [012](../../tasks/012-macos-trash-and-path-spike.md); [архітектура §8](../../APPLICATION_ARCHITECTURE.md#8-файли-й-безпечне-видалення) | Синоніми одного системного механізму. Термін UI фіксує локалізація ([041](../../tasks/041-six-languages-formatters.md)); документи не перейменовуються в 001. |
+| R1 | Task 001 requires "all 72 IDs", while the requirements and plan contain 80. | [001](../../tasks/001-scope-and-decision-register.md), "Work order" item 1 and criteria; [tasks/README.md](../../tasks/README.md#check-of-the-plan-itself) | Cause: QA-01–QA-08 were added in revision 3 of the plan (72 + 8 = 80); the text of 001 was not updated. Authoritative requirements (source 1) → the valid number is **80**. A note was added to the context handoff of 001; numbering was not changed. |
+| R2 | The requirements refer to the mockup as `OctopusTorrent-mockup.html`; the actual file is `MOCKUP.html`. | [Requirements](../../PROJECT_REQUIREMENTS.md), line "Related materials" | The actual file name was corrected in the link line (a verifiable link change, not a behavior change). |
+| R3 | The concept lists search and filters among the "Core capabilities", while the requirements assign them to NEXT-01/02 "after MVP". | [Concept](../../PRODUCT_CONCEPT.md), "Core capabilities"; [requirements §4](../../PROJECT_REQUIREMENTS.md#4-planned-after-mvp) | Not a scope contradiction: both sources keep them in the project. The MVP boundary is defined by the requirements — NEXT-01/02 in phase P6 ([055](../../tasks/055-search-status-filters.md)), after [054](../../tasks/054-global-upload-ui-mvp-gate.md). |
+| R4 | Architecture: the `.app` registers `.torrent` **and magnet**; requirements §5 mention only `CFBundleDocumentTypes` for `.torrent`. | [Architecture §9](../../APPLICATION_ARCHITECTURE.md#9-macos-and-frontend); [requirements §5](../../PROJECT_REQUIREMENTS.md#5-technical-and-quality-requirements), ADD-02 | ADD-02 requires system opening of magnet links, so URL scheme registration is also needed. Open for [036](../../tasks/036-finder-magnet-open-queue.md): the `magnet:` registration mechanism is checked in the built `.app`. |
+| R5 | Two different Ukrainian terms, "Bin" (title of 012) and "Trash" (tasks/README, architecture §8), for the macOS Trash. | [012](../../tasks/012-macos-trash-and-path-spike.md); [architecture §8](../../APPLICATION_ARCHITECTURE.md#8-files-and-safe-deletion) | Synonyms for the same system mechanism. The UI term is fixed by localization ([041](../../tasks/041-six-languages-formatters.md)); documents are not renamed in 001. |
 
-| R6 | MVP-вимоги UI-07 («пошук не призводить до дії над прихованими записами») і UI-16 (перехід між «Усі / Завантажуються / Завершені / Роздаються») спираються на пошук і розділи, які вимоги відносять до NEXT-01/02 після MVP. | [Вимоги §2.3](../../PROJECT_REQUIREMENTS.md#23-список-і-деталі) і [§4](../../PROJECT_REQUIREMENTS.md#4-заплановано-після-mvp) | Тлумачення до рішення власника: у MVP критерії UI-07/UI-16 діють для тих розділів і пошуку, що вже існують; повне приймання цих частин — разом із [055](../../tasks/055-search-status-filters.md). Обсяг не змінено. |
-| R7 | Назва фільтра: вимоги — «активні», макет і UI-16 — «Завантажуються»; у макеті «Завершені» містить лише статус `done`, тож завершений торрент, що роздається, туди не потрапляє. | NEXT-02, UI-16; `MOCKUP.html` (розділи бічної панелі, `render`) | Відкрито для [013](../../tasks/013-transfer-policy-state-machine.md)/[055](../../tasks/055-search-status-filters.md) (O11): правила відбору й назви розділів. |
+| R6 | The MVP requirements UI-07 ("search does not lead to an action on hidden entries") and UI-16 (switching between "All / Downloading / Completed / Seeding") rely on search and sections that the requirements assign to NEXT-01/02 after MVP. | [Requirements §2.3](../../PROJECT_REQUIREMENTS.md#23-list-and-details) and [§4](../../PROJECT_REQUIREMENTS.md#4-planned-after-mvp) | Interpretation pending the owner's decision: in the MVP the UI-07/UI-16 criteria apply to the sections and search that already exist; full acceptance of these parts happens together with [055](../../tasks/055-search-status-filters.md). Scope unchanged. |
+| R7 | Filter name: the requirements say "active", the mockup and UI-16 say "Downloading"; in the mockup "Completed" contains only the `done` status, so a completed torrent that is seeding does not appear there. | NEXT-02, UI-16; `MOCKUP.html` (sidebar sections, `render`) | Open for [013](../../tasks/013-transfer-policy-state-machine.md)/[055](../../tasks/055-search-status-filters.md) (O11): selection rules and section names. |
 
-### Макет проти специфікацій
+### Mockup versus specifications
 
-Перевірено повним переглядом `MOCKUP.html` (498 рядків) із вибірковою звіркою рядків. Макет не є джерелом поведінки (авторитетність §1): де він розходиться з вимогами, переносяться вимоги.
+Verified by a full review of `MOCKUP.html` (498 lines) with selective cross-checking of lines. The mockup is not a source of behavior (authority §1): where it diverges from the requirements, the requirements are carried over.
 
-| # | Що робить макет | Що вимагає специфікація | Вид | Задача, що переносить вимогу |
+| # | What the mockup does | What the specification requires | Kind | Task that carries over the requirement |
 |---|---|---|---|---|
-| M1 | Magnet приймає будь-який непорожній рядок і одразу створює активний запис з готовими файлами (`openMagnet`/`addPending`). | ADD-02, ADD-04, TR-06, AS-03: очікування метаданих, вибір файлів після них, помилкове посилання не створює запис. | суперечність (демо) | 022, 044 |
-| M2 | Повторне додавання «прикладу» створює дублікат наявного запису. | ADD-03. | суперечність (демо) | 021 |
-| M3 | Лише 4 статуси (Завантажується, Призупинено, Роздається, Завершено); немає «очікування метаданих» і помилки окремого торрента. | UI-01, UI-10. | суперечність | 013, 027, 045, 051 |
-| M4 | Одиночне видалення з файлами не показує перелік файлів; групове — лише імена без шляхів. | DEL-02, DEL-05. | суперечність | 049 |
-| M5 | Новий запис показує «0 Б із 2.1 ГБ»; правило МБ/ГБ дотримане лише в деталях. | UI-12. | суперечність | 041 (O12) |
-| M6 | У налаштуваннях немає лімітів швидкості. | TR-04. | відсутня можливість | 026, 050 |
-| M7 | Початкова мова — `uk`. | SET-06: мова з пріоритетів macOS, інакше англійська. | суперечність | 041 |
-| M8 | Попередження про вимкнення віддачі: «трекери можуть не зараховувати завантаження». | SET-08: «можуть застосовувати власні правила». | неточність тексту | 050, 053 |
-| M9 | Пропущений завершений файл має текст «Не вибрано», «Пропущено» — лише для незавершених. | AS-07: «Пропущено». | неточність | 046 |
-| M10 | Під час пошуку «Вибрати всі» стає «Вибрати показані». | UI-07 такого стану не описує. | неточність | 048, 055 |
-| M11 | Повний шлях у попередньому перегляді доступний лише через `title`, не в доступній назві чекбокса. | ADD-09: повний шлях для VoiceOver. | суперечність доступності | 044 |
-| M12 | Немає тегів, колекцій, правил і папки спостереження. | COL-01, AUTO-01, AUTO-02. | відсутня можливість (погоджена на P6) | 056–061 |
+| M1 | Magnet accepts any non-empty string and immediately creates an active entry with ready files (`openMagnet`/`addPending`). | ADD-02, ADD-04, TR-06, AS-03: waiting for metadata, file selection after it, an invalid link does not create an entry. | contradiction (demo) | 022, 044 |
+| M2 | Re-adding the "example" creates a duplicate of the existing entry. | ADD-03. | contradiction (demo) | 021 |
+| M3 | Only 4 statuses (Downloading, Paused, Seeding, Completed); there is no "waiting for metadata" and no error of an individual torrent. | UI-01, UI-10. | contradiction | 013, 027, 045, 051 |
+| M4 | Single deletion with files does not show the file list; group deletion shows only names without paths. | DEL-02, DEL-05. | contradiction | 049 |
+| M5 | A new entry shows "0 B of 2.1 GB"; the MB/GB rule is followed only in the details. | UI-12. | contradiction | 041 (O12) |
+| M6 | Settings have no speed limits. | TR-04. | missing capability | 026, 050 |
+| M7 | The initial language is `uk`. | SET-06: language from macOS preferences, otherwise English. | contradiction | 041 |
+| M8 | Warning about disabling upload: "trackers may not count downloads". | SET-08: "may apply their own rules". | text inaccuracy | 050, 053 |
+| M9 | A skipped completed file has the text "Not selected"; "Skipped" is only for incomplete ones. | AS-07: "Skipped". | inaccuracy | 046 |
+| M10 | During search "Select all" becomes "Select shown". | UI-07 does not describe such a state. | inaccuracy | 048, 055 |
+| M11 | The full path in the preview is available only via `title`, not in the checkbox's accessible name. | ADD-09: full path for VoiceOver. | accessibility contradiction | 044 |
+| M12 | No tags, collections, rules or watch folder. | COL-01, AUTO-01, AUTO-02. | missing capability (agreed for P6) | 056–061 |
 
-**Демонстраційні елементи макета, які не переносяться в продукт.** Названі у вимогах §4: «Відновити приклад», «Показати приклад помилки», «Показати стан без мережі». Додатково виявлено (не названі у вимогах, теж не переносяться): кнопка «Про макет» у деталях; «Переглянути приклад» у діалозі додавання й в алерті помилки; ліміти «для макета» (20 МБ файла, 1000 файлів); ручне введення шляху й `webkitdirectory` замість системного діалогу (SET-01 → 037); службові примітки «Макет…/У вебмакеті…»; збереження налаштувань у `localStorage` (у продукті — SQLite, SET-02); футер «Інтерактивний макет».
+**Mockup demo elements that are not carried over into the product.** Named in requirements §4: "Restore example", "Show error example", "Show offline state". Additionally found (not named in the requirements, also not carried over): the "About mockup" button in details; "View example" in the add dialog and in the error alert; limits "for the mockup" (20 MB file, 1000 files); manual path entry and `webkitdirectory` instead of the system dialog (SET-01 → 037); service notes "Mockup…/In the web mockup…"; storing settings in `localStorage` (in the product — SQLite, SET-02); the "Interactive mockup" footer.
 
-**Не визначено специфікацією, лишається рішенням реалізації:** приховування зони перетягування за ширини ≤ 860 px; підказка «Файли залишаються з вами» під списком (UI-17 забороняє підказки лише над списком).
+**Not defined by the specification, remains an implementation decision:** hiding the drop zone at widths ≤ 860 px; the hint "Files stay with you" below the list (UI-17 forbids hints only above the list).
 
-**Збігається з вимогами:** UI-03, UI-06, UI-07 (постійні чекбокси, панель після вибору), UI-08, UI-09, UI-10 (розташування алерту), UI-11, UI-12 (шлях, позиція відсотка), UI-17, UI-18, UI-19, TR-07, ADD-06–09 (крім M11), DEL-01, SET-04, SET-07, SET-08 (перемикач і збереження ручних пауз). Позасферних функцій (акаунти, оплати, підписки, ліцензії, хмара, аналітика, ШІ, стрімінг, каталог) у макеті немає.
+**Matches the requirements:** UI-03, UI-06, UI-07 (persistent checkboxes, panel after selection), UI-08, UI-09, UI-10 (alert placement), UI-11, UI-12 (path, percentage position), UI-17, UI-18, UI-19, TR-07, ADD-06–09 (except M11), DEL-01, SET-04, SET-07, SET-08 (toggle and preservation of manual pauses). There are no out-of-scope functions (accounts, payments, subscriptions, licenses, cloud, analytics, AI, streaming, catalog) in the mockup.
 
-## 5. Середовище розробки
+## 5. Development environment
 
-Перевірено 14 жовтня 2026 року (команди — у звіті 001):
+Verified on 14 October 2026 (commands are in the 001 verification report):
 
-| Параметр | Значення |
+| Parameter | Value |
 |---|---|
 | Mac | Apple M4, `arm64`, 16 GiB RAM |
 | macOS | 27.0.1 (build 26A434) |
-| Вільне місце | ≈ 32 GiB із 228 GiB (том даних заповнено на 84 %) |
-| Xcode | лише Command Line Tools (`/Library/Developer/CommandLineTools`), Apple clang 21.0.0; повний Xcode не активний |
+| Free space | ≈ 32 GiB of 228 GiB (data volume 84 % full) |
+| Xcode | Command Line Tools only (`/Library/Developer/CommandLineTools`), Apple clang 21.0.0; full Xcode is not active |
 | Git | 2.54.0, `init.defaultBranch=main` |
 | Node.js / npm | v26.0.0 / 11.12.1 |
 | Homebrew | 7.0.6 |
-| sqlite3 CLI | 3.54.0 (системний; це не той SQLite, з яким буде зібрано застосунок) |
+| sqlite3 CLI | 3.54.0 (system; this is not the SQLite the application will be built with) |
 | gh CLI | 2.96.0 |
-| **Go** | **не встановлено** |
-| **Wails CLI** | **не встановлено** |
+| **Go** | **not installed** |
+| **Wails CLI** | **not installed** |
 
-Наслідки:
+Consequences:
 
-- Відсутні Go і Wails CLI — передумова для [003](../../tasks/003-wails-macos-build-spike.md): встановити й зафіксувати версії перед RED-кроком 003. Для 001/002 не потрібні.
-- Вільних ≈ 32 GiB достатньо для розробки й малих контрольованих торрентів; великі дослідні payload у 064 потребують окремої перевірки місця.
-- **Відкрито:** мінімальна підтримувана версія macOS не визначена. Перевірена конфігурація (вище) ≠ мінімальна підтримувана; рішення — [003](../../tasks/003-wails-macos-build-spike.md)/[066](../../tasks/066-personal-build-install-license-audit.md). Підтримка інших Mac — лише за окремої потреби (вимоги §7 п. 1).
+- Missing Go and Wails CLI are a prerequisite for [003](../../tasks/003-wails-macos-build-spike.md): install them and record the versions before the RED step of 003. Not needed for 001/002.
+- The free ≈ 32 GiB are enough for development and small controlled torrents; large spike payloads in 064 need a separate space check.
+- **Open:** the minimum supported macOS version is not defined. The verified configuration (above) ≠ the minimum supported one; decision — [003](../../tasks/003-wails-macos-build-spike.md)/[066](../../tasks/066-personal-build-install-license-audit.md). Support for other Macs only on separate need (requirements §7 item 1).
 
-## 6. Реєстр відкритих рішень
+## 6. Open-decision register
 
-Кожне рішення фіксується окремим ADR у `docs/decisions/` за шаблоном із задачі 002, з доказом і наслідками. Назви ADR нижче — заплановані, файлів ще немає. Якщо вибір змінює погоджену поведінку або стек, спершу потрібне рішення власника.
+Each decision is recorded as a separate ADR in `docs/decisions/` following the template from task 002, with evidence and consequences. The ADR names below are planned; the files do not exist yet. If a choice changes agreed behavior or the stack, an owner decision is needed first.
 
-| # | Питання | Задача-власник | Критерій вибору | Перевірка | Документ рішення |
+| # | Question | Owner task | Selection criterion | Check | Decision document |
 |---|---|---|---|---|---|
-| O1 | Мінімальна macOS, архітектура цільового Mac (вимоги §7 п. 1, §5 «Сумісність») | [003](../../tasks/003-wails-macos-build-spike.md), [066](../../tasks/066-personal-build-install-license-audit.md) | Реальна збірка й запуск на власному Mac; без припущень про інші Mac | `.app` відкривається на цільовій системі; `LSMinimumSystemVersion` збігається з перевіреним | [macos-target.md](macos-target.md) — **прийнято** в 003 (перевірено лише 27.0.1 arm64) |
-| O2 | Версії Go, Wails v2 patch, anacrolix/torrent tag, Node.js, frontend-залежностей (§7 п. 2) | [003](../../tasks/003-wails-macos-build-spike.md), [004](../../tasks/004-reproducible-check-commands.md), [007](../../tasks/007-engine-api-lifecycle-spike.md) | Один узгоджений набір API; чиста відтворювана збірка з `go.mod`/`go.sum` і lockfile | Збірка з чистого клону; сигнатури звірені на зафіксованому tag (дослідження згадує Wails v2.15.0 — ще не перевірено) | [toolchain-versions.md](toolchain-versions.md) — **прийнято** в 003 для Go/Wails/Node/frontend; anacrolix — 007 |
-| O3 | Засоби тестів і 100% покриття для Go/TS (Vitest, coverage provider, аналізатори) | [004](../../tasks/004-reproducible-check-commands.md) | Точні 4 метрики TS і оператори Go по кожному файлу, повний інвентар джерел | Локальна команда падає при < 100 % або неповному інвентарі | `docs/decisions/quality-gate.md` |
-| O4 | SQLite-драйвер (CGO / pure Go), bundled SQLite, WAL, durability, pool (§7 п. 5) | [008](../../tasks/008-sqlite-driver-durability-spike.md), [014](../../tasks/014-sqlite-schema-migrations.md) | Фактична `sqlite_version()`, commit/checkpoint/cancel, збірка в `.app` без Homebrew | Дослід 008 на власному Mac | `docs/decisions/sqlite-driver.md` |
-| O5 | Storage backend рушія, розташування payload, довговічний piece completion (§7 п. 5) | [009](../../tasks/009-storage-and-completion-spike.md) | Фізичні шляхи в save path; restart/crash/corruption без прихованого memory fallback | Контрольовані торренти з 006, перезапуск і пошкодження completion | `docs/decisions/engine-storage.md` |
-| O6 | Глобальне вимкнення віддачі без зупинки завантаження, межа підтвердження й тайм-аут (§7 п. 3, TR-08) | [010](../../tasks/010-upload-stop-and-pause-spike.md), [053](../../tasks/053-global-upload-policy-production.md) | Локальні й віддалені лічильники: upload припинено, download триває; залишковий буфер виміряно | Контрольований swarm на зафіксованій версії рушія | `docs/decisions/global-upload-stop.md` |
-| O7 | Тимчасовий storage magnet і перехід до остаточної папки | [011](../../tasks/011-magnet-metadata-storage-spike.md), [022](../../tasks/022-pending-import-coordinator.md) | Payload заборонено до підтвердження; borrowed handle не робить Drop; кінцева папка доведена | Дослід metadata-only із скасуванням | `docs/decisions/magnet-pending-storage.md` |
-| O8 | Механізм macOS Trash, перевірка шляхів, колізії, спільні файли | [012](../../tasks/012-macos-trash-and-path-spike.md), [020](../../tasks/020-destination-filesystem-service.md), [032](../../tasks/032-safe-payload-trash-journal.md) | Переміщення саме в Смітник; повторна перевірка кожного файла; журнал часткових результатів | Дослід на штучних файлах у зібраній `.app` | `docs/decisions/trash-and-paths.md` |
-| O9 | Переміщені, змінені або частково втрачені payload (§7 п. 4) | [030](../../tasks/030-relink-missing-payload.md), [029](../../tasks/029-restore-recheck-reconciliation.md) | Явний повторний вибір і перевірка, без автоматичного переміщення | Сценарії відновлення на контрольованих даних | `docs/decisions/missing-payload-recovery.md` |
-| O10 | Резервна копія, міграції й пошкодження БД | [016](../../tasks/016-migration-backup-corruption-recovery.md) | Узгоджена копія активної БД, відкат невдалої міграції без втрати бібліотеки | Тести міграції й штучного пошкодження | `docs/decisions/db-backup-recovery.md` |
-| O11 | Пріоритет статусів, перетин фільтрів, нуль wanted | [013](../../tasks/013-transfer-policy-state-machine.md), [027](../../tasks/027-metrics-status-snapshots.md), [055](../../tasks/055-search-status-filters.md) | Явна таблиця станів і правил відбору | Табличні тести політики | `docs/decisions/transfer-status-model.md` |
-| O12 | Десяткові/двійкові одиниці, малі файли, округлення (UI-12) | [041](../../tasks/041-six-languages-formatters.md) | Правило МБ/ГБ, малі файли, точність великих чисел | Тести форматерів для 6 мов | `docs/decisions/size-units.md` |
-| O13 | Реєстрація `magnet:` у пакеті (див. R4) | [036](../../tasks/036-finder-magnet-open-queue.md) | Холодний і повторний запуск отримують посилання | Перевірка зібраної `.app` | `docs/decisions/finder-magnet-registration.md` |
-| O14 | Теги: унікальність, ANY/ALL, видалені посилання | [056](../../tasks/056-local-tags-crud.md), [057](../../tasks/057-smart-collections.md) | Сталі ID, видимі умови, відсутність файлових наслідків | Тести repository і UI | `docs/decisions/tags-collections.md` |
-| O15 | Конфлікти правил, matching, ручний вибір | [058](../../tasks/058-rules-semantics-preview-evaluator.md), [059](../../tasks/059-rules-crud-import-application.md) | Перегляд без side effects, видимий порядок, повторна перевірка до commit | Тести evaluator і імпорту | `docs/decisions/import-rules.md` |
-| O16 | Watch folder: підпапки, стабільність файла, повтор кандидатів | [060](../../tasks/060-watch-folder-stable-detection.md), [061](../../tasks/061-watch-folder-settings-queue-ui.md) | Parse/restat/reconcile; оригінали збережені; auto-add на паузі лише явно | Тести з контрольованими записами файлів | `docs/decisions/watch-folder.md` |
-| O17 | Навантаження, бюджети оновлень, virtualization списків | [064](../../tasks/064-scale-profiling-lifecycle-soak.md) | Вимірювання на власному Mac; оптимізація лише доведеної проблеми | Профілювання й soak | `docs/decisions/performance-budgets.md` |
-| O18 | Встановлення, підпис, оновлення й відкат особистої збірки; аудит ліцензій (§7 п. 6, REL-02) | [066](../../tasks/066-personal-build-install-license-audit.md), [067](../../tasks/067-owner-help-upgrade-recovery-runbook.md) | Фактична особиста збірка без залежності від Homebrew; сумісне відновлення даних | Встановлення на власному Mac; інвентар ліцензій (MPL-2.0 anacrolix та ін.) | `docs/decisions/personal-install-signing.md` |
+| O1 | Minimum macOS, architecture of the target Mac (requirements §7 item 1, §5 "Compatibility") | [003](../../tasks/003-wails-macos-build-spike.md), [066](../../tasks/066-personal-build-install-license-audit.md) | Real build and launch on the owner's own Mac; no assumptions about other Macs | The `.app` opens on the target system; `LSMinimumSystemVersion` matches the verified one | [macos-target.md](macos-target.md) — **accepted** in 003 (only 27.0.1 arm64 verified) |
+| O2 | Versions of Go, Wails v2 patch, anacrolix/torrent tag, Node.js, frontend dependencies (§7 item 2) | [003](../../tasks/003-wails-macos-build-spike.md), [004](../../tasks/004-reproducible-check-commands.md), [007](../../tasks/007-engine-api-lifecycle-spike.md) | One consistent API set; clean reproducible build from `go.mod`/`go.sum` and lockfile | Build from a clean clone; signatures cross-checked on the pinned tag (the research mentions Wails v2.15.0 — not yet verified) | [toolchain-versions.md](toolchain-versions.md) — **accepted** in 003 for Go/Wails/Node/frontend; anacrolix — 007 |
+| O3 | Test tools and 100% coverage for Go/TS (Vitest, coverage provider, analyzers) | [004](../../tasks/004-reproducible-check-commands.md) | Exact 4 TS metrics and Go statements per file, full source inventory | The local command fails at < 100 % or an incomplete inventory | `docs/decisions/quality-gate.md` |
+| O4 | SQLite driver (CGO / pure Go), bundled SQLite, WAL, durability, pool (§7 item 5) | [008](../../tasks/008-sqlite-driver-durability-spike.md), [014](../../tasks/014-sqlite-schema-migrations.md) | Actual `sqlite_version()`, commit/checkpoint/cancel, build in `.app` without Homebrew | Spike 008 on the owner's own Mac | `docs/decisions/sqlite-driver.md` |
+| O5 | Engine storage backend, payload location, durable piece completion (§7 item 5) | [009](../../tasks/009-storage-and-completion-spike.md) | Physical paths inside the save path; restart/crash/corruption without a hidden memory fallback | Controlled torrents from 006, restart and completion corruption | `docs/decisions/engine-storage.md` |
+| O6 | Global upload disabling without stopping downloads, confirmation boundary and timeout (§7 item 3, TR-08) | [010](../../tasks/010-upload-stop-and-pause-spike.md), [053](../../tasks/053-global-upload-policy-production.md) | Local and remote counters: upload stopped, download continues; residual buffer measured | Controlled swarm on the pinned engine version | `docs/decisions/global-upload-stop.md` |
+| O7 | Temporary magnet storage and transition to the final folder | [011](../../tasks/011-magnet-metadata-storage-spike.md), [022](../../tasks/022-pending-import-coordinator.md) | Payload forbidden until confirmation; a borrowed handle does not Drop; final folder proven | Metadata-only spike with cancellation | `docs/decisions/magnet-pending-storage.md` |
+| O8 | macOS Trash mechanism, path checks, collisions, shared files | [012](../../tasks/012-macos-trash-and-path-spike.md), [020](../../tasks/020-destination-filesystem-service.md), [032](../../tasks/032-safe-payload-trash-journal.md) | Moving specifically to the Trash; re-checking every file; journal of partial results | Spike on artificial files in the built `.app` | `docs/decisions/trash-and-paths.md` |
+| O9 | Moved, changed or partially lost payloads (§7 item 4) | [030](../../tasks/030-relink-missing-payload.md), [029](../../tasks/029-restore-recheck-reconciliation.md) | Explicit re-selection and check, no automatic moving | Restore scenarios on controlled data | `docs/decisions/missing-payload-recovery.md` |
+| O10 | Backup, migrations and DB corruption | [016](../../tasks/016-migration-backup-corruption-recovery.md) | Consistent copy of the active DB, rollback of a failed migration without losing the library | Migration and artificial corruption tests | `docs/decisions/db-backup-recovery.md` |
+| O11 | Status priority, filter intersection, zero wanted | [013](../../tasks/013-transfer-policy-state-machine.md), [027](../../tasks/027-metrics-status-snapshots.md), [055](../../tasks/055-search-status-filters.md) | Explicit table of states and selection rules | Table-driven policy tests | `docs/decisions/transfer-status-model.md` |
+| O12 | Decimal/binary units, small files, rounding (UI-12) | [041](../../tasks/041-six-languages-formatters.md) | MB/GB rule, small files, precision of large numbers | Formatter tests for 6 languages | `docs/decisions/size-units.md` |
+| O13 | Registration of `magnet:` in the bundle (see R4) | [036](../../tasks/036-finder-magnet-open-queue.md) | Cold and repeated launches receive the link | Check of the built `.app` | `docs/decisions/finder-magnet-registration.md` |
+| O14 | Tags: uniqueness, ANY/ALL, deleted references | [056](../../tasks/056-local-tags-crud.md), [057](../../tasks/057-smart-collections.md) | Stable IDs, visible conditions, no file side effects | Repository and UI tests | `docs/decisions/tags-collections.md` |
+| O15 | Rule conflicts, matching, manual selection | [058](../../tasks/058-rules-semantics-preview-evaluator.md), [059](../../tasks/059-rules-crud-import-application.md) | Preview without side effects, visible order, re-check before commit | Evaluator and import tests | `docs/decisions/import-rules.md` |
+| O16 | Watch folder: subfolders, file stability, candidate retries | [060](../../tasks/060-watch-folder-stable-detection.md), [061](../../tasks/061-watch-folder-settings-queue-ui.md) | Parse/restat/reconcile; originals preserved; auto-add in the paused state only explicitly | Tests with controlled file writes | `docs/decisions/watch-folder.md` |
+| O17 | Load, update budgets, list virtualization | [064](../../tasks/064-scale-profiling-lifecycle-soak.md) | Measurements on the owner's own Mac; optimization only of a proven problem | Profiling and soak | `docs/decisions/performance-budgets.md` |
+| O18 | Installation, signing, updating and rollback of the personal build; license audit (§7 item 6, REL-02) | [066](../../tasks/066-personal-build-install-license-audit.md), [067](../../tasks/067-owner-help-upgrade-recovery-runbook.md) | An actual personal build without dependence on Homebrew; compatible data restore | Installation on the owner's own Mac; license inventory (MPL-2.0 anacrolix and others) | `docs/decisions/personal-install-signing.md` |
 
-Таблиця [«Відкриті рішення»](../../tasks/README.md#відкриті-рішення-та-їхні-відповідальні-задачі) у плані містить ті самі питання (O1–O2, O4–O9, O11–O12, O14–O18) у стислому вигляді; цей реєстр додає перевірку й документ рішення та нові пункти O3, O10, O13.
+The ["Open decisions"](../../tasks/README.md#open-decisions-and-their-responsible-tasks) table in the plan contains the same questions (O1–O2, O4–O9, O11–O12, O14–O18) in condensed form; this register adds the check and the decision document and the new items O3, O10, O13.
 
-## 7. Поділ робіт
+## 7. Division of work
 
-Погоджено ([tasks/README.md](../../tasks/README.md#фази-й-критерії-переходу)):
+Agreed ([tasks/README.md](../../tasks/README.md#phases-and-transition-criteria)):
 
-| Етап | Задачі | Що доводить |
+| Stage | Tasks | What it proves |
 |---|---|---|
-| Старт | 001–002 | Обсяг, реєстр рішень, репозиторій і точка входу АІ. |
-| Ризикові прототипи | 003–012 | `.app`, команди, DTO, тестові торренти, ранній наскрізний шлях 007, SQLite, storage, віддача, magnet, Смітник. |
-| **Проміжна перевірка основного передавання** | **052** | Вузький збережений сценарій: імпорт, передавання, пауза, перезапуск — без групового видалення, Finder і Смітника. |
-| **Повний MVP** | **054** | Усі MVP-можливості, включно з Finder/magnet, видаленням файлів і незалежним вимкненням віддачі (010 → 053). |
-| **Погоджені наступні можливості** | **055–062** | Пошук і фільтри (NEXT-01/02), теги й колекції (COL-01), правила й папка спостереження (AUTO-01/02). Не входять у перший MVP, але лишаються в загальному плані. |
-| Завершення | 063–068 | Надійність, профілювання, доступність, особиста збірка, довідка, передача з чистого контексту. |
+| Start | 001–002 | Scope, decision register, repository and AI entry point. |
+| Risk prototypes | 003–012 | `.app`, commands, DTO, test torrents, early end-to-end path 007, SQLite, storage, upload, magnet, Trash. |
+| **Interim check of core transfer** | **052** | A narrow persisted scenario: import, transfer, pause, restart — without group deletion, Finder and Trash. |
+| **Full MVP** | **054** | All MVP capabilities, including Finder/magnet, file deletion and independent upload disabling (010 → 053). |
+| **Agreed next capabilities** | **055–062** | Search and filters (NEXT-01/02), tags and collections (COL-01), rules and watch folder (AUTO-01/02). Not part of the first MVP, but remain in the overall plan. |
+| Completion | 063–068 | Reliability, profiling, accessibility, personal build, help, handoff from a clean context. |
 
-## 8. Каталог коду й межі файлів
+## 8. Code directory and file boundaries
 
-- **Корінь проєкту й майбутнього Git-репозиторію:** `/Users/tsykvas/projects/torrent` (перевірено: на момент 001 не був Git-репозиторієм і не лежить усередині іншого). Задача 002 ініціалізує тут єдиний репозиторій; вкладені репозиторії не створюються.
-- **Походження:** документація скопійована 14 жовтня 2026 року з `~/Desktop/OctopusTorrent` (вміст ідентичний, перевірено `diff -rq`). Робоча копія — лише корінь проєкту; копія на Desktop не синхронізується й не є джерелом правди.
-- **Лише для читання:** `archive/` (історія відхиленого стеку). Синхронізованих `sources/` у проєкті немає. Специфікації (вимоги, концепт, архітектура, дослідження) змінюються тільки свідомо в задачі, якої це стосується, з записом причини.
-- **Макет:** `MOCKUP.html` — довідка оформлення; код з нього не вважається протестованим, а перенесення в React проходить TDD.
-- **Майбутній код:** структура з [архітектури §3](../../APPLICATION_ARCHITECTURE.md#3-структура-репозиторію-для-ai-first) (`main.go`, `internal/…`, `frontend/…`, `scripts/`). Жоден із цих шляхів ще не створено; фактичні шляхи підтверджує 003.
-- **Документація:** `docs/` за [docs/README.md](../README.md); рішення — `docs/decisions/`, докази — `docs/verification/`, фічі — `docs/features/`.
+- **Root of the project and of the future Git repository:** `/Users/tsykvas/projects/torrent` (verified: at the time of 001 it was not a Git repository and is not located inside another one). Task 002 initializes the single repository here; nested repositories are not created.
+- **Origin:** the documentation was copied on 14 October 2026 from `~/Desktop/OctopusTorrent` (content identical, verified with `diff -rq`). The working copy is only the project root; the Desktop copy is not synchronized and is not a source of truth. On 15 October 2026 the repository copy was translated into English ([repository-language](repository-language.md)); the Desktop copy stays Ukrainian.
+- **Read-only:** `archive/` (history of the rejected stack). There are no synchronized `sources/` in the project. Specifications (requirements, concept, architecture, research) change only deliberately in the task they concern, with the reason recorded.
+- **Mockup:** `MOCKUP.html` — a styling reference; code from it is not considered tested, and porting to React goes through TDD.
+- **Future code:** the structure from [architecture §3](../../APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first) (`main.go`, `internal/…`, `frontend/…`, `scripts/`). None of these paths has been created yet; the actual paths are confirmed by 003.
+- **Documentation:** `docs/` per [docs/README.md](../README.md); decisions — `docs/decisions/`, evidence — `docs/verification/`, features — `docs/features/`.
 
-## 9. Факти, припущення й майбутні перевірки
+## 9. Facts, assumptions and future checks
 
-| Категорія | Зміст |
+| Category | Content |
 |---|---|
-| Перевірені факти | 80 ID і 19 сценаріїв; повнота матриць; 68 задач у статусі `planned` на старті 001; конфігурація Mac і інструментів; відсутність Go/Wails; ідентичність копії документації. |
-| Погоджені, але не доведені | Стек і продуктові межі; поведінка рушія з дослідження anacrolix (зокрема `DisallowDataUpload()`, file priorities, storage); формати DTO й життєві цикли архітектури. |
-| Відкрите | O1–O18 вище. |
-| Не застосовується | Покриття коду: виконуваного коду ще немає (`not_applicable`). |
+| Verified facts | 80 IDs and 19 scenarios; completeness of the matrices; 68 tasks in status `planned` at the start of 001; Mac and tool configuration; absence of Go/Wails; identity of the documentation copy. |
+| Agreed but not proven | Stack and product boundaries; engine behavior from the anacrolix research (in particular `DisallowDataUpload()`, file priorities, storage); DTO formats and architecture lifecycles. |
+| Open | O1–O18 above. |
+| Not applicable | Code coverage: there is no executable code yet (`not_applicable`). |

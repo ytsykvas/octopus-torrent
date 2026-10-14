@@ -1,81 +1,81 @@
-# Обов’язкові правила інженерної роботи
+# Mandatory engineering rules
 
-**Статус:** обов’язкове рішення власника, 14 жовтня 2026 року. Застосовується з першої зміни, зокрема до дослідів, виправлень, рефакторингу й інструментів розробки. Вимоги QA-01–QA-08 визначені в [специфікації](../../PROJECT_REQUIREMENTS.md). Усі заплановані задачі підпорядковані цьому документу.
+**Status:** mandatory owner decision, 14 October 2026. Applies from the first change, including to spikes, fixes, refactoring and development tooling. Requirements QA-01–QA-08 are defined in the [specification](../../PROJECT_REQUIREMENTS.md). All planned tasks are subordinate to this document.
 
-## 1. Початок кожної сесії: архітектура й план
+## 1. Start of every session: architecture and plan
 
-Перед змінами агент обов’язково:
+Before making changes, the agent must:
 
-1. Читає [AGENTS.md](../../AGENTS.md), актуальні вимоги, [архітектуру](../../APPLICATION_ARCHITECTURE.md), задачу з передумовами, документацію зачепленої фічі й останні зміни в репозиторії. З’ясовує фактичний стан коду, а не покладається лише на намір у документах.
-2. Простежує сценарій React → bridge/Wails → Go-сервіс → рушій/SQLite/файли. Визначає власника стану, побічні ефекти, порядок операцій, помилки, скасування й безпечне завершення ресурсів.
-3. Шукає реалізації, які можна повторно використати. Перевіряє дублювання правил, неправильний напрям залежностей, змішані відповідальності, приховані ефекти та невиправдану складність.
-4. Записує короткий план у звіті задачі: які межі й контракти зміняться; що перевикористовується; що потрібно рефакторити; які спочатку тести; як буде доведено 100% покриття; яка документація оновиться. Якщо зміна архітектури не потрібна, пояснює це предметно.
-5. Обирає найпростіший достатній дизайн у погодженому стеку. Значущу зміну контракту фіксує в ADR та архітектурі. Зміна стеку чи погодженої поведінки потребує рішення власника; звичайне покращення структури в межах задачі виконується самостійно.
+1. Read [AGENTS.md](../../AGENTS.md), the current requirements, the [architecture](../../APPLICATION_ARCHITECTURE.md), the task with its prerequisites, the documentation of the affected feature and the latest changes in the repository. Establish the actual state of the code rather than relying only on the intent stated in documents.
+2. Trace the scenario React → bridge/Wails → Go service → engine/SQLite/files. Identify the owner of the state, side effects, order of operations, errors, cancellation and safe release of resources.
+3. Look for implementations that can be reused. Check for duplicated rules, wrong dependency direction, mixed responsibilities, hidden effects and unjustified complexity.
+4. Write a short plan in the task report: which boundaries and contracts will change; what is reused; what must be refactored; which tests come first; how 100% coverage will be proven; which documentation will be updated. If no architecture change is needed, explain why in concrete terms.
+5. Choose the simplest sufficient design within the agreed stack. Record a significant contract change in an ADR and in the architecture. A change of the stack or of agreed behavior requires an owner decision; an ordinary structural improvement within the task is carried out by the agent on its own.
 
-Це аналіз на початку **кожної сесії**, включно з продовженням тієї самої задачі. Він не означає переписування всього проєкту щоразу. План і висновки можна зберігати в уже наявному звіті задачі; окремий формальний документ на кожну сесію не потрібний.
+This analysis happens at the start of **every session**, including when continuing the same task. It does not mean rewriting the whole project each time. The plan and conclusions may be kept in the existing task report; a separate formal document per session is not required.
 
-## 2. TDD для кожної зміни
+## 2. TDD for every change
 
-Обов’язковий цикл **RED → GREEN → REFACTOR**:
+The **RED → GREEN → REFACTOR** cycle is mandatory:
 
-1. **RED:** до зміни реалізації написати або посилити тест очікуваної поведінки й запустити його. Переконатися, що він не проходить саме через відсутню чи неправильну поведінку, а не через зламане середовище. Зафіксувати тест, команду та причину невдачі.
-2. **GREEN:** написати мінімальну коректну реалізацію. Запустити тест і потрібну регресію; відновити всі визначені метрики покриття до 100%.
-3. **REFACTOR:** на зелених тестах прибрати дублювання, поліпшити назви й межі, виділити потрібний повторно використовуваний код. Повторити тести, аналіз якості та перевірку покриття.
-4. Повторювати малими кроками. Тест, написаний після готової нової реалізації, не є доказом виконання TDD. Виправлення помилки починається з тесту, який відтворює її.
+1. **RED:** before changing the implementation, write or strengthen a test of the expected behavior and run it. Make sure it fails precisely because of the missing or incorrect behavior, not because of a broken environment. Record the test, the command and the reason for the failure.
+2. **GREEN:** write the minimal correct implementation. Run the test and the required regression; restore all defined coverage metrics to 100%.
+3. **REFACTOR:** with tests green, remove duplication, improve names and boundaries, extract the necessary reusable code. Rerun the tests, the quality analysis and the coverage check.
+4. Repeat in small steps. A test written after a finished new implementation is not evidence that TDD was followed. A bug fix starts with a test that reproduces the bug.
 
-Для чистого рефакторингу спочатку запускаються наявні тести поведінки; відсутні гарантії додаються й перевіряються до структурної зміни. Не потрібно навмисно ламати коректну поведінку заради червоного тесту. Для зміни документа чи декларативної конфігурації спочатку визначається й виконується перевірка потрібного нового стану — посилань, схеми, контракту або відтворюваної збірки — потім зміна й повторна перевірка. Кожна дія має перевірюваний очікуваний результат; не створюємо беззмістовні тести лише на факт існування рядка коду.
+For pure refactoring, the existing behavior tests are run first; missing guarantees are added and verified before the structural change. There is no need to deliberately break correct behavior for the sake of a red test. For a change to a document or declarative configuration, a check of the required new state — links, schema, contract or reproducible build — is defined and run first, then the change is made and the check is rerun. Every action has a verifiable expected result; we do not create meaningless tests merely for the fact that a line of code exists.
 
-Під час RED невдалий новий тест очікуваний. **Кожен завершений зелений крок, інтеграція, коміт реалізації, `done` та робоча збірка повинні мати успішні перевірки й 100% покриття.** RED не можна видавати за готовий результат.
+During RED, a failing new test is expected. **Every completed green step, integration, implementation commit, `done` and working build must have passing checks and 100% coverage.** RED must not be presented as a finished result.
 
-## 3. Що саме означає 100% покриття
+## 3. What exactly 100% coverage means
 
-Ціль жорстка: **100% усього власного виконуваного коду**, а не лише змінених рядків чи файлів, які випадково імпортували тести.
+The target is strict: **100% of all own executable code**, not only changed lines or files that tests happened to import.
 
-| Частина | Обов’язкова метрика й доказ |
+| Part | Mandatory metric and evidence |
 |---|---|
-| Власний Go-код | 100% виконуваних операторів у кожному власному файлі/пакеті та загалом. Перевірка читає сирі лічильники, а не округлений напис `100.0%`. Власні `main`, platform adapters і допоміжні інструменти входять до переліку. |
-| Власний TypeScript/JavaScript, зокрема React | 100% рядків, операторів, функцій і гілок у кожному файлі та загалом; явно охопити весь перелік виконуваних власних джерел, включно з неімпортованими файлами. |
-| SQL/міграції, CSS, декларативна конфігурація й документи | Перевіряються відповідними інтеграційними, компонентними, візуальними, схемними чи структурними сценаріями. Метрика виконуваних рядків до них не приписується штучно. Логіка їх застосування у Go/TS покривається повністю. |
+| Own Go code | 100% of executable statements in every own file/package and overall. The check reads the raw counters, not the rounded `100.0%` label. Own `main`, platform adapters and auxiliary tools are included in the inventory. |
+| Own TypeScript/JavaScript, including React | 100% of lines, statements, functions and branches in every file and overall; the entire inventory of own executable sources must be explicitly included in the measurement, including files that are not imported. |
+| SQL/migrations, CSS, declarative configuration and documents | Verified by the corresponding integration, component, visual, schema or structural scenarios. An executable-lines metric is not artificially attributed to them. The Go/TS logic that applies them is fully covered. |
 
-Стандартний Go-звіт вимірює оператори; його не називаємо виміряним branch coverage. Варіанти умов, помилки й конкурентність додатково перевіряються поведінковими тестами. Профілі модульних та інструментованих інтеграційних запусків можна поєднувати лише для однакових джерел і налаштувань. [Офіційне вимірювання Go](https://go.dev/doc/build-cover).
+The standard Go report measures statements; we do not call it measured branch coverage. Condition variants, errors and concurrency are additionally verified by behavioral tests. Profiles from unit and instrumented integration runs may be merged only for identical sources and settings. [Official Go measurement](https://go.dev/doc/build-cover).
 
-Для frontend задача 004 фіксує версію Vitest і засобу збору покриття або перевірений еквівалент. Конфігурація повинна явно включати джерела й контролювати чотири метрики для кожного файла та загалом; самі стандартні налаштування не вважаються доказом повного охоплення. [Офіційна конфігурація Vitest](https://vitest.dev/config/coverage.html).
+For the frontend, task 004 pins the version of Vitest and of the coverage collection tool or a verified equivalent. The configuration must explicitly include the sources and enforce the four metrics for every file and overall; the default settings alone are not considered evidence of full coverage. [Official Vitest configuration](https://vitest.dev/config/coverage.html).
 
-### Незмінні межі вимірювання
+### Fixed measurement boundaries
 
-- З інвентарю власного виконуваного коду не випадають startup, error handling, файли без тестів, scripts, probes чи складні системні адаптери. Новий власний код іншою мовою потребує засобу вимірювання до його приймання.
-- Зовнішні залежності, стандартна бібліотека, самі тести й незмінений відтворюваний згенерований код обліковуються окремо. Для кожної категорії є явне правило походження; назва `generated` сама по собі не виправдовує виключення. Власні обгортки завжди вимірюються.
-- Заборонено знижувати пороги, звужувати список джерел, додавати ignore-директиви для власної логіки, вимикати невдалі тести чи підмінювати складну поведінку заглушкою, щоб отримати 100%.
-- Відсутні, порожні, застарілі або несумісні профілі — невдала перевірка. Якщо власного виконуваного коду ще немає, стан `not_applicable`, а не вигадані 100%. Перший власний код уже має виконувати правила.
-- Недоступне середовище дає `not_run`/`blocked`, а не успіх чи виняток із порога. 100% — обов’язковий мінімум приймання; він не замінює перевірку байтів справжнього рушія, SQLite або macOS.
+- Startup, error handling, files without tests, scripts, probes and complex system adapters are never dropped from the inventory of own executable code. New own code in another language requires a measurement tool before it is accepted.
+- External dependencies, the standard library, the tests themselves and unmodified reproducible generated code are accounted for separately. Each category has an explicit provenance rule; the name `generated` by itself does not justify an exclusion. Own wrappers are always measured.
+- It is forbidden to lower thresholds, narrow the list of sources, add ignore directives for own logic, disable failing tests or replace complex behavior with a stub in order to reach 100%.
+- Missing, empty, stale or incompatible profiles are a failed check. If there is no own executable code yet, the state is `not_applicable`, not a fabricated 100%. The first own code must already follow the rules.
+- An unavailable environment yields `not_run`/`blocked`, not success or an exception to the threshold. 100% is the mandatory minimum for acceptance; it does not replace verifying the bytes of the real engine, SQLite or macOS.
 
-## 4. Чистий і повторно використовуваний код
+## 4. Clean and reusable code
 
-- Перед новою реалізацією перевірити наявні компоненти, функції, hooks і сервіси. Спільна поведінка має одного власника; дві копії однієї політики під виглядом різних екранів заборонені.
-- Виділяти повторно використовувані модулі за реальною відповідальністю та перевіреними випадками використання. Не створювати загальні фреймворки наперед, глобальний `utils` зі змішаною логікою чи універсальний сервіс на всі випадки.
-- **Go:** невеликі предметні пакети, вузькі інтерфейси в місці використання, явні залежності, `context`/скасування й завершення goroutines, перевірені помилки, відокремлена чиста політика. Форматування, `go vet` і узгоджені аналізатори входять у перевірку. [Effective Go](https://go.dev/doc/effective_go).
-- **React/TypeScript:** strict mode, явні DTO, композиція невеликих компонентів і hooks, одна точка володіння станом, керовані підписки. Не дублювати бізнес-стан або Go-політики в компонентах; не обходити типи через необґрунтований `any` чи assertions. [Thinking in React](https://react.dev/learn/thinking-in-react).
-- **Wails:** власний bridge відокремлює згенеровані bindings; Go повторно перевіряє запити. **SQLite:** запити й міграції належать repository, транзакції явні. **anacrolix:** прямий доступ ізольований адаптером; його типи не розповзаються по UI.
-- Стандарти перевіряються за офіційними матеріалами зафіксованих версій. Відхилення потребує причини й архітектурного рішення; слово «best practices» без конкретних правил і перевірок не є критерієм якості.
+- Before a new implementation, check the existing components, functions, hooks and services. Shared behavior has a single owner; two copies of the same policy disguised as different screens are forbidden.
+- Extract reusable modules according to real responsibility and verified use cases. Do not create general-purpose frameworks in advance, a global `utils` with mixed logic or a universal service for every case.
+- **Go:** small domain packages, narrow interfaces at the point of use, explicit dependencies, `context`/cancellation and termination of goroutines, checked errors, separated pure policy. Formatting, `go vet` and the agreed analyzers are part of the check. [Effective Go](https://go.dev/doc/effective_go).
+- **React/TypeScript:** strict mode, explicit DTOs, composition of small components and hooks, a single point of state ownership, managed subscriptions. Do not duplicate business state or Go policies in components; do not bypass types through unjustified `any` or assertions. [Thinking in React](https://react.dev/learn/thinking-in-react).
+- **Wails:** the own bridge isolates the generated bindings; Go re-validates requests. **SQLite:** queries and migrations belong to the repository, transactions are explicit. **anacrolix:** direct access is isolated by the adapter; its types do not spread across the UI.
+- Standards are verified against the official materials for the pinned versions. A deviation requires a reason and an architecture decision; the phrase "best practices" without concrete rules and checks is not a quality criterion.
 
-## 5. Без накопичення технічного боргу
+## 5. No accumulation of technical debt
 
-Рефакторинг — частина кожного TDD-циклу й поточної задачі. У зачепленому сценарії агент усуває дублювання, неправильні залежності, приховані ефекти та тимчасові обходи до завершення роботи. Рефакторить малими кроками на зелених тестах і з 100% покриттям; потрібні архітектурні зміни одразу відображає в документах.
+Refactoring is part of every TDD cycle and of the current task. In the affected scenario, the agent removes duplication, wrong dependencies, hidden effects and temporary workarounds before the work is finished. Refactoring is done in small steps with green tests and 100% coverage; required architecture changes are reflected in the documents immediately.
 
-Заборонено приймати `done` із «потім покриємо», пропущеною помилкою, вимкненим тестом, копією бізнес-правила, тимчасовою заглушкою замість потрібної реалізації, непоясненим приглушенням аналізатора або TODO, яке відкладає потрібну якість. Якщо потрібне виправлення неможливо завершити, задача залишається `blocked` з конкретною причиною й планом усунення; готовність не оголошується.
+It is forbidden to accept `done` with "we will cover it later", a skipped error, a disabled test, a copy of a business rule, a temporary stub instead of the required implementation, an unexplained analyzer suppression or a TODO that postpones required quality. If a required fix cannot be completed, the task remains `blocked` with a concrete reason and a remediation plan; readiness is not declared.
 
-Погоджена майбутня фіча сама по собі не є технічним боргом. Тестова заміна зовнішньої межі теж допустима, якщо її явно відокремлено від справжньої перевірки. Не маскувати неготову реалізацію тестовим адаптером і не переписувати сторонні модулі без зв’язку з поточною задачею. Виявлений раніше борг у зачепленому шляху обробляється до його приймання, а не переноситься автоматично на невизначене «пізніше».
+An agreed future feature is not technical debt in itself. A test double for an external boundary is also acceptable if it is explicitly separated from the real verification. Do not mask an unfinished implementation with a test adapter and do not rewrite unrelated modules that have no connection to the current task. Previously discovered debt in the affected path is handled before that path is accepted, not automatically deferred to an undefined "later".
 
-## 6. Документація фічі в тій самій зміні
+## 6. Feature documentation in the same change
 
-Папка `docs/` є частиною проєкту. Для кожної фічі створюється й поступово підтримується `docs/features/<feature>.md` за [шаблоном](../features/_TEMPLATE.md). До коду описуються поведінка, межі й тести; після коду — фактичні модулі, контракти, оброблені збої, команди, результати та стан.
+The `docs/` folder is part of the project. For every feature, `docs/features/<feature>.md` is created and incrementally maintained according to the [template](../features/_TEMPLATE.md). Before the code, the behavior, boundaries and tests are described; after the code — the actual modules, contracts, handled failures, commands, results and state.
 
-Не позначати заплановану фічу реалізованою. Зміна поведінки, тестів, схеми, API чи команд одночасно оновлює відповідну документацію й індекс. Архітектурні рішення зберігаються в `docs/decisions/`, докази — в `docs/verification/`; одна фіча може розроблятися кількома задачами без копій суперечливих описів.
+Do not mark a planned feature as implemented. A change to behavior, tests, schema, API or commands updates the corresponding documentation and the index at the same time. Architecture decisions are stored in `docs/decisions/`, evidence in `docs/verification/`; one feature may be developed across several tasks without copies of contradictory descriptions.
 
-## 7. Блокувальна перевірка завершення
+## 7. Blocking completion check
 
-Перед інтеграцією й статусом `done` мають пройти: тести поведінки та потрібна регресія, 100% визначених метрик, повнота інвентарю файлів, форматування/типи/аналізатори, згенеровані контракти, перевірка документації, перегляд архітектурної зміни й відсутності нового технічного боргу. Задача 004 автоматизує це локально; хмарний сервіс не потрібний.
+Before integration and the `done` status, the following must pass: behavior tests and the required regression, 100% of the defined metrics, completeness of the file inventory, formatting/types/analyzers, generated contracts, documentation check, review of the architecture change and of the absence of new technical debt. Task 004 automates this locally; a cloud service is not required.
 
-Ранні 003 і наступні прототипи також працюють через TDD та 100% покриття. До завершення 004 вони створюють мінімальні перевірені команди разом зі своїми тестами; 004 уніфікує їх. Відсутність ще не створеної централізованої команди не скасовує поріг.
+The early task 003 and subsequent prototypes also work through TDD and 100% coverage. Until 004 is completed, they create minimal verified commands together with their tests; 004 unifies them. The absence of a not-yet-created centralized command does not cancel the threshold.
 
-У підсумку роботи зберігаються: архітектурний план сесії, тести й очікувана причина RED, фактичні GREEN-команди, виконаний рефакторинг, сирий звіт покриття та інвентар джерел для того самого коду, документація фічі й висновок про борг. Непрогнані перевірки не зараховуються. Відсоток не повідомляється як виміряний без виконаного засобу збору.
+The work summary records: the session architecture plan, the tests and the expected RED reason, the actual GREEN commands, the refactoring performed, the raw coverage report and the source inventory for the same code, the feature documentation and the conclusion about debt. Checks that were not run do not count. A percentage is not reported as measured unless the collection tool was actually run.

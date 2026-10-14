@@ -1,110 +1,110 @@
 # OctopusTorrent
 
-Особистий локальний BitTorrent-клієнт для macOS (власний Apple Silicon Mac): зручне додавання `.torrent` і magnet, вибір файлів і папок, пауза й роздача, надійне відновлення після перезапуску. Без акаунтів, оплат, хмари, аналітики й вбудованого ШІ. **AI-first:** код і документація пишуться так, щоб агент-розробник продовжив роботу лише за цим репозиторієм.
+A personal local BitTorrent client for macOS (the owner's own Apple Silicon Mac): convenient adding of `.torrent` and magnet, selection of files and folders, pause and seeding, reliable restore after restart. No accounts, payments, cloud, analytics or built-in AI. **AI-first:** code and documentation are written so that a developer agent can continue the work using only this repository.
 
-## Поточний стан
+## Current state
 
-**Етап P1 розпочато.** Є специфікації, макет, план, реєстр рішень і **перша мінімальна `.app`** (задача 003): вікно Wails з React-кнопкою, що викликає Go-метод. Продуктових функцій (торренти, бібліотека) ще немає.
+**Stage P1 has started.** There are specifications, a mockup, a plan, a decision register and the **first minimal `.app`** (task 003): a Wails window with a React button that calls a Go method. There are no product features (torrents, library) yet.
 
-| Що | Стан |
+| What | State |
 |---|---|
-| Задачі [001](tasks/001-scope-and-decision-register.md), [002](tasks/002-repository-and-agent-entrypoint.md), [003](tasks/003-wails-macos-build-spike.md) | див. [навігацію](tasks/README.md#навігація-всіх-задач) |
-| **Наступні задачі** | [004 — єдина команда перевірок](tasks/004-reproducible-check-commands.md), [005 — DTO і bridge-контракт](tasks/005-domain-dto-and-bridge-contract.md) |
-| Покриття власного коду | 100% Go (оператори, сирі лічильники) і 100% TS (4 метрики на файл) — [звіт 003](docs/verification/003-wails-macos-build-spike.md) |
+| Tasks [001](tasks/001-scope-and-decision-register.md), [002](tasks/002-repository-and-agent-entrypoint.md), [003](tasks/003-wails-macos-build-spike.md) | see [navigation](tasks/README.md#navigation-of-all-tasks) |
+| **Next tasks** | [004 — single check command](tasks/004-reproducible-check-commands.md), [005 — DTO and bridge contract](tasks/005-domain-dto-and-bridge-contract.md) |
+| Coverage of our own code | 100% Go (statements, raw counters) and 100% TS (4 metrics per file) — [report 003](docs/verification/003-wails-macos-build-spike.md) |
 
-## Стек
+## Stack
 
-React 19 + TypeScript 7 (strict) і Vite 8 · Wails v2.16.0 (системний WebView) · Go 1.27.2 · [anacrolix/torrent](https://github.com/anacrolix/torrent) (версію фіксує 007) · SQLite через repository (драйвер — 008). Точні версії, **політика оновлення** (остання стабільна версія не молодша за 14 днів; patch-релізи Go/Node — одразу) і причини — [toolchain-versions](docs/decisions/toolchain-versions.md); ціль macOS і bundle ID — [macos-target](docs/decisions/macos-target.md).
+React 19 + TypeScript 7 (strict) and Vite 8 · Wails v2.16.0 (system WebView) · Go 1.27.2 · [anacrolix/torrent](https://github.com/anacrolix/torrent) (version pinned by 007) · SQLite through a repository (driver — 008). Exact versions, the **update policy** (latest stable version at least 14 days old; Go/Node patch releases — immediately) and reasons — [toolchain-versions](docs/decisions/toolchain-versions.md); macOS target and bundle ID — [macos-target](docs/decisions/macos-target.md).
 
-## Документи
+## Documents
 
-| Документ | Для чого |
+| Document | Purpose |
 |---|---|
-| [AGENTS.md](AGENTS.md) | **Почати тут, якщо ви агент:** обов’язкові правила сесії й межі модулів. |
-| [PROJECT_REQUIREMENTS.md](PROJECT_REQUIREMENTS.md) | Поведінка й критерії: 80 ID вимог, 19 наскрізних сценаріїв. Головне джерело правди. |
-| [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md) | Ідея, особисті межі, порядок можливостей. |
-| [APPLICATION_ARCHITECTURE.md](APPLICATION_ARCHITECTURE.md) | Компоненти, DTO, потоки, SQLite, видалення, macOS. |
-| [ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md](ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md) | Технічний план рушія й Wails; припущення, які ще доводять прототипи. |
-| [MOCKUP.html](MOCKUP.html) | Інтерактивний макет — орієнтир вигляду; демо-перемикачі й демо-логіка не є продуктом ([розбіжності](docs/decisions/project-baseline.md#макет-проти-специфікацій)). |
-| [tasks/README.md](tasks/README.md) | План: 68 задач, залежності, матриці вимог і сценаріїв, правила виконання. |
-| [docs/README.md](docs/README.md) | Індекс інженерної політики, рішень, доказів і документації фіч. |
-| [docs/engineering/TDD_AND_QUALITY.md](docs/engineering/TDD_AND_QUALITY.md) | TDD, 100% покриття, відсутність боргу — обов’язково для кожної зміни. |
-| [docs/decisions/project-baseline.md](docs/decisions/project-baseline.md) | Погоджений обсяг, інвентар вимог, розбіжності, середовище, реєстр відкритих рішень O1–O18. |
-| [archive/](archive/LIBTORRENT_TECHNICAL_RESEARCH.md) | Історія відхиленого стеку (libtorrent). Лише для читання, не є вимогою. |
+| [AGENTS.md](AGENTS.md) | **Start here if you are an agent:** mandatory session rules and module boundaries. |
+| [PROJECT_REQUIREMENTS.md](PROJECT_REQUIREMENTS.md) | Behavior and criteria: 80 requirement IDs, 19 end-to-end scenarios. The main source of truth. |
+| [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md) | Idea, personal limits, order of capabilities. |
+| [APPLICATION_ARCHITECTURE.md](APPLICATION_ARCHITECTURE.md) | Components, DTOs, flows, SQLite, deletion, macOS. |
+| [ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md](ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md) | Technical plan for the engine and Wails; assumptions that prototypes still have to prove. |
+| [MOCKUP.html](MOCKUP.html) | Interactive mockup — a visual reference; demo toggles and demo logic are not the product ([discrepancies](docs/decisions/project-baseline.md#mockup-versus-specifications)). |
+| [tasks/README.md](tasks/README.md) | Plan: 68 tasks, dependencies, requirement and scenario matrices, execution rules. |
+| [docs/README.md](docs/README.md) | Index of engineering policy, decisions, evidence and feature documentation. |
+| [docs/engineering/TDD_AND_QUALITY.md](docs/engineering/TDD_AND_QUALITY.md) | TDD, 100% coverage, no debt — mandatory for every change. |
+| [docs/decisions/project-baseline.md](docs/decisions/project-baseline.md) | Agreed scope, requirement inventory, discrepancies, environment, open-decision register O1–O18. |
+| [archive/](archive/LIBTORRENT_TECHNICAL_RESEARCH.md) | History of the rejected stack (libtorrent). Read-only, not a requirement. |
 
-## Карта каталогів
+## Directory map
 
-Створені зараз:
+Created now:
 
 ```text
-README.md, AGENTS.md          точка входу й правила агента
-CLAUDE.md                     вхід для Claude Code: імпортує AGENTS.md, команди, загальна картина
+README.md, AGENTS.md          entry point and agent rules
+CLAUDE.md                     entry for Claude Code: imports AGENTS.md, commands, big picture
 PROJECT_REQUIREMENTS.md, PRODUCT_CONCEPT.md, APPLICATION_ARCHITECTURE.md,
-ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md, MOCKUP.html   специфікації й макет
-main.go, main_test.go         точка входу Wails: вбудований frontend/dist, run(start, stderr)
-go.mod, go.sum                Go 1.27.2, Wails v2.16.0 (бібліотека + CLI як go tool)
-wails.json                    конфігурація Wails (npm ci, npm run build)
+ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md, MOCKUP.html   specifications and mockup
+main.go, main_test.go         Wails entry point: embedded frontend/dist, run(start, stderr)
+go.mod, go.sum                Go 1.27.2, Wails v2.16.0 (library + CLI as go tool)
+wails.json                    Wails configuration (npm ci, npm run build)
 internal/app/                 Wails facade (AppAPI): GetRuntimeInfo
-frontend/src/bridge/          власна обгортка згенерованих bindings
-frontend/src/features/        UI за функціями (зараз runtime-check)
-frontend/src/test/            налаштування тестів
-frontend/wailsjs/             bindings, згенеровані Wails — не редагувати вручну
+frontend/src/bridge/          our own wrapper over generated bindings
+frontend/src/features/        UI by feature (currently runtime-check)
+frontend/src/test/            test setup
+frontend/wailsjs/             bindings generated by Wails — do not edit by hand
 frontend/package.json, package-lock.json, vite.config.ts, tsconfig.json
-build/darwin/, build/appicon.png   Info.plist (bundle ID, мінімальна macOS), іконка
-tasks/                        план і 68 numbered tasks
-docs/                         політика, рішення (ADR), докази, фічі
-archive/                      історичні матеріали, лише читання
+build/darwin/, build/appicon.png   Info.plist (bundle ID, minimum macOS), icon
+tasks/                        plan and 68 numbered tasks
+docs/                         policy, decisions (ADR), evidence, features
+archive/                      historical materials, read-only
 ```
 
-**Ще не створено** — з [архітектури §3](APPLICATION_ARCHITECTURE.md#3-структура-репозиторію-для-ai-first): `internal/torrentengine/`, `internal/library/`, `internal/files/`, `internal/automation/`, `internal/platform/`, `internal/diagnostics/`, `frontend/src/{state,i18n,styles}/`, `scripts/`.
+**Not created yet** — from [architecture §3](APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first): `internal/torrentengine/`, `internal/library/`, `internal/files/`, `internal/automation/`, `internal/platform/`, `internal/diagnostics/`, `frontend/src/{state,i18n,styles}/`, `scripts/`.
 
-Простежити сценарій від UI до Go: [desktop-shell-build](docs/features/desktop-shell-build.md) — кнопка в `frontend/src/features/runtime-check` → `frontend/src/bridge/runtimeInfo.ts` → `frontend/wailsjs/go/app/App.js` → `internal/app.App.GetRuntimeInfo`. Для майбутньої вимоги: [TR-01](PROJECT_REQUIREMENTS.md#22-завантаження-й-роздача) → [матриця](tasks/README.md#повне-покриття-80-вимог) → [025](tasks/025-pause-resume-application.md) → `internal/app` → `internal/torrentengine` / `internal/library`.
+Tracing a scenario from the UI to Go: [desktop-shell-build](docs/features/desktop-shell-build.md) — the button in `frontend/src/features/runtime-check` → `frontend/src/bridge/runtimeInfo.ts` → `frontend/wailsjs/go/app/App.js` → `internal/app.App.GetRuntimeInfo`. For a future requirement: [TR-01](PROJECT_REQUIREMENTS.md#22-downloading-and-seeding) → [matrix](tasks/README.md#full-coverage-of-the-80-requirements) → [025](tasks/025-pause-resume-application.md) → `internal/app` → `internal/torrentengine` / `internal/library`.
 
-## Команди збірки й перевірок
+## Build and check commands
 
-Перевірено в задачі 003 на Apple M4 / macOS 27.0.1 ([звіт](docs/verification/003-wails-macos-build-spike.md)). Усі команди виконуються з кореня репозиторію й не залежать від абсолютного шляху. Єдину команду для всіх перевірок створить [004](tasks/004-reproducible-check-commands.md).
+Verified in task 003 on Apple M4 / macOS 27.0.1 ([report](docs/verification/003-wails-macos-build-spike.md)). All commands run from the repository root and do not depend on an absolute path. A single command for all checks will be created by [004](tasks/004-reproducible-check-commands.md).
 
-**Передумови розробки** (готовій `.app` вони не потрібні): Xcode Command Line Tools (`xcode-select --install`), Go ≥ 1.27 (`brew install go`; точну 1.27.2 підтягне `go.mod`), Node.js ≥ 22.12 з npm ≥ 11.20 (перевірено 26.11.1 / 11.20.0; `frontend/.npmrc` задає `min-release-age=14`, тож npm не встановить версію, молодшу за 14 днів). Глобальний Wails CLI **не потрібен**: `go tool wails` бере версію з `go.mod`.
+**Development prerequisites** (the finished `.app` does not need them): Xcode Command Line Tools (`xcode-select --install`), Go ≥ 1.27 (`brew install go`; the exact 1.27.2 is pulled in by `go.mod`), Node.js ≥ 22.12 with npm ≥ 11.20 (verified 26.11.1 / 11.20.0; `frontend/.npmrc` sets `min-release-age=14`, so npm will not install a version younger than 14 days). A global Wails CLI is **not needed**: `go tool wails` takes the version from `go.mod`.
 
 ```sh
-go tool wails doctor                          # перевірка середовища
+go tool wails doctor                          # environment check
 
-# Frontend: залежності, типи, тести з порогом 100% на кожен файл, збірка
+# Frontend: dependencies, types, tests with a 100% per-file threshold, build
 npm --prefix frontend ci
 npm --prefix frontend run typecheck
 npm --prefix frontend run test:coverage
-npm --prefix frontend run build               # потрібно до go test: main вбудовує frontend/dist
+npm --prefix frontend run build               # required before go test: main embeds frontend/dist
 
-# Go: формат, аналізатор, тести
-gofmt -l .                                    # має бути порожньо
+# Go: formatting, analyzer, tests
+gofmt -l .                                    # must be empty
 go vet ./...
 go test ./...
 
-# Bindings після зміни Go-facade (результат комітиться)
+# Bindings after a Go facade change (the result is committed)
 go tool wails generate module
 
-# Релізна збірка → build/bin/OctopusTorrent.app (arm64, ad-hoc підпис)
+# Release build → build/bin/OctopusTorrent.app (arm64, ad-hoc signature)
 go tool wails build -clean -trimpath
 
-# Розробка з гарячим перезавантаженням frontend
+# Development with frontend hot reload
 go tool wails dev
 ```
 
-**100% покриття Go** вимірюється разом із реальним запуском `.app`, бо `main()` виконується лише у справжньому застосунку:
+**100% Go coverage** is measured together with a real `.app` launch, because `main()` runs only in the real application:
 
 ```sh
 C="$PWD/build/coverage"; rm -rf "$C"; mkdir -p "$C/go-unit" "$C/go-app"
 go test -cover -coverpkg=./... ./... -args -test.gocoverdir="$C/go-unit"
 GOFLAGS="-cover -coverpkg=./..." go tool wails build -clean -trimpath
 open -n --env GOCOVERDIR="$C/go-app" build/bin/OctopusTorrent.app
-# натиснути «Check Go connection», потім закрити застосунок (⌘Q)
+# click "Check Go connection", then quit the application (⌘Q)
 go tool covdata textfmt -i="$C/go-unit,$C/go-app" -o "$C/go.out"
-awk 'NR>1 && $NF==0' "$C/go.out"              # має бути порожньо: жодного непокритого блоку
-go tool wails build -clean -trimpath          # повернути звичайну релізну збірку
+awk 'NR>1 && $NF==0' "$C/go.out"              # must be empty: no uncovered block
+go tool wails build -clean -trimpath          # restore the normal release build
 ```
 
-Правила для майбутніх скриптів (AI-07): запуск із кореня, шляхи відносно кореня, без прихованих кроків; версії — у `go.mod`/`go.sum` і `frontend/package-lock.json`; згенеровані bindings відтворюються командою, а не редагуються.
+Rules for future scripts (AI-07): run from the root, paths relative to the root, no hidden steps; versions in `go.mod`/`go.sum` and `frontend/package-lock.json`; generated bindings are reproduced by a command, not edited.
 
-## Робота з репозиторієм
+## Working with the repository
 
-Кожна задача — через RED → GREEN → REFACTOR, зі 100% покриттям власного виконуваного коду, актуальною документацією фічі й без нового боргу. Порядок дій — [tasks/README.md](tasks/README.md#як-виконати-одну-задачу), правила агента — [AGENTS.md](AGENTS.md). Особисті торренти, завантажені дані й робочі бази не комітяться (див. [.gitignore](.gitignore)); штучні тестові дані живуть у `testdata/`.
+Every task goes through RED → GREEN → REFACTOR, with 100% coverage of our own executable code, up-to-date feature documentation and no new debt. Order of actions — [tasks/README.md](tasks/README.md#how-to-execute-one-task), agent rules — [AGENTS.md](AGENTS.md). Personal torrents, downloaded data and working databases are not committed (see [.gitignore](.gitignore)); synthetic test data lives in `testdata/`.

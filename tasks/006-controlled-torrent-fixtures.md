@@ -1,76 +1,76 @@
-# 006 — Створити контрольовані торренти й локальний swarm
+# 006 — Create controlled torrents and a local swarm
 
-**Статус:** `planned`  
-**Фаза:** P1 — Прототипи ризикових контрактів  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [004](004-reproducible-check-commands.md)  
-**Вимоги:** `AI-08`, `TR-02`
+**Status:** `planned`  
+**Phase:** P1 — Prototypes of risky contracts  
+**Priority:** critical path of the main scenario or completion  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [004](004-reproducible-check-commands.md)  
+**Requirements:** `AI-08`, `TR-02`
 
-## Результат
+## Outcome
 
-Підготувати власні відтворювані тестові торренти та локальне середовище передавання між відомими peers. Наступні тести рушія мають працювати без публічних трекерів і чужого контенту, з вимірюваними байтами та контрольованим завершенням.
+Prepare own reproducible test torrents and a local transfer environment between known peers. Subsequent engine tests must work without public trackers and third-party content, with measurable bytes and controlled completion.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `AI-08`, `TR-02`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): task start and completion conditions, statuses and check evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `AI-08`, `TR-02`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTO, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API and assumptions not confirmed by a prototype.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Створити невеликі детерміновані файли й генератор metainfo для v1, v2 та hybrid. Охопити один файл, вкладене дерево, повторювані назви в різних папках, нульовий файл, pad-файли й v1 pieces, що перетинають межу двох файлів.
-2. Додати окремі некоректні metainfo та варіанти payload із пошкодженими байтами. Зберегти очікуваний вміст, повні infohash, хеші файлів і призначення кожного прикладу в короткому описі тестових даних.
-3. Підготувати локальні seeder і leecher з різними тимчасовими каталогами та явним списком peers. Вимкнути публічні DHT, tracker discovery й інші небажані шляхи виходу до зовнішніх peers; тестові метадані не повинні містити сторонніх web seeds.
-4. Записувати конфігурацію, транспорт, адреси локальних peers та лічильники payload обох сторін. Передбачити вимірювання початку передавання, його зупинки й залишкового буферизованого трафіку для наступних тестів політики.
-5. Для кожного очікування встановити граничний час, підтримати скасування та гарантоване завершення clients, goroutines, listeners і процесів. Очищати лише тимчасові каталоги, створені цим тестом; при помилці зберігати достатню діагностику.
+1. Create small deterministic files and a metainfo generator for v1, v2 and hybrid. Cover a single file, a nested tree, repeated names in different folders, a zero-length file, pad files and v1 pieces that cross the boundary between two files.
+2. Add separate invalid metainfo and payload variants with corrupted bytes. Keep the expected content, full infohashes, file hashes and the purpose of each example in a short description of the test data.
+3. Prepare local seeder and leecher with different temporary directories and an explicit peer list. Disable public DHT, tracker discovery and other unwanted paths out to external peers; test metadata must not contain third-party web seeds.
+4. Record the configuration, transport, addresses of local peers and the payload counters of both sides. Provide measurement of the start of transfer, its stop and residual buffered traffic for subsequent policy tests.
+5. For every wait, set a time limit, support cancellation and guaranteed shutdown of clients, goroutines, listeners and processes. Clean up only the temporary directories created by this test; on error, keep sufficient diagnostics.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `internal/torrentengine/testutil; testdata/torrents; scripts/`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/006-controlled-torrent-fixtures.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `internal/torrentengine/testutil; testdata/torrents; scripts/`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** an entry `docs/verification/006-controlled-torrent-fixtures.md` or an exact link to a test or build report in the context handoff. One report can be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Генератор повторно створює ті самі метадані й очікувані хеші з тих самих тестових даних.
-- [ ] Після локального передавання отримані файли побайтово відповідають очікуваним, а їхні контрольні хеші збігаються.
-- [ ] Конфігурація й спостереження підтверджують, що тестове передавання використовує тільки заданих локальних peers і не залежить від публічного пошуку або трекерів.
-- [ ] Відсутність peers, пошкоджений piece та скасування дають передбачуваний результат у межах граничного часу.
-- [ ] Два послідовні запуски завершуються без залишених процесів, відкритих listeners або конфліктів тимчасових каталогів; користувацькі файли не змінюються.
+- [ ] The generator re-creates the same metadata and expected hashes from the same test data.
+- [ ] After local transfer, the received files match the expected ones byte for byte, and their checksums match.
+- [ ] Configuration and observation confirm that the test transfer uses only the specified local peers and does not depend on public discovery or trackers.
+- [ ] Absence of peers, a corrupted piece and cancellation give a predictable result within the time limit.
+- [ ] Two consecutive runs finish without leftover processes, open listeners or temporary directory conflicts; user files are not changed.
 
-## Перевірки
+## Checks
 
-- Двічі згенерувати приклади та порівняти metainfo, повні infohash і контрольні хеші payload.
-- Виконати успішне передавання одного файла й багатофайлового торрента; порівняти результат із вихідними байтами та лічильниками обох peers.
-- Окремо перевірити пошкоджені метадані, пошкоджений piece, відсутність peers і скасування під час передавання. Переконатися, що жоден сценарій не очікує безмежно.
-- Виконати середовище двічі поспіль, перевірити звільнення ресурсів і переглянути діагностику на сторонні адреси та особисті дані.
+- Generate the examples twice and compare the metainfo, full infohashes and payload checksums.
+- Perform a successful transfer of a single-file and a multi-file torrent; compare the result with the source bytes and the counters of both peers.
+- Separately check corrupted metadata, a corrupted piece, absence of peers and cancellation during transfer. Make sure no scenario waits indefinitely.
+- Run the environment twice in a row, verify that resources are released and review the diagnostics for third-party addresses and personal data.
 
-**Як запускати:** додати точні команди до набору [004](004-reproducible-check-commands.md) і README. Для кожного запуску записати приклад, конфігурацію, граничний час, код завершення та результат. Це перевірки реального рушія в контрольованому середовищі; браузер і Wails-вікно для них не потрібні.
+**How to run:** add the exact commands to the [004](004-reproducible-check-commands.md) set and the README. For each run, record the example, configuration, time limit, exit code and result. These are checks of the real engine in a controlled environment; a browser and a Wails window are not needed for them.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Генератор metainfo та тестове середовище мають використовувати зафіксовану версію API й явно перевіряти наявність підтримки кожного формату. Не плутати службовий мережевий трафік із payload. Відсутність відповіді публічного трекера не може бути причиною нестабільного тесту, бо тест не повинен його використовувати. Тайм-аути, скасування й очищення — частина результату цієї задачі, а не необов’язкова допоміжна робота.
+The metainfo generator and the test environment must use the pinned API version and explicitly check support for each format. Do not confuse service network traffic with payload. A missing response from a public tracker cannot be the cause of a flaky test, because the test must not use one. Timeouts, cancellation and cleanup are part of the result of this task, not optional auxiliary work.
 
-**Підстава для технічних рішень:** [BEP52](https://www.bittorrent.org/beps/bep_0052.html), [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [BEP52](https://www.bittorrent.org/beps/bep_0052.html), [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). Cross-check signatures and limitations against the pinned version; reading the API is not a passed integration check.
 
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of each session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** under the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are performed; absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and verification evidence.
+- Record a short result: what was changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

@@ -1,48 +1,49 @@
-# Документація OctopusTorrent
+# OctopusTorrent documentation
 
-**Поточний стан:** вимоги, макет і план підготовлені; є перша мінімальна `.app` (задача 003), продуктові фічі ще не реалізовані. Документація розвивається разом із кодом через TDD, без відкладеного оформлення після реалізації.
+**Current state:** requirements, mockup and plan are prepared; the first minimal `.app` exists (task 003); product features are not implemented yet. Documentation evolves together with the code through TDD, without deferred write-ups after implementation.
 
-## Обов’язкові точки входу
+## Mandatory entry points
 
-- [Правила агента](../AGENTS.md).
-- [Вимоги](../PROJECT_REQUIREMENTS.md), [концепт](../PRODUCT_CONCEPT.md), [архітектура](../APPLICATION_ARCHITECTURE.md).
-- [TDD, 100% покриття, архітектурний аналіз і відсутність технічного боргу](engineering/TDD_AND_QUALITY.md).
-- [План задач](../tasks/README.md).
-- [Шаблон опису фічі](features/_TEMPLATE.md), [шаблон ADR](decisions/_ADR_TEMPLATE.md).
-- [Кореневий README](../README.md): поточний стан, карта каталогів, наступна задача.
+- [Agent rules](../AGENTS.md).
+- [Requirements](../PROJECT_REQUIREMENTS.md), [concept](../PRODUCT_CONCEPT.md), [architecture](../APPLICATION_ARCHITECTURE.md).
+- [TDD, 100% coverage, architecture analysis and no technical debt](engineering/TDD_AND_QUALITY.md).
+- [Task plan](../tasks/README.md).
+- [Feature description template](features/_TEMPLATE.md), [ADR template](decisions/_ADR_TEMPLATE.md).
+- [Root README](../README.md): current state, directory map, next task.
 
-## Структура
+## Structure
 
-| Розташування | Призначення |
+| Location | Purpose |
 |---|---|
-| `engineering/` | Обов’язкові інженерні правила й фактичні команди якості після їх реалізації. |
-| `features/` | Один актуальний опис кожної фічі: поведінка, модулі, контракти, тести, команди, стан. |
-| `decisions/` | Значущі рішення, альтернативи й причини за [шаблоном ADR](decisions/_ADR_TEMPLATE.md); не журнал кожного косметичного редагування. |
-| `verification/` | Докази TDD, перевірок, покриття й архітектурних висновків; можна повторно використати звіт конкретної задачі. |
+| `engineering/` | Mandatory engineering rules and the actual quality commands once they are implemented. |
+| `features/` | One current description of each feature: behavior, modules, contracts, tests, commands, state. |
+| `decisions/` | Significant decisions, alternatives and reasons following the [ADR template](decisions/_ADR_TEMPLATE.md); not a log of every cosmetic edit. |
+| `verification/` | Evidence of TDD, checks, coverage and architecture conclusions; a specific task's verification report can be reused. |
 
-## Рішення й докази
+## Decisions and evidence
 
-| Документ | Статус |
+| Document | Status |
 |---|---|
-| [Базовий опис проєкту й реєстр відкритих рішень](decisions/project-baseline.md) | прийнято, [001](../tasks/001-scope-and-decision-register.md); [звіт](verification/001-scope-and-decision-register.md) |
-| Git-репозиторій і точка входу АІ | [002](../tasks/002-repository-and-agent-entrypoint.md); [звіт](verification/002-repository-and-agent-entrypoint.md) |
-| [Версії інструментів і frontend-залежностей](decisions/toolchain-versions.md) (O2) | прийнято, [003](../tasks/003-wails-macos-build-spike.md); [звіт](verification/003-wails-macos-build-spike.md) |
-| [Цільова macOS і ідентичність застосунку](decisions/macos-target.md) (O1) | прийнято, [003](../tasks/003-wails-macos-build-spike.md); перегляд — 066 |
+| [Project baseline and open-decision register](decisions/project-baseline.md) | accepted, [001](../tasks/001-scope-and-decision-register.md); [report](verification/001-scope-and-decision-register.md) |
+| Git repository and AI entry point | [002](../tasks/002-repository-and-agent-entrypoint.md); [report](verification/002-repository-and-agent-entrypoint.md) |
+| [Tool and frontend dependency versions](decisions/toolchain-versions.md) (O2) | accepted, [003](../tasks/003-wails-macos-build-spike.md); [report](verification/003-wails-macos-build-spike.md) |
+| [Target macOS and application identity](decisions/macos-target.md) (O1) | accepted, [003](../tasks/003-wails-macos-build-spike.md); review — 066 |
+| [Repository language: English only](decisions/repository-language.md) | accepted, owner's decision of 15 October 2026 |
 
-## Індекс фіч
+## Feature index
 
-Перш ніж реалізувати фічу, створити її документ за шаблоном і додати сюди посилання зі статусом. Змінювати той самий документ протягом усіх пов’язаних задач.
+Before implementing a feature, create its document from the template and add a link with its status here. Change the same document throughout all related tasks.
 
-| Фіча | Статус | Задачі |
+| Feature | Status | Tasks |
 |---|---|---|
-| [Desktop-оболонка, збірка `.app` і перший зв’язок React → Go](features/desktop-shell-build.md) | `implemented` (прототип) | [003](../tasks/003-wails-macos-build-spike.md) |
+| [Desktop shell, `.app` build and the first React → Go connection](features/desktop-shell-build.md) | `implemented` (prototype) | [003](../tasks/003-wails-macos-build-spike.md) |
 
-Жодна продуктова можливість (імпорт, передавання, бібліотека) ще не реалізована.
+No product capability (import, transfer, library) is implemented yet.
 
-Рекомендовані перші теми: імпорт `.torrent`/magnet, бібліотека й відновлення, політика передавання, керування файлами, видалення, UI/доступність, налаштування, теги/колекції, правила/папка спостереження. Остаточний поділ визначає фактична відповідальність модулів.
+Recommended first topics: `.torrent`/magnet import, library and restore, transfer policy, file management, deletion, UI/accessibility, settings, tags/collections, rules/watch folder. The final split is determined by the actual responsibilities of the modules.
 
-## Оновлення
+## Updates
 
-Кожна зміна одночасно актуалізує документ фічі, індекс, зачеплені вимоги/контракти та посилання на перевірки. До коду фіксується запланована поведінка й тест; після GREEN — фактична реалізація. Статуси `planned`, `in_progress`, `blocked`, `implemented` не підмінюють докази. Для документації перевіряються посилання, обов’язкові розділи й відповідність реальному стану; відсутність коду не видається за 100% покриття.
+Every change simultaneously updates the feature document, the index, the affected requirements/contracts and the links to checks. Before code, the planned behavior and test are recorded; after GREEN, the actual implementation. The statuses `planned`, `in_progress`, `blocked`, `implemented` do not replace evidence. For documentation, links, mandatory sections and correspondence to the real state are checked; absence of code is not presented as 100% coverage.
 
-Наявність інтерактивного HTML-макета не є виміряним покриттям застосунку або самого макета. Код, який надалі переноситься, змінюється чи повторно використовується, отримує тести за чинною політикою; застаріла історія розробки не зараховується як доказ TDD.
+The existence of the interactive HTML mockup is not measured coverage of the application or of the mockup itself. Code that is later moved, changed or reused gets tests under the current policy; outdated development history does not count as TDD evidence.

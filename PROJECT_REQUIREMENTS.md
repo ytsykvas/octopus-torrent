@@ -1,236 +1,236 @@
-# OctopusTorrent — вимоги до проєкту
+# OctopusTorrent — project requirements
 
-**Статус:** робоча специфікація v0.6 — особисте використання (14 жовтня 2026)  
-**Платформа:** macOS  
-**Технології:** React + TypeScript · Wails v2 · Go · anacrolix/torrent · SQLite  
-**Принцип коду:** AI-first — код і документація проєктуються для зрозумілого читання, перевірки та подальших змін АІ.  
-**Пов'язані матеріали:** `PRODUCT_CONCEPT.md`, `APPLICATION_ARCHITECTURE.md`, `ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md`, `MOCKUP.html`
+**Status:** working specification v0.6 — personal use (14 October 2026)  
+**Platform:** macOS  
+**Technologies:** React + TypeScript · Wails v2 · Go · anacrolix/torrent · SQLite  
+**Code principle:** AI-first — code and documentation are designed to be easy for AI to read, verify and change later.  
+**Related materials:** `PRODUCT_CONCEPT.md`, `APPLICATION_ARCHITECTURE.md`, `ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md`, `MOCKUP.html`
 
-## 1. Мета та межі особистої версії
+## 1. Goal and boundaries of the personal version
 
-OctopusTorrent — desktop BitTorrent-клієнт для особистого використання на Mac власника. Мета — зручне завантаження й роздача, вибір файлів, керування бібліотекою та надійне відновлення після перезапуску. Це одна локальна версія без акаунтів, платних планів, підписок, платежів, сервера ліцензій і хмарної синхронізації.
+OctopusTorrent is a desktop BitTorrent client for personal use on the owner's Mac. The goal is convenient downloading and seeding, file selection, library management and reliable restore after restart. It is a single local version without accounts, paid plans, subscriptions, payments, a license server or cloud sync.
 
-У цьому документі **MVP** — перша працездатна особиста версія. Колекції, правила й папка спостереження лишаються погодженими можливостями та реалізуються після перевірки основного рушія. Деталі, позначені **«потрібно визначити»**, уточнюємо за результатами прототипу й характеристиками власного Mac.
+In this document **MVP** means the first working personal version. Collections, rules and the watch folder remain agreed capabilities and are implemented after the core engine has been verified. Details marked **"to be determined"** are clarified based on prototype results and the characteristics of the owner's Mac.
 
-### Правила застосунку
+### Application rules
 
-1. Кількість торрентів у списку не має штучного ліміту. Реальні межі визначають пам’ять, диск, мережа та налаштування черги.
-2. Усі реалізовані функції доступні одразу без входу або перевірки доступу.
-3. Список, метадані, налаштування й стан відновлення зберігаються на цьому Mac.
-4. Видалення запису зупиняє передавання та за замовчуванням залишає завантажені файли на диску. Видалення файлів потребує окремого вибору й підтвердження.
+1. The number of torrents in the list has no artificial limit. Real limits are set by memory, disk, network and queue settings.
+2. All implemented features are available immediately, without sign-in or access checks.
+3. The list, metadata, settings and restore state are stored on this Mac.
+4. Removing an entry stops the transfer and by default leaves the downloaded files on disk. Deleting files requires a separate choice and confirmation.
 
-### Обраний стек
+### Chosen stack
 
-| Частина | Технологія | Межа відповідальності |
+| Part | Technology | Responsibility boundary |
 |---|---|---|
-| Інтерфейс | React + TypeScript у strict mode, Vite | Макет, взаємодії, доступність, локалізація й презентаційний стан. |
-| Desktop оболонка | Wails v2, стабільна гілка | macOS-вікно, системний WebView, bindings, меню, діалоги й події відкриття. |
-| Логіка | Go | Торренти, файлові операції, правила, бібліотека й контроль життєвого циклу. |
-| BitTorrent | github.com/anacrolix/torrent | Мережевий протокол, peers, pieces, метадані й перевірка цілісності. |
-| Локальна бібліотека | SQLite через Go | Транзакції, схеми й міграції власних даних. Конкретний драйвер фіксується після прототипу. |
+| Interface | React + TypeScript in strict mode, Vite | Layout, interactions, accessibility, localization and presentation state. |
+| Desktop shell | Wails v2, stable branch | macOS window, system WebView, bindings, menus, dialogs and open events. |
+| Logic | Go | Torrents, file operations, rules, library and lifecycle control. |
+| BitTorrent | github.com/anacrolix/torrent | Network protocol, peers, pieces, metadata and integrity checks. |
+| Local library | SQLite via Go | Transactions, schemas and migrations of the application's own data. The specific driver is fixed after the prototype. |
 
-Застосунок залишається локальним для особистого використання на macOS. Першою ціллю є власний Apple Silicon Mac; портованість стеку не створює вимоги випустити Windows/Linux-версії. Окремий web-сайт або віддалений backend не потрібні. Перехід на Wails v3 розглядається окремо після стабільного релізу й перевірки сумісності.
+The application stays local, for personal use on macOS. The first target is the owner's Apple Silicon Mac; the portability of the stack does not create a requirement to ship Windows/Linux versions. A separate website or remote backend is not needed. Moving to Wails v3 is considered separately after a stable release and a compatibility check.
 
-## 2. Вимоги до функцій MVP
+## 2. MVP feature requirements
 
-### 2.1. Додавання торрента
+### 2.1. Adding a torrent
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| ADD-01 | Додавати локальний файл `.torrent` через кнопку у застосунку, команду «Відкрити за допомогою» та подвійне натискання у Finder, якщо користувач призначив OctopusTorrent типовим застосунком. | Після відкриття коректного файла застосунок запускається або активується та показує назву, вміст і налаштування передавання до додавання; некоректний файл дає зрозумілу помилку. Той самий сценарій діє при запуску програми з Finder і коли вона вже відкрита. |
-| ADD-02 | Додавати magnet-посилання вставленням у застосунку та системним відкриттям посилання. | Посилання приймається, метадані завантажуються, а користувач бачить стан очікування; помилкове посилання не створює зламаний запис. |
-| ADD-03 | Не створювати дублікат уже доданого торрента. | Повторне відкриття того самого торрента переводить до існуючого запису й не створює другого запису. |
-| ADD-04 | До старту дозволяти вибрати папку призначення та файли для завантаження. | Для `.torrent` вибір доступний одразу; для magnet — після отримання метаданих. Вибір зберігається після перезапуску. |
-| ADD-06 | Приймати один `.torrent` перетягуванням у зону внизу бічної панелі. | Під час наведення зона підсвічується; якщо тип файла вже відомий як неприйнятний, зона показує відмову. Після відпускання перевіряються кількість файлів, розширення та вміст метаданих. Лише коректний `.torrent` відкриває попередній перегляд; інші файли не додаються й дають зрозумілу помилку. Клацання на зоні відкриває системний вибір файла. |
-| ADD-07 | Перед додаванням показувати діалог налаштування торрента. | Діалог показує справжній перелік файлів із метаданих, їхні розміри, вибір окремих файлів і всіх одразу, сумарний обсяг вибраного, папку збереження та перемикач запуску після додавання. Без вибраних файлів додавання недоступне. Скасування нічого не додає; підтвердження зберігає вибрані налаштування й додає торрент. |
-| ADD-08 | У діалозі додавання дозволяти вибрати наявну папку або створити нову, задавши її назву та батьківську папку. | Нова папка створюється на диску лише після явного підтвердження. Застосунок перевіряє назву, право запису та помилки файлової системи; якщо папка з такою назвою вже існує, не перезаписує її мовчки. Після успіху нова папка стає місцем збереження цього торрента. |
-| ADD-09 | Показувати вкладені папки у попередньому перегляді файлів. | Файли з `.torrent` відображаються деревом за відносними шляхами, без дублювання кореневої назви торрента. Папки можна згортати, вибирати всі дочірні файли однією дією; частковий вибір має проміжний стан. Підсумок обсягу рахується за вибраними файлами незалежно від того, чи згорнуто папку. Повний відносний шлях доступний у підказці й для VoiceOver. |
+| ADD-01 | Add a local `.torrent` file via a button in the application, the "Open With" command, and a double-click in Finder if the user has made OctopusTorrent the default application. | After a valid file is opened, the application launches or activates and shows the name, contents and transfer settings before adding; an invalid file produces a clear error. The same scenario applies when the application is launched from Finder and when it is already open. |
+| ADD-02 | Add magnet links by pasting them in the application and by opening the link through the system. | The link is accepted, metadata is downloaded, and the user sees a waiting state; an invalid link does not create a broken entry. |
+| ADD-03 | Do not create a duplicate of an already added torrent. | Opening the same torrent again navigates to the existing entry and does not create a second entry. |
+| ADD-04 | Before start, allow choosing the destination folder and the files to download. | For `.torrent` the choice is available immediately; for magnet, after metadata is received. The choice is preserved after restart. |
+| ADD-06 | Accept a single `.torrent` by drag-and-drop onto the zone at the bottom of the sidebar. | While hovering, the zone is highlighted; if the file type is already known to be unacceptable, the zone shows a rejection. After drop, the file count, extension and metadata contents are checked. Only a valid `.torrent` opens the preview; other files are not added and produce a clear error. Clicking the zone opens the system file picker. |
+| ADD-07 | Show a torrent settings dialog before adding. | The dialog shows the real file list from the metadata, their sizes, selection of individual files and of all at once, the total size of the selection, the save folder and a toggle to start after adding. Adding is unavailable with no files selected. Cancel adds nothing; confirm saves the chosen settings and adds the torrent. |
+| ADD-08 | In the add dialog, allow choosing an existing folder or creating a new one by giving its name and parent folder. | The new folder is created on disk only after explicit confirmation. The application checks the name, write permission and file system errors; if a folder with that name already exists, it does not silently overwrite it. On success the new folder becomes the save location of this torrent. |
+| ADD-09 | Show nested folders in the file preview. | Files from the `.torrent` are displayed as a tree by relative paths, without duplicating the torrent's root name. Folders can be collapsed, and all child files can be selected with one action; a partial selection has an indeterminate state. The size total is computed from the selected files regardless of whether a folder is collapsed. The full relative path is available in a tooltip and to VoiceOver. |
 
-### 2.2. Завантаження й роздача
+### 2.2. Downloading and seeding
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| TR-01 | Запускати, призупиняти й відновлювати торрент. | Ручна пауза забороняє payload-завантаження й віддачу; відновлення дозволяє завантаження та віддачу лише за чинною глобальною політикою. Пауза зберігається в SQLite після перезапуску. Службовий трафік і перевірка файлів не називаються активним передаванням payload. |
-| TR-02 | Завантажувати вибрані файли й показувати поступ у реальному часі. | У списку та деталях видно статус, відсоток, обсяг завантаженого, поточні швидкості й приблизний час до завершення, якщо його можна обчислити. |
-| TR-03 | Після завершення підтримувати роздачу. | Завершений торрент може роздаватися, доки користувач його не призупинить, не видалить зі списку або не ввімкне глобальне вимкнення віддачі за TR-08. |
-| TR-04 | Надавати загальні налаштування максимальної швидкості завантаження та віддачі. | Користувач може вимкнути ліміт або задати значення; налаштування зберігається після перезапуску. |
-| TR-05 | Відновлювати роботу після втрати мережі або перезапуску застосунку. | Застосунок не завантажує повторно наявні коректні дані та не змінює вибрані файли чи папку без дії користувача. |
-| TR-06 | Дозволяти припинити подальше цільове завантаження окремого файла й знову його вибрати. | Дії «Не завантажувати» / «Завантажувати» змінюють wanted у SQLite та викликають `File.SetPriority(PiecePriorityNone)` / відновлення попереднього пріоритету в anacrolix/torrent. Це не пауза всього торрента й не видалення байтів. Спільний piece може вимагати граничні байти для інших вибраних файлів. Виключення завершеного файла не є гарантією припинення його роздачі. До отримання magnet-метаданих керування файлами недоступне. |
-| TR-07 | Дозволяти керування завантаженням для цілої папки. | У вже доданому торренті кнопка pause виключає всі файли папки з подальшого завантаження, включно з готовими, вкладеними й прихованими у згорнутих папках. Якщо хоча б один дочірній файл виключено, папка показує play: натискання знову вибирає всі файли. Кількість вибраних файлів показує частковий стан. Дія не видаляє байти, не ставить на паузу весь торрент і не є окремим об’єктом або пріоритетом папки в рушії. До додавання чекбокси попереднього перегляду лишаються способом вибору за ADD-09. |
-| TR-08 | Керувати віддачею глобально, незалежно від завантаження. | «Зупинити віддачу для всіх торрентів» діє на поточні й нові записи. Go-сервіс забороняє payload upload, не вимикаючи активне завантаження; завершені торренти не роздають. Вимкнення режиму зберігає ручні паузи. Для поточних записів використовуються `DisallowDataUpload()` / `AllowDataUpload()`, для нових — початкові прапорці TorrentSpec. Поведінка, включно з уже буферизованими даними, перевіряється в контрольованому swarm на зафіксованій версії рушія. |
+| TR-01 | Start, pause and resume a torrent. | A manual pause forbids payload download and upload; resume allows download and upload only under the current global policy. The pause is stored in SQLite across restarts. Control traffic and file checks are not called active payload transfer. |
+| TR-02 | Download the selected files and show progress in real time. | The list and details show status, percentage, downloaded amount, current speeds and the estimated time to completion if it can be computed. |
+| TR-03 | Keep seeding after completion. | A completed torrent may seed until the user pauses it, removes it from the list or turns on the global upload stop under TR-08. |
+| TR-04 | Provide global settings for maximum download and upload speed. | The user can disable the limit or set a value; the setting is preserved after restart. |
+| TR-05 | Resume work after a network loss or an application restart. | The application does not re-download existing valid data and does not change the selected files or folder without a user action. |
+| TR-06 | Allow stopping further targeted download of an individual file and selecting it again. | The "Don't download" / "Download" actions change wanted in SQLite and call `File.SetPriority(PiecePriorityNone)` / restore the previous priority in anacrolix/torrent. This is not a pause of the whole torrent and not a deletion of bytes. A shared piece may require boundary bytes for other selected files. Excluding a completed file does not guarantee that its seeding stops. File controls are unavailable until magnet metadata is received. |
+| TR-07 | Allow download control for a whole folder. | In an already added torrent, the pause button excludes all files of the folder from further download, including completed ones, nested ones and those hidden in collapsed folders. If at least one child file is excluded, the folder shows play: clicking it selects all files again. The count of selected files shows the partial state. The action does not delete bytes, does not pause the whole torrent and is not a separate folder object or folder priority in the engine. Before adding, the preview checkboxes remain the way of selecting under ADD-09. |
+| TR-08 | Control upload globally, independently of download. | "Stop upload for all torrents" applies to current and new entries. The Go service forbids payload upload without disabling active download; completed torrents do not seed. Turning the mode off preserves manual pauses. For current entries `DisallowDataUpload()` / `AllowDataUpload()` are used, for new ones the initial TorrentSpec flags. The behavior, including already buffered data, is verified in a controlled swarm on the pinned engine version. |
 
-### 2.3. Список і деталі
+### 2.3. List and details
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| UI-01 | Показувати список торрентів із назвою, статусом, прогресом, розміром та швидкістю. | Користувач відрізняє завантаження, паузу, завершення, роздачу, помилку й очікування метаданих. |
-| UI-02 | Показувати деталі вибраного торрента. | Доступні назва, файли, папка, завантажений обсяг, швидкість завантаження й віддачі, кількість підключень, стан і основні дії. |
-| UI-03 | Пояснювати порожній стан і помилки простою мовою. | Порожній список пропонує додати торрент; помилка мережі, доступу до папки чи нестачі місця має опис і наступну дію. |
-| UI-04 | Реалізувати інтерфейс на React + TypeScript у Wails. | Власне вікно `.app` містить локальний React UI у системному WebView; меню, файлові діалоги й системні події проходять через Wails/Go. Основні дії доступні з клавіатури; семантичні елементи HTML, керування фокусом, VoiceOver, масштабування UI та обидві теми перевіряються у справжньому WebView на Mac. |
-| UI-06 | Зберегти скляне оформлення бічної й верхньої панелей із макета. | React/CSS відтворюють кольори, прозорість і відступи макета; підтримувані параметри вікна Wails застосовуються окремо. Вміст торрентів має читабельний непрозорий фон. За зменшеної прозорості використовується суцільне оформлення. Вигляд, контраст і масштабування перевіряються в системному WebView на Mac. |
-| UI-07 | Дозволити вибрати кілька торрентів у розділі «Усі торренти» й виконати групову дію. | Прапорці біля торрентів доступні постійно. Після вибору хоча б одного торрента з’являється панель із кількістю вибраних, «Вибрати всі», «Зняти вибір» і діями «Запустити», «Зупинити», «Видалити». Кнопок входу й виходу з окремого режиму вибору немає. Натискання на саму картку відкриває її деталі та не змінює груповий вибір. Пошук не призводить до дії над прихованими записами. |
-| UI-08 | Показувати стан і швидкість безпосередньо в картці торрента. | Під прогресбаром в одному рядку видно бейдж статусу, завантажений обсяг і, лише під час активного передавання, поточну швидкість. «Завантажується» й «Роздається» мають однаковий колір бейджа, але різні напрямки стрілок: ↓ для завантаження та ↑ для роздачі. «Завершено» має червоний бейдж, «Призупинено» — нейтральний; для обох швидкість прихована в картці й деталях, а не показана прочерком. Текстовий стан залишається видимим незалежно від кольору. |
-| UI-09 | Показувати кнопки play/pause біля кожного файла в картці та деталях. | Для вибраного файла видно pause з дією «Не завантажувати», для виключеного — play з дією «Завантажувати». Це стосується також завершених файлів; галочка завершення не замінює кнопку керування. Прогрес і текст окремо показують завершення або пропуск. Обидва місця оновлюються узгоджено; кнопка доступна з клавіатури, має назву для VoiceOver й зберігає фокус після натискання. Поведінка відповідає TR-06. |
-| UI-10 | Показувати помилки й відсутність мережі в окремій області під верхньою панеллю вікна. | Постійного індикатора «з’єднання активне» в бічній панелі немає. Якщо мережа зникла, алерт пояснює наслідки для мережевого передавання й пропонує повторити перевірку. Він не перекриває список, має кнопку закриття, доступний із клавіатури й озвучується VoiceOver. Помилки окремого торрента також позначаються біля його запису й у деталях; успішні дії лишаються короткими сповіщеннями. |
-| UI-11 | Розгортати картку торрента та показувати файли також у панелі деталей. | Окрема кнопка розгортання відкриває список усіх файлів торрента; біля кожного видно назву, завантажений і загальний обсяг, відсоток та власний прогресбар. Обсяг стоїть над прогресбаром в одному рядку з назвою й відсотком. Панель деталей показує той самий актуальний стан файлів. Довгі назви не перекривають кнопки чи прогрес. |
-| UI-12 | Показувати обсяг і шлях так, щоб дані можна було прочитати та використати. | Біля загального відсотка видно завантажений/загальний обсяг; якщо загальний розмір менший за 1 ГБ, показувати МБ, інакше ГБ. Відсоток на картці розміщено біля кінця заповненої частини прогресбару. Довгий шлях до папки в деталях можна розгорнути та скопіювати повністю, без обрізання значення в буфері. |
-| UI-13 | Дати основні дії біля самого торрента. | У картці та панелі деталей є відповідна до стану дія «Запустити» або «Зупинити» і дія «Видалити». Після дії статус, швидкість і кнопки оновлюються узгоджено; видалення відкриває підтвердження з DEL-01, а не виконується одразу. |
-| UI-15 | Обмежувати довгі значення у вузьких рядках. | Назви торрентів і файлів та шляхи до папок не виходять за межі бічної панелі, карток, списків, модальних вікон і панелі деталей; видимий текст скорочується з багатокрапкою. Повний текст доступний у підказці при наведенні та для допоміжних технологій. Шлях у деталях можна розгорнути й скопіювати повністю; скорочення на екрані не змінює справжнє значення. |
-| UI-16 | Прокручувати довгі списки всередині вікна. | Перехід між «Усі торренти», «Завантажуються», «Завершені» й «Роздаються», розгортання файлів та великий список не змінюють розмір головного вікна. Список і панель деталей прокручуються незалежно; бічна панель теж прокручується, якщо її вміст не вміщується. Після вибору іншого розділу список починається згори. У компактному вікні вміст залишається доступним через прокручування сторінки. |
-| UI-17 | Розмістити головну дію додавання у верхній панелі. | Кнопка «Додати торрент» стоїть на початку верхньої панелі замість дубльованої назви застосунку. Над списком немає окремого блоку з назвою, дубльованими елементами керування чи підказкою; групові дії з’являються над списком після вибору торрентів. Дія додавання доступна в усіх розділах і веде до однакового сценарію додавання й перевірки метаданих. Назву поточного розділу збережено для допоміжних технологій. |
-| UI-18 | Показувати файли торрента як дерево, якщо є папки. | У картці та деталях вкладені папки можна окремо розгортати й згортати. Рядок папки показує кнопку play/pause, кількість вибраних дочірніх файлів і сумарний прогрес за байтами; кнопка діє за TR-07. У дереві вже доданого торрента чекбоксів файлів або папок немає. Кожен вкладений рівень має відступ праворуч для всього рядка, включно з кнопкою play/pause, назвою й прогресом; кнопки дочірніх файлів не вирівнюються з кнопкою батьківської папки. Відступи узгоджені в картці та деталях. Згортання не змінює вибір чи завантаження. Довгі назви скорочуються з доступом до повного шляху для підказки й VoiceOver. Для великих дерев прокручується панель, а не росте головне вікно. |
-| UI-19 | Показувати напрямок або зупинку передавання на початку картки торрента. | Замість піктограми файла в лівому верхньому куті картки видно стрілку вниз під час завантаження, стрілку вгору під час роздачі та знак паузи, коли передавання зупинено. Завершений торрент без роздачі також має знак зупиненого передавання, але текстовий статус «Завершено» зберігається. Піктограма оновлюється після зміни стану, а зміст статусу не залежить лише від кольору чи форми значка. |
+| UI-01 | Show the torrent list with name, status, progress, size and speed. | The user can tell apart downloading, paused, completed, seeding, error and waiting for metadata. |
+| UI-02 | Show the details of the selected torrent. | Name, files, folder, downloaded amount, download and upload speed, number of connections, state and main actions are available. |
+| UI-03 | Explain the empty state and errors in plain language. | The empty list offers to add a torrent; a network error, folder access error or lack of space has a description and a next action. |
+| UI-04 | Implement the interface in React + TypeScript in Wails. | The application's own `.app` window contains a local React UI in the system WebView; menus, file dialogs and system events go through Wails/Go. The main actions are available from the keyboard; semantic HTML elements, focus management, VoiceOver, UI scaling and both themes are verified in the real WebView on a Mac. |
+| UI-06 | Keep the glass styling of the sidebar and top bar from the mockup. | React/CSS reproduce the colors, transparency and spacing of the mockup; supported Wails window options are applied separately. Torrent content has a readable opaque background. With reduced transparency a solid style is used. Appearance, contrast and scaling are verified in the system WebView on a Mac. |
+| UI-07 | Allow selecting several torrents in the "All Torrents" section and running a bulk action. | Checkboxes next to torrents are always available. After at least one torrent is selected, a bar appears with the selected count, "Select All", "Clear Selection" and the actions "Start", "Stop", "Remove". There are no buttons to enter or leave a separate selection mode. Clicking the card itself opens its details and does not change the bulk selection. Search does not lead to an action on hidden entries. |
+| UI-08 | Show state and speed directly in the torrent card. | Under the progress bar, on one line, the status badge, the downloaded amount and, only during active transfer, the current speed are visible. "Downloading" and "Seeding" have the same badge color but different arrow directions: ↓ for download and ↑ for seeding. "Completed" has a red badge, "Paused" a neutral one; for both, speed is hidden in the card and details rather than shown as a dash. The text state stays visible regardless of color. |
+| UI-09 | Show play/pause buttons next to each file in the card and details. | A selected file shows pause with the "Don't download" action, an excluded file shows play with the "Download" action. This also applies to completed files; the completion checkmark does not replace the control button. Progress and text separately show completion or skipping. Both places update consistently; the button is keyboard accessible, has a VoiceOver name and keeps focus after being pressed. The behavior matches TR-06. |
+| UI-10 | Show errors and lack of network in a separate area under the window's top bar. | There is no permanent "connection active" indicator in the sidebar. If the network is gone, the alert explains the consequences for network transfer and offers to retry the check. It does not cover the list, has a close button, is keyboard accessible and is announced by VoiceOver. Errors of an individual torrent are also marked next to its entry and in the details; successful actions remain short notifications. |
+| UI-11 | Expand the torrent card and also show files in the details panel. | A separate expand button opens the list of all files of the torrent; next to each, the name, downloaded and total size, percentage and its own progress bar are visible. The size sits above the progress bar on one line with the name and percentage. The details panel shows the same current file state. Long names do not overlap buttons or progress. |
+| UI-12 | Show size and path so the data can be read and used. | Next to the overall percentage the downloaded/total size is visible; if the total size is less than 1 GB, show MB, otherwise GB. The percentage on the card is placed near the end of the filled part of the progress bar. A long folder path in the details can be expanded and copied in full, without truncating the value in the clipboard. |
+| UI-13 | Provide the main actions right next to the torrent. | The card and the details panel have a state-appropriate "Start" or "Stop" action and a "Remove" action. After an action, status, speed and buttons update consistently; removal opens the confirmation from DEL-01 rather than executing immediately. |
+| UI-15 | Constrain long values in narrow rows. | Torrent and file names and folder paths do not overflow the sidebar, cards, lists, modal windows or the details panel; visible text is truncated with an ellipsis. The full text is available in a hover tooltip and to assistive technologies. The path in the details can be expanded and copied in full; on-screen truncation does not change the real value. |
+| UI-16 | Scroll long lists inside the window. | Switching between "All Torrents", "Downloading", "Completed" and "Seeding", expanding files and a large list do not change the size of the main window. The list and the details panel scroll independently; the sidebar also scrolls if its content does not fit. After choosing another section, the list starts from the top. In a compact window the content remains reachable by scrolling the page. |
+| UI-17 | Place the main add action in the top bar. | The "Add Torrent" button sits at the start of the top bar instead of a duplicated application name. Above the list there is no separate block with a title, duplicated controls or a hint; bulk actions appear above the list after torrents are selected. The add action is available in all sections and leads to the same add and metadata check scenario. The current section name is kept for assistive technologies. |
+| UI-18 | Show the torrent's files as a tree if there are folders. | In the card and details, nested folders can be expanded and collapsed individually. A folder row shows a play/pause button, the number of selected child files and the total progress by bytes; the button works under TR-07. The tree of an already added torrent has no file or folder checkboxes. Each nested level is indented to the right for the whole row, including the play/pause button, name and progress; child file buttons are not aligned with the parent folder's button. Indentation is consistent in the card and details. Collapsing does not change selection or download. Long names are truncated with access to the full path via tooltip and VoiceOver. For large trees the panel scrolls rather than the main window growing. |
+| UI-19 | Show the direction or stop of transfer at the start of the torrent card. | Instead of a file icon, the top-left corner of the card shows a down arrow during download, an up arrow during seeding and a pause sign when transfer is stopped. A completed torrent without seeding also shows the stopped-transfer sign, but the "Completed" text status is kept. The icon updates after a state change, and the meaning of the status does not depend only on the color or shape of the icon. |
 
-Усі рядки інтерфейсу, включно з алертами й текстом доступності, потрібно винести в систему локалізації для шести мов із вимоги SET-06.
+All interface strings, including alerts and accessibility text, must be moved into the localization system for the six languages from requirement SET-06.
 
-### 2.4. Видалення та безпека файлів
+### 2.4. Removal and file safety
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| DEL-01 | Окремо пропонувати «Видалити торрент зі списку» та «Видалити торрент і файли». | Перший варіант є варіантом за замовчуванням. Жоден інший сценарій не видаляє файли автоматично. |
-| DEL-02 | Перед видаленням файлів показувати підтвердження з переліком файлів і їхнім розташуванням. | Користувач може скасувати дію; застосунок видаляє лише файли, що належать вибраному торренту, і не зачіпає інші файли в папці. |
-| DEL-03 | При видаленні запису зупиняти передавання. | Запис більше не працює в рушії; завантажені файли залишаються на диску, якщо окремо не вибрано їх видалення. |
-| DEL-04 | Обробляти помилки доступу до файлів без неправдивого повідомлення про успіх. | Якщо видалення файлів не вдалося, застосунок повідомляє, що залишилося на диску, і не приховує помилку. |
-| DEL-05 | Підтверджувати групове видалення вибраних торрентів. | Діалог називає вибрані записи; за замовчуванням видаляє тільки записи й залишає файли. Окремий прапорець видалення файлів показує їхній перелік і папки. Користувач може скасувати дію; застосунок не зачіпає невибрані торренти. |
+| DEL-01 | Offer "Remove torrent from list" and "Delete torrent and files" separately. | The first option is the default. No other scenario deletes files automatically. |
+| DEL-02 | Before deleting files, show a confirmation with the list of files and their location. | The user can cancel the action; the application deletes only files that belong to the selected torrent and does not touch other files in the folder. |
+| DEL-03 | Stop the transfer when an entry is removed. | The entry no longer runs in the engine; downloaded files remain on disk unless their deletion was chosen separately. |
+| DEL-04 | Handle file access errors without a false success message. | If deleting files failed, the application reports what remained on disk and does not hide the error. |
+| DEL-05 | Confirm bulk removal of the selected torrents. | The dialog names the selected entries; by default it removes only the entries and keeps the files. A separate file deletion checkbox shows their list and folders. The user can cancel the action; the application does not touch unselected torrents. |
 
-### 2.5. Налаштування й локальні дані
+### 2.5. Settings and local data
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| SET-01 | У налаштуваннях вибирати типову папку завантажень через системний вибір папки. | Обраний шлях видно в налаштуваннях і збережено після перезапуску. Нові торренти використовують його за замовчуванням; для окремого торрента можна вибрати іншу папку. Зміна типової папки не переміщує файли вже доданих торрентів. |
-| SET-02 | Зберігати бібліотеку й політику передавання локально. | SQLite містить записи, повні v1/v2 infohash, metainfo/magnet, шляхи, wanted/пріоритети, ручну паузу, теги, правила й налаштування. Storage рушія окремо зберігає piece completion. Після аварії записи відновлюються без дублікатів і втрати файлів; недовірені або змінені дані перевіряються, а ручна пауза застосовується до дозволу payload. |
-| SET-03 | Не перетворювати зниклу чи недоступну папку на тиху втрату даних. | Застосунок показує проблему й дозволяє повторно вказати розташування. |
-| SET-04 | У налаштуваннях вибирати вигляд: «Як у системі», «Світла» або «Темна». | За замовчуванням використовується тема macOS. У режимі «Як у системі» інтерфейс змінюється разом із системною темою без перезапуску; ручний вибір має пріоритет над системою й зберігається після перезапуску. Усі вікна, діалоги та стани залишаються читабельними в обох темах. |
-| SET-05 | Для типової папки завантажень дозволяти вибрати наявну папку або створити нову за назвою всередині обраної батьківської папки. | Після успішного створення шлях підставляється в налаштування; він стає типовим після збереження. Помилки назви, доступу та створення показуються користувачу, а попереднє налаштування зберігається. |
-| SET-06 | У налаштуваннях вибирати мову інтерфейсу: англійську, українську, іспанську, німецьку, французьку або португальську. | Усі шість мов доступні для всіх екранів, діалогів, повідомлень, помилок і елементів доступності. Початкову мову застосунок бере з пріоритетів macOS серед підтримуваних, інакше використовує англійську. Ручний вибір застосовується без перезапуску й зберігається після нього; назви торрентів, файлів і папок не перекладаються. |
-| SET-07 | Дати користувачу можливість зробити OctopusTorrent типовим застосунком для `.torrent`. | Застосунок реєструє підтримку `.torrent` у macOS; у налаштуваннях є зрозумілий шлях до системного вибору типового застосунку. Вибір робить користувач, без тихої зміни поточного типового застосунку. Після вибору подвійне натискання на `.torrent` у Finder відкриває діалог додавання, а перевірка файла й вибір папки діють так само, як для кнопки додавання. |
-| SET-08 | Дати загальний перемикач віддачі для всіх торрентів. | У розділі «Передавання» користувач вмикає або вимикає «Зупинити віддачу для всіх торрентів»; стан зберігається після перезапуску та застосовується до вже наявних і нових записів. Інтерфейс попереджає, що швидкість завантаження може впасти і деякі трекери можуть застосовувати власні правила. Це локальне налаштування Mac. Поведінка відповідає TR-08. |
+| SET-01 | In settings, choose the default download folder via the system folder picker. | The chosen path is visible in settings and preserved after restart. New torrents use it by default; a different folder can be chosen for an individual torrent. Changing the default folder does not move the files of already added torrents. |
+| SET-02 | Store the library and transfer policy locally. | SQLite contains the entries, full v1/v2 infohashes, metainfo/magnet, paths, wanted/priorities, manual pause, tags, rules and settings. The engine storage keeps piece completion separately. After a crash, entries are restored without duplicates or file loss; untrusted or changed data is checked, and the manual pause is applied before payload is allowed. |
+| SET-03 | Do not turn a missing or inaccessible folder into silent data loss. | The application shows the problem and allows specifying the location again. |
+| SET-04 | In settings, choose the appearance: "System", "Light" or "Dark". | The macOS theme is used by default. In "System" mode the interface changes together with the system theme without a restart; a manual choice takes priority over the system and is preserved after restart. All windows, dialogs and states remain readable in both themes. |
+| SET-05 | For the default download folder, allow choosing an existing folder or creating a new one by name inside the chosen parent folder. | After successful creation the path is filled into the settings; it becomes the default after saving. Name, access and creation errors are shown to the user, and the previous setting is kept. |
+| SET-06 | In settings, choose the interface language: English, Ukrainian, Spanish, German, French or Portuguese. | All six languages are available for all screens, dialogs, messages, errors and accessibility elements. The application takes the initial language from the macOS preferences among the supported ones, otherwise it uses English. A manual choice is applied without a restart and preserved after it; torrent, file and folder names are not translated. |
+| SET-07 | Let the user make OctopusTorrent the default application for `.torrent`. | The application registers `.torrent` support in macOS; settings contain a clear path to the system choice of the default application. The user makes the choice, without a silent change of the current default application. After the choice, a double-click on a `.torrent` in Finder opens the add dialog, and file checking and folder selection work the same as for the add button. |
+| SET-08 | Provide a global upload toggle for all torrents. | In the "Transfer" section the user turns "Stop upload for all torrents" on or off; the state is preserved after restart and applied to existing and new entries. The interface warns that download speed may drop and some trackers may apply their own rules. This is a local Mac setting. The behavior matches TR-08. |
 
-### 2.6. Дистрибуція та підтримка
+### 2.6. Distribution and support
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| REL-01 | Встановлювати особисту збірку локально. | `wails build` збирає frontend і Go-застосунок у `.app`, що відкривається на власному Mac. Для повторного встановлення можна підготувати `.dmg`; сайт не потрібен. Go, Node.js і потрібні native build tools є інструментами розробки, а не вимогою до запуску готової збірки. |
-| REL-02 | Перевірити підпис і залежності встановленої збірки. | Особиста збірка запускається на цільовому Mac без залежності від Homebrew кінцевого користувача. Developer ID і notarization перевіряються окремо, якщо з’явиться потреба розповсюджувати збірку. |
-| REL-03 | Зберегти коротку локальну довідку. | Описані додавання, вибір файлів, папки, пауза, роздача, відновлення й видалення; технічна діагностика допомагає власнику виправляти проблеми. |
+| REL-01 | Install the personal build locally. | `wails build` builds the frontend and the Go application into an `.app` that opens on the owner's Mac. A `.dmg` can be prepared for reinstallation; a website is not needed. Go, Node.js and the required native build tools are development tools, not a requirement for running the finished build. |
+| REL-02 | Verify the signature and dependencies of the installed build. | The personal build runs on the target Mac without depending on the end user's Homebrew. Developer ID and notarization are checked separately if there is a need to distribute the build. |
+| REL-03 | Keep a short local help. | Adding, file selection, folders, pause, seeding, restore and removal are described; technical diagnostics help the owner fix problems. |
 
-### 2.7. Бібліотека й локальна автоматизація
+### 2.7. Library and local automation
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| COL-01 | Теги й розумні колекції | Користувач може додати кілька тегів до торрента, створити, перейменувати й видалити колекцію як збережений фільтр за тегами та статусом. Склад колекції оновлюється після зміни тегів або статусу; один торрент може бути в кількох колекціях без дублювання запису. Видалення колекції не видаляє торренти чи файли. Локальний пошук відповідає NEXT-01. |
-| AUTO-01 | Папка спостереження | Користувач явно вибирає локальну папку для нових `.torrent`. Після завершення запису файла застосунок перевіряє його вміст, уникає повторного імпорту того самого infohash і показує помилку для некоректного файла. За замовчуванням файл потрапляє на перегляд; лише після окремого ввімкнення автоматичного додавання коректний торрент додається на паузі. Вихідний `.torrent` не видаляється автоматично. |
-| AUTO-02 | Правила для нових торрентів | Правило задає умови для назви або джерела додавання та дії: призначити теги й локальну папку завантаження. Правила мають видимий порядок пріоритету й попередній перегляд результату; користувач може вимкнути правило. Недоступна папка чи помилка не запускає торрент і не переміщує файли мовчки. Автоматично доданий торрент залишається на паузі до ручного запуску. |
+| COL-01 | Tags and smart collections | The user can add several tags to a torrent, and create, rename and delete a collection as a saved filter by tags and status. Collection membership updates after tags or status change; one torrent can be in several collections without duplicating the entry. Deleting a collection does not delete torrents or files. Local search follows NEXT-01. |
+| AUTO-01 | Watch folder | The user explicitly chooses a local folder for new `.torrent` files. After a file has finished being written, the application checks its contents, avoids re-importing the same infohash and shows an error for an invalid file. By default the file goes to review; only after automatic adding is separately enabled is a valid torrent added paused. The source `.torrent` is not deleted automatically. |
+| AUTO-02 | Rules for new torrents | A rule sets conditions on the name or the add source and actions: assign tags and a local download folder. Rules have a visible priority order and a preview of the result; the user can disable a rule. An unavailable folder or an error does not start the torrent and does not silently move files. An automatically added torrent stays paused until started manually. |
 
-**Порядок реалізації:** базове завантаження й надійне локальне відновлення → теги й колекції (COL-01) → правила та папка спостереження (AUTO-01–02). Ці функції доступні в одній особистій версії без штучного ліміту кількості записів.
+**Implementation order:** basic downloading and reliable local restore → tags and collections (COL-01) → rules and watch folder (AUTO-01–02). These features are available in a single personal version without an artificial limit on the number of entries.
 
-## 3. Локальні дані та приватність
+## 3. Local data and privacy
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| DATA-01 | Зберігати бібліотеку й налаштування локально. | Застосунок працює без реєстрації та власного сервера; доступ до функцій не залежить від зовнішньої перевірки. Мережа потрібна для роботи BitTorrent, а не для відкриття списку чи налаштувань. |
-| DATA-02 | Не збирати продуктову аналітику. | Немає ідентифікатора установки, подій конверсії або автоматичного надсилання назв торрентів, шляхів, magnet-посилань чи діагностики. |
-| DATA-03 | Мати локальну діагностику для розробки. | Журнал містить час, категорію, код помилки та ID операції; секрети tracker URL і повні локальні шляхи не потрапляють до звичайного журналу. Показ проблеми не змінює стан збережених файлів. |
+| DATA-01 | Store the library and settings locally. | The application works without registration or its own server; access to features does not depend on an external check. The network is needed for BitTorrent operation, not for opening the list or settings. |
+| DATA-02 | Do not collect product analytics. | There is no installation identifier, no conversion events and no automatic sending of torrent names, paths, magnet links or diagnostics. |
+| DATA-03 | Have local diagnostics for development. | The log contains time, category, error code and operation ID; tracker URL secrets and full local paths do not get into the regular log. Displaying a problem does not change the state of stored files. |
 
-## 4. Заплановано після MVP
+## 4. Planned after MVP
 
-| ID | Функція | Межі |
+| ID | Feature | Boundaries |
 |---|---|---|
-| NEXT-01 | Пошук у списку торрентів | Локальний пошук за назвою, як у макеті; реалізується після надійної роботи основного списку. |
-| NEXT-02 | Фільтри списку | Усі, активні, завершені та ті, що роздаються. Розділи лишаються в макеті й реалізуються як локальні фільтри. |
+| NEXT-01 | Search in the torrent list | Local search by name, as in the mockup; implemented after the main list works reliably. |
+| NEXT-02 | List filters | All, active, completed and seeding. The sections stay in the mockup and are implemented as local filters. |
 
-Кнопки «Відновити приклад», показу помилки й стану без мережі під вікном — інструменти інтерактивного макета. У справжньому застосунку помилки й стан мережі відображаються автоматично за UI-10.
+The "Restore example", error display and offline state buttons under the window are tools of the interactive mockup. In the real application, errors and network state are displayed automatically under UI-10.
 
-Каталог контенту, обмін бібліотекою чи завантаженими даними між Mac, мобільні застосунки та розширена аналітика мережі **не входять у погоджений обсяг робіт**. Їх можна розглядати лише після окремого рішення.
+A content catalog, sharing the library or downloaded data between Macs, mobile applications and extended network analytics are **not part of the agreed scope of work**. They can be considered only after a separate decision.
 
-## 5. Технічні й якісні вимоги
+## 5. Technical and quality requirements
 
-- **Архітектура:** React/TypeScript показує власні DTO та надсилає команди через Wails. Go-сервіси керують бібліотекою, файлами й anacrolix/torrent; SQLite є джерелом збереженої політики, рушій — джерелом фактичного прогресу. Довгі операції виконуються з керованим життєвим циклом і не блокують UI.
-- **Стійкість:** збої мережі, некоректний торрент, відсутність місця, зміна шляху й аварійне завершення не повинні спричиняти неоголошене видалення або повторне завантаження даних.
-- **Безпека даних:** жодна дія інтерфейсу не видаляє файли без явного вибору. Операція видалення має перевіряти шлях кожного файлу.
-- **Доступність:** основні дії доступні з клавіатури; статуси мають текстові підписи, а не лише кольори; елементи підтримують VoiceOver і системне масштабування тексту.
-- **Прозорість і контраст:** CSS-оформлення панелей враховує зменшення прозорості та збільшення контрасту. Якщо системну перевагу не можна надійно отримати через WebView, непрозоре оформлення забезпечується явно задокументованим fallback.
-- **Продуктивність:** список і деталі залишаються чуйними під час завантаження; часті оновлення прогресу не повинні перевантажувати React або канал подій Go–TS.
-- **Сумісність і залежності:** мінімальну підтримувану версію macOS та архітектури Mac потрібно визначити до початку реалізації; перед релізом перевірити умови використання anacrolix/torrent, Wails та всіх включених компонентів.
-- **Інтеграція з macOS:** зареєструвати `.torrent` як підтримуваний тип документа в пакеті застосунку через `CFBundleDocumentTypes`; системний вибір типового застосунку належить користувачу. Перевірити відкриття файла з Finder і передавання його до застосунку при холодному та повторному запуску.
+- **Architecture:** React/TypeScript displays the application's own DTOs and sends commands through Wails. Go services manage the library, files and anacrolix/torrent; SQLite is the source of the stored policy, the engine is the source of actual progress. Long operations run with a managed lifecycle and do not block the UI.
+- **Resilience:** network failures, an invalid torrent, lack of space, a path change and a crash must not cause unannounced deletion or re-download of data.
+- **Data safety:** no interface action deletes files without an explicit choice. The delete operation must check the path of every file.
+- **Accessibility:** the main actions are available from the keyboard; statuses have text labels, not just colors; elements support VoiceOver and system text scaling.
+- **Transparency and contrast:** the CSS styling of panels respects reduced transparency and increased contrast. If the system preference cannot be obtained reliably through the WebView, the opaque style is provided by an explicitly documented fallback.
+- **Performance:** the list and details remain responsive during downloading; frequent progress updates must not overload React or the Go–TS event channel.
+- **Compatibility and dependencies:** the minimum supported macOS version and Mac architectures must be determined before implementation starts; before release, check the terms of use of anacrolix/torrent, Wails and all included components.
+- **macOS integration:** register `.torrent` as a supported document type in the application bundle via `CFBundleDocumentTypes`; the system choice of the default application belongs to the user. Verify opening a file from Finder and passing it to the application on cold and repeated launch.
 
-### 5.1. Контракти обраного стеку
+### 5.1. Contracts of the chosen stack
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| STACK-01 | Ізолювати доступ до native можливостей у Go. | React використовує вузький API Wails; не виконує довільні shell-команди та не видаляє файли через сторонній обхідний шлях. Валідація шляхів, метаданих і команд виконується в Go незалежно від перевірок UI. |
-| STACK-02 | Передавати узгоджені знімки стану Go–TS. | Початковий snapshot доступний окремим запитом; події мають revision/послідовність і оновлюють лише актуальний стан. Пропуск події або повторне підключення відновлюється повним snapshot. React не підписується повторно без очищення listeners. |
-| STACK-03 | Серіалізувати зміни політики кожного торрента. | Пауза, глобальна віддача, wanted і видалення мають узгоджений порядок у Go. Після повільної відповіді UI не повертається до застарілого стану. Одночасні команди не гублять ручну паузу або вибір файлів. |
-| STACK-04 | Керувати SQLite лише через repository. | Версія схеми, транзакції й міграції перевірені; помилка запису не повідомляється як успішна дія. Дані бібліотеки відокремлені від payload та внутрішнього piece completion рушія. |
-| STACK-05 | Довести збірку й native інтеграцію на власному Mac. | `.app` запускається з локальними assets; Finder/magnet, системні діалоги, keyboard/VoiceOver і завершення застосунку перевірені у справжньому Wails-вікні. Browser-тест frontend не замінює цю перевірку. |
+| STACK-01 | Isolate access to native capabilities in Go. | React uses a narrow Wails API; it does not execute arbitrary shell commands and does not delete files through a third-party workaround. Validation of paths, metadata and commands is done in Go independently of UI checks. |
+| STACK-02 | Pass consistent Go–TS state snapshots. | The initial snapshot is available through a separate request; events carry a revision/sequence and update only the current state. A missed event or a reconnect is recovered with a full snapshot. React does not resubscribe without cleaning up listeners. |
+| STACK-03 | Serialize policy changes of each torrent. | Pause, global upload, wanted and removal have a consistent order in Go. After a slow response the UI does not revert to a stale state. Concurrent commands do not lose the manual pause or the file selection. |
+| STACK-04 | Manage SQLite only through the repository. | Schema version, transactions and migrations are verified; a write error is not reported as a successful action. Library data is separated from the payload and from the engine's internal piece completion. |
+| STACK-05 | Prove the build and native integration on the owner's Mac. | The `.app` launches with local assets; Finder/magnet, system dialogs, keyboard/VoiceOver and application shutdown are verified in a real Wails window. A frontend browser test does not replace this check. |
 
-### 5.2. AI-first: код для подальшої роботи АІ
+### 5.2. AI-first: code for further AI work
 
-Власник визначає бажану поведінку застосунку й оцінює результат; глибоке знання Go, React, TypeScript та Wails не є передумовою підтримки проєкту. Код пишемо з розрахунком на те, що основну розробку, читання, пошук помилок і наступні зміни виконуватимуть АІ-агенти. Новий агент має розуміти проєкт із репозиторію без доступу до попередніх чатів.
+The owner defines the desired application behavior and evaluates the result; deep knowledge of Go, React, TypeScript and Wails is not a prerequisite for maintaining the project. We write code on the assumption that the main development, reading, debugging and subsequent changes will be done by AI agents. A new agent must understand the project from the repository without access to previous chats.
 
-Пріоритет — явна логіка, передбачувана структура й відтворювана перевірка. Зручність для АІ не скасовує вимоги безпеки файлів, коректності передавання й продуктивності. Коментарі пояснюють рішення та інваріанти; зрозумілі назви й невеликі модулі пояснюють повсякденну поведінку.
+The priority is explicit logic, a predictable structure and reproducible verification. Convenience for AI does not cancel the requirements for file safety, transfer correctness and performance. Comments explain decisions and invariants; clear names and small modules explain everyday behavior.
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| AI-01 | Дати агенту точку входу в репозиторій. | Кореневий `README.md` пояснює призначення, поточний стан, карту основних каталогів і точні команди збірки, запуску й перевірок. `AGENTS.md` містить короткі правила роботи, посилання на актуальні вимоги й архітектуру та особливі правила для Go–TS bridge й файлових операцій. Документи не потребують історії розмов. |
-| AI-02 | Використовувати однозначні назви й явні типи даних. | Назви файлів, типів, методів і змінних описують предметну дію; ідентифікатори написані зрозумілою англійською відповідно до звичайних правил мови. Для байтів, швидкостей, часу, file index і UUID видно одиниці та призначення. Значущі числа й режими мають названі константи або типи. Незрозумілі скорочення пояснені локально. |
-| AI-03 | Ділити код за відповідальністю. | Файл або тип має одну основну роль. UI, правила імпорту, доступ до файлів, локальне збереження та рушій мають чіткі межі. Великі змішані файли розділяються за реальними задачами; не вводяться довільні обмеження кількості рядків або додаткові шари без практичної потреби. |
-| AI-04 | Робити залежності й побічні ефекти видимими. | Компоненти явно отримують потрібні залежності. Читання/запис диска, мережеві команди й мутація стану відокремлені від обчислень. Немає прихованого глобального стану, який агент має вгадувати. За конкретною дією UI можна простежити команду, зміну стану та результат. |
-| AI-05 | Документувати ризикові контракти на місці. | Для Wails bindings, DTO/подій, goroutines і файлових операцій описані життєвий цикл, послідовність, помилки, скасування та інваріанти. Через межу Go–TS передаються власні DTO, без об’єктів рушія. Коментар пояснює нетривіальне рішення; публічний API має стислий контракт. |
-| AI-06 | Зберігати рішення й актуальний контекст у репозиторії. | Вимоги описують поведінку, архітектура — компоненти й потоки, короткі записи в `docs/decisions/` — важливі вибори та їхні причини. Опис відрізняє перевірені факти від припущень і незавершених прототипів. Зміна контракту, структури чи команди збірки оновлює відповідний документ у тій самій зміні. |
-| AI-07 | Забезпечити відтворювану збірку й перевірку. | Go toolchain і залежності бекенду зафіксовані в `go.mod`/`go.sum`; версії Wails CLI та Node.js задокументовані й відтворювані, frontend-залежності зафіксовані в lockfile. README дає точні команди та native prerequisites для Mac. Генеровані bindings відтворюються й не редагуються вручну. Скрипти не залежать від прихованих кроків або абсолютних шляхів розробника. |
-| AI-08 | Перевіряти важливу поведінку й інваріанти. | Go-тести охоплюють імпорт, дедуплікацію, політики передавання, відновлення й видалення; тести React перевіряють дії та доступність через тестовий bridge. Реальні Wails bindings і anacrolix/torrent перевіряються окремими інтеграційними сценаріями. Для Go перевіряються конкурентні зміни стану, зокрема race detector у підтримуваній конфігурації. Кожна зміна проходить TDD та обов’язкове 100% покриття за QA-01/QA-02/QA-05; поведінкові, інтеграційні й візуальні перевірки доповнюють одна одну. |
-| AI-09 | Робити зміни зрозумілими для наступного агента й власника. | Зміна має чітку мету й оглядовий diff без стороннього переписування. У Git і звіті пояснені результат, спосіб перевірки та відомі обмеження. Незавершені місця позначені локальним TODO з причиною й критерієм завершення, а не розмитою обіцянкою. Власнику пояснюється поведінка простою мовою. |
-| AI-10 | Перевірити передачу проєкту агенту з чистим контекстом. | Перед завершенням основного етапу агент, маючи лише репозиторій, може знайти точку запуску, потрібний модуль і відповідну вимогу, виконати збірку/перевірки та простежити один сценарій від UI до рушія. Якщо для цього потрібна незаписана підказка власника, контекст додається до відповідного документа. |
+| AI-01 | Give the agent an entry point into the repository. | The root `README.md` explains the purpose, the current state, a map of the main directories and the exact build, run and check commands. `AGENTS.md` contains short working rules, links to the current requirements and architecture, and special rules for the Go–TS bridge and file operations. The documents do not require conversation history. |
+| AI-02 | Use unambiguous names and explicit data types. | Names of files, types, methods and variables describe the domain action; identifiers are written in clear English following the usual rules of the language. For bytes, speeds, time, file index and UUID, units and purpose are visible. Significant numbers and modes have named constants or types. Unclear abbreviations are explained locally. |
+| AI-03 | Split code by responsibility. | A file or type has one main role. UI, import rules, file access, local storage and the engine have clear boundaries. Large mixed files are split by real tasks; no arbitrary line-count limits or extra layers are introduced without a practical need. |
+| AI-04 | Make dependencies and side effects visible. | Components receive the dependencies they need explicitly. Disk reads/writes, network commands and state mutation are separated from computation. There is no hidden global state the agent has to guess. From a specific UI action one can trace the command, the state change and the result. |
+| AI-05 | Document risky contracts in place. | For Wails bindings, DTOs/events, goroutines and file operations, the lifecycle, ordering, errors, cancellation and invariants are described. The application's own DTOs cross the Go–TS boundary, without engine objects. A comment explains a non-trivial decision; a public API has a concise contract. |
+| AI-06 | Keep decisions and current context in the repository. | Requirements describe behavior, the architecture describes components and flows, and short records in `docs/decisions/` describe important choices and their reasons. The description distinguishes verified facts from assumptions and unfinished prototypes. A change of a contract, structure or build command updates the corresponding document in the same change. |
+| AI-07 | Ensure a reproducible build and verification. | The Go toolchain and backend dependencies are pinned in `go.mod`/`go.sum`; the Wails CLI and Node.js versions are documented and reproducible, frontend dependencies are pinned in the lockfile. The README gives exact commands and native prerequisites for the Mac. Generated bindings are reproducible and are not edited by hand. Scripts do not depend on hidden steps or the developer's absolute paths. |
+| AI-08 | Verify important behavior and invariants. | Go tests cover import, deduplication, transfer policies, restore and removal; React tests verify actions and accessibility through the test bridge. Real Wails bindings and anacrolix/torrent are verified by separate integration scenarios. For Go, concurrent state changes are verified, including the race detector in a supported configuration. Every change passes TDD and the mandatory 100% coverage under QA-01/QA-02/QA-05; behavioral, integration and visual checks complement each other. |
+| AI-09 | Make changes understandable for the next agent and the owner. | A change has a clear goal and a reviewable diff without unrelated rewriting. Git and the report explain the result, the verification method and known limitations. Unfinished places are marked with a local TODO with a reason and a completion criterion, not a vague promise. Behavior is explained to the owner in plain language. |
+| AI-10 | Verify the handoff of the project to an agent with a clean context. | Before a main stage is completed, an agent with only the repository can find the entry point, the needed module and the corresponding requirement, run the build/checks and trace one scenario from the UI to the engine. If this requires an unrecorded hint from the owner, the context is added to the corresponding document. |
 
-Ці правила застосовуються до Go, React/TypeScript, Wails bindings, конфігурації збірки, локальної БД та допоміжних скриптів. Сторонній код не переписується заради стилю; його використання ізолюється зрозумілими контрактами. AI-first — обов’язковий принцип реалізації й підтримки всіх наступних змін.
+These rules apply to Go, React/TypeScript, Wails bindings, build configuration, the local DB and helper scripts. Third-party code is not rewritten for the sake of style; its use is isolated by clear contracts. AI-first is a mandatory principle for the implementation and maintenance of all subsequent changes.
 
-### 5.3. Обов’язкова інженерна дисципліна
+### 5.3. Mandatory engineering discipline
 
-Це жорсткі умови всіх задач і кожної сесії. Детальні метрики, цикл роботи й межі вимірювання: [TDD_AND_QUALITY.md](docs/engineering/TDD_AND_QUALITY.md). Правила агента діють із [AGENTS.md](AGENTS.md), індекс фіч — [docs/README.md](docs/README.md).
+These are hard conditions of all tasks and every session. Detailed metrics, the work cycle and measurement boundaries: [TDD_AND_QUALITY.md](docs/engineering/TDD_AND_QUALITY.md). The agent rules come from [AGENTS.md](AGENTS.md), the feature index is [docs/README.md](docs/README.md).
 
-| ID | Вимога | Критерій приймання |
+| ID | Requirement | Acceptance criterion |
 |---|---|---|
-| QA-01 | Обов’язковий TDD для кожної зміни. | RED → GREEN → REFACTOR застосовується від першого коду, до виправлень, прототипів, конфігурації й перевірюваних змін документації. Звіт доводить очікувану невдачу до нової реалізації, успішну перевірку й рефакторинг; код не пишеться спочатку з відкладеними тестами. |
-| QA-02 | Завжди підтримувати 100% покриття власного виконуваного коду. | Усі визначені метрики зі сталим інвентарем файлів досягають точно 100% для кожного файла та загалом перед завершенням зеленого кроку, інтеграцією й done. Метрики Go та TS визначені в інженерній політиці; порожній або застарілий звіт не є успіхом. Не приховувати складні файли й не знижувати пороги. |
-| QA-03 | Писати чистий, повторно використовуваний код за правилами стеку. | Перед новою реалізацією знайдено наявні компоненти й сервіси; спільна поведінка має одного власника. Межі React/Wails/Go/рушія/SQL явні, залежності передаються явно, форматування/типи/аналізатори перевірені. Відсутні дублікати бізнес-правил, змішані універсальні модулі та непотрібні абстракції. |
-| QA-04 | Поступово документувати кожну фічу в docs/. | До реалізації описані поведінка, архітектурний вплив і тести; після — фактичні модулі, контракти, результати й стан. docs/README.md та docs/features/<feature>.md актуалізуються в тій самій зміні; заплановане не позначається реалізованим. |
-| QA-05 | Автоматично блокувати приймання при порушенні якості. | Локальна команда перевіряє тести, точне 100% покриття, повноту інвентарю джерел, форматування, типи/аналізатори, bindings і документацію. Відсутня, невдала або непрогнана обов’язкова перевірка блокує інтеграцію/done; ігнорування помилок і звуження охоплення заборонені. |
-| QA-06 | Перевіряти поведінку й реальні межі, а не лише відсоток. | Тести мають змістовні твердження й негативні випадки. Мережа/диск/SQLite/macOS перевіряються на належних межах; тестова заміна не оголошується справжньою інтеграцією. Регресія помилки починається з її відтворення; 100% не замінює критерії приймання. |
-| QA-07 | Аналізувати архітектуру на початку кожної сесії. | Агент читає актуальну архітектуру, документи фічі й зміни коду, визначає вплив, повторне використання, ризики й потрібний рефакторинг, записує короткий план до редагування. Продовження задачі в новій сесії знову проходить цей аналіз; значущі рішення актуалізують архітектуру/ADR. |
-| QA-08 | Не накопичувати технічний борг; рефакторити під час роботи. | У зачепленому сценарії на зелених тестах і з 100% покриттям усунуто дублювання, неправильні межі та тимчасові обходи. Новий борг, потрібна заглушка, відкладені тести/документи або приглушена помилка забороняють done. Неможливість завершення дає blocked із планом усунення, а не обіцянку виправити пізніше. |
+| QA-01 | Mandatory TDD for every change. | RED → GREEN → REFACTOR applies from the first code onward, to fixes, prototypes, configuration and verifiable documentation changes. The report proves the expected failure before the new implementation, the successful check and the refactoring; code is not written first with tests deferred. |
+| QA-02 | Always maintain 100% coverage of the project's own executable code. | All defined metrics with a fixed file inventory reach exactly 100% per file and overall before the green step is completed, before integration and before done. The Go and TS metrics are defined in the engineering policy; an empty or stale report is not a success. Do not hide difficult files and do not lower thresholds. |
+| QA-03 | Write clean, reusable code following the rules of the stack. | Before a new implementation, existing components and services are found; shared behavior has a single owner. The React/Wails/Go/engine/SQL boundaries are explicit, dependencies are passed explicitly, formatting/types/analyzers are checked. There are no duplicated business rules, mixed catch-all modules or unnecessary abstractions. |
+| QA-04 | Document every feature incrementally in docs/. | Before implementation, behavior, architectural impact and tests are described; after, the actual modules, contracts, results and state. docs/README.md and docs/features/<feature>.md are updated in the same change; planned work is not marked as implemented. |
+| QA-05 | Automatically block acceptance when quality is violated. | A local command checks tests, exact 100% coverage, completeness of the source inventory, formatting, types/analyzers, bindings and documentation. A missing, failed or not run mandatory check blocks integration/done; ignoring errors and narrowing the scope are forbidden. |
+| QA-06 | Verify behavior and real boundaries, not just the percentage. | Tests have meaningful assertions and negative cases. Network/disk/SQLite/macOS are verified at the proper boundaries; a test double is not declared a real integration. A regression test for a bug starts by reproducing it; 100% does not replace the acceptance criteria. |
+| QA-07 | Analyze the architecture at the start of every session. | The agent reads the current architecture, feature documents and code changes, determines impact, reuse, risks and needed refactoring, and records a short plan before editing. Continuing a task in a new session goes through this analysis again; significant decisions update the architecture/ADR. |
+| QA-08 | Do not accumulate technical debt; refactor while working. | In the affected scenario, on green tests and with 100% coverage, duplication, wrong boundaries and temporary workarounds are eliminated. New debt, a needed stub, deferred tests/documents or a suppressed error forbid done. Inability to finish yields blocked with a remediation plan, not a promise to fix it later. |
 
-## 6. Наскрізні сценарії приймання
+## 6. End-to-end acceptance scenarios
 
-1. **Перший запуск:** відкриває особисту збірку, додає `.torrent`, вибирає файли й папку, запускає завантаження; після перезапуску список, вибір файлів і пауза збережені.
-2. **Кілька торрентів:** додає другий, третій і наступні записи без переривання попередніх передавань та додаткових екранів доступу.
-3. **Magnet:** вставляє посилання, очікує реальні метадані, обирає файли, завантажує й за потреби роздає.
-4. **Видалення запису:** підтверджує видалення без прапорця файлів; запис зникає, передавання зупиняється, файли залишаються.
-5. **Видалення файлів:** окремо обирає видалення файлів і бачить перелік; сторонні файли в папці не зачіпаються, помилка видалення явно показана.
-6. **Групові дії:** вибирає кілька торрентів через постійні чекбокси, запускає або зупиняє лише їх; «Зняти вибір» прибирає панель дій. Групове видалення має підтвердження.
-7. **Окремий файл і папка:** виключає файл або цілу вкладену папку з вибору, бачить «Пропущено», потім вибирає знову. Інші файли продовжують завантаження; наявні байти залишаються. Дії узгоджені в картці й деталях.
-8. **Перетягування:** коректний `.torrent` у зоні бічної панелі відкриває перегляд; файл іншого типу, пошкоджений файл і кілька файлів дають зрозумілу відмову.
-9. **Нова папка:** у діалозі додавання або налаштуваннях вибирає батьківську папку, задає назву й підтверджує створення. Помилка не змінює попередній шлях.
-10. **Типова папка:** зміна налаштування застосовується до майбутніх торрентів; файли наявних записів не переміщуються.
-11. **Тема й доступність:** системна, світла й темна теми працюють із клавіатурою, VoiceOver, зменшенням прозорості та масштабуванням тексту.
-12. **Мова:** перемикається між шістьма погодженими мовами; тексти UI змінюються, а назви торрентів, файлів і папок лишаються оригінальними. Вибір збережений після запуску.
-13. **Алерти й офлайн:** без інтернету бібліотека та налаштування доступні. Алерт пояснює зупинку мережевого передавання; після повернення мережі активні торренти відновлюють роботу, ручна пауза зберігається.
-14. **Finder:** після системного призначення типового застосунку подвійне натискання `.torrent` відкриває той самий перегляд при холодному й повторному запуску.
-15. **Колекції:** теги й статуси автоматично визначають склад збереженого фільтра; видалення колекції не видаляє торренти чи файли.
-16. **Правила й папка спостереження:** перевірка нового `.torrent`, дублікатів та правил працює локально; явно ввімкнене автоматичне додавання створює торрент на паузі.
-17. **Довгі списки й назви:** багато записів і вкладених файлів не змінюють розмір вікна; панелі прокручуються, довгі назви скорочуються з доступом до повного значення.
-18. **Глобальне вимкнення віддачі:** поточні й нові торренти підкоряються TR-08; завантаження триває, а вимкнення режиму не скасовує ручні паузи. Реальний результат підтверджується мережевим прототипом.
-19. **Іконки стану:** після паузи, відновлення й початку роздачі значок у картці відповідає UI-19, а статус і швидкості оновлені узгоджено.
+1. **First launch:** opens the personal build, adds a `.torrent`, chooses files and a folder, starts the download; after restart the list, file selection and pause are preserved.
+2. **Several torrents:** adds a second, third and further entries without interrupting earlier transfers and without additional access screens.
+3. **Magnet:** pastes a link, waits for the real metadata, chooses files, downloads and seeds if needed.
+4. **Removing an entry:** confirms removal without the files checkbox; the entry disappears, the transfer stops, the files remain.
+5. **Deleting files:** separately chooses file deletion and sees the list; unrelated files in the folder are not touched, a deletion error is shown explicitly.
+6. **Bulk actions:** selects several torrents via the persistent checkboxes, starts or stops only them; "Clear Selection" removes the action bar. Bulk removal has a confirmation.
+7. **Individual file and folder:** excludes a file or a whole nested folder from the selection, sees "Skipped", then selects it again. Other files keep downloading; existing bytes remain. Actions are consistent in the card and details.
+8. **Drag-and-drop:** a valid `.torrent` dropped on the sidebar zone opens the preview; a file of another type, a corrupted file and several files produce a clear rejection.
+9. **New folder:** in the add dialog or settings, chooses a parent folder, gives a name and confirms creation. An error does not change the previous path.
+10. **Default folder:** a settings change applies to future torrents; files of existing entries are not moved.
+11. **Theme and accessibility:** the system, light and dark themes work with the keyboard, VoiceOver, reduced transparency and text scaling.
+12. **Language:** switches between the six agreed languages; UI texts change, while torrent, file and folder names stay original. The choice is preserved after launch.
+13. **Alerts and offline:** without internet the library and settings are available. The alert explains that network transfer has stopped; after the network returns, active torrents resume work and the manual pause is preserved.
+14. **Finder:** after the system default application is assigned, a double-click on a `.torrent` opens the same preview on cold and repeated launch.
+15. **Collections:** tags and statuses automatically determine the membership of a saved filter; deleting a collection does not delete torrents or files.
+16. **Rules and watch folder:** checking a new `.torrent`, duplicates and rules works locally; explicitly enabled automatic adding creates a paused torrent.
+17. **Long lists and names:** many entries and nested files do not change the window size; panels scroll, long names are truncated with access to the full value.
+18. **Global upload stop:** current and new torrents obey TR-08; download continues, and turning the mode off does not cancel manual pauses. The real result is confirmed by a network prototype.
+19. **Status icons:** after pause, resume and the start of seeding, the icon in the card matches UI-19, and the status and speeds are updated consistently.
 
-## 7. Параметри, які фіксуємо на технічному прототипі
+## 7. Parameters fixed on the technical prototype
 
-1. Версія macOS та архітектура власного Mac; підтримка інших Mac потрібна лише за окремої потреби.
-2. Конкретні версії Wails v2, anacrolix/torrent, Go й frontend-залежностей після пробної збірки; базовий стек уже обраний.
-3. Результат прототипу глобального вимкнення віддачі без зупинки завантаження.
-4. Поведінка при переміщенні, зміні чи частковій втраті завантажених файлів.
-5. SQLite-драйвер, схеми й міграції; storage/piece-completion backend рушія та перевірка його відновлення після аварії.
-6. Спосіб локального встановлення й підпису особистої збірки; публічна дистрибуція не є умовою завершення MVP.
+1. The macOS version and architecture of the owner's Mac; support for other Macs is needed only if a separate need arises.
+2. Specific versions of Wails v2, anacrolix/torrent, Go and frontend dependencies after a trial build; the base stack is already chosen.
+3. The result of the prototype for the global upload stop without stopping download.
+4. Behavior when downloaded files are moved, changed or partially lost.
+5. The SQLite driver, schemas and migrations; the engine's storage/piece-completion backend and verification of its restore after a crash.
+6. The method of local installation and signing of the personal build; public distribution is not a condition for completing the MVP.
 
-Дизайн-орієнтир: [Apple Human Interface Guidelines — Materials](https://developer.apple.com/design/human-interface-guidelines/materials), [Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars), [Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars).
+Design reference: [Apple Human Interface Guidelines — Materials](https://developer.apple.com/design/human-interface-guidelines/materials), [Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars), [Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars).
 
-Системне відкривання файлів: [Apple — CFBundleDocumentTypes](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes), [Apple — вибір типового застосунку для файлів](https://support.apple.com/guide/mac-help/choose-an-app-to-open-a-file-on-mac-mh35597/mac).
+System file opening: [Apple — CFBundleDocumentTypes](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes), [Apple — choosing the default application for files](https://support.apple.com/guide/mac-help/choose-an-app-to-open-a-file-on-mac-mh35597/mac).

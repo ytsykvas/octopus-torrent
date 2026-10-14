@@ -1,72 +1,72 @@
-# 011 — Перевірити отримання magnet-метаданих і остаточну папку файлів
+# 011 — Check magnet metadata retrieval and the final file folder
 
-**Статус:** `planned`  
-**Фаза:** P1 — Прототипи ризикових контрактів  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Ворота/дослід із зафіксованим результатом  
-**Жорсткі залежності:** [009](009-storage-and-completion-spike.md)  
-**Вимоги:** `ADD-02`, `ADD-04`, `ADD-07`
+**Status:** `planned`  
+**Phase:** P1 — Prototypes of risky contracts  
+**Priority:** critical path of the main scenario or completion  
+**Size:** Gate/spike with a recorded result  
+**Hard dependencies:** [009](009-storage-and-completion-spike.md)  
+**Requirements:** `ADD-02`, `ADD-04`, `ADD-07`
 
-## Результат
+## Outcome
 
-Довести, що magnet-метадані можна отримати без передавання даних файлів до підтвердження, а після нього використовувати справді вибрану папку.
+Prove that magnet metadata can be obtained without transferring file data before confirmation, and that after confirmation the folder actually selected is used.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення, статуси та докази виконання.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `ADD-02`, `ADD-04`, `ADD-07`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових попередніх задач. Якщо потрібний доказ відсутній, залежну частину роботи починати не можна.
+- [Task execution rules](README.md): conditions for starting and completing, statuses and evidence of completion.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `ADD-02`, `ADD-04`, `ADD-07`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API and assumptions not yet confirmed by a prototype.
+- Outcomes and ADRs of all mandatory preceding tasks. If the required evidence is missing, the dependent part of the work must not start.
 
-## Порядок роботи
+## Work order
 
-1. Створити окремий контекст незавершеного імпорту та належне йому тимчасове сховище; від початку заборонити передавання даних файлів.
-2. Очікувати метадані з підтримкою скасування та обмеженим часом очікування; записати створені файлові об’єкти й мережеві лічильники.
-3. Після підтвердження використати інший `saveRoot` через перевірене вилучення й повторне додавання або іншу підтримувану стратегію. Не намагатися змінити `Storage` через `MergeSpec`.
-4. Скасувати імпорт до та після отримання метаданих. Не викликати `Drop` для об’єкта вже наявного торрента, яким цей імпорт не керує.
-5. Описати очищення лише власних тимчасових об’єктів і обробку викликів, що надходять після скасування.
+1. Create a separate context for the pending import and temporary storage owned by it; forbid transfer of file data from the start.
+2. Wait for metadata with cancellation support and a bounded wait time; record the created file objects and network counters.
+3. After confirmation, use a different `saveRoot` through a verified removal and re-add or another supported strategy. Do not try to change `Storage` through `MergeSpec`.
+4. Cancel the import before and after the metadata is obtained. Do not call `Drop` on the object of an already existing torrent that this import does not manage.
+5. Describe cleanup of only our own temporary objects and handling of calls that arrive after cancellation.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `docs/decisions/pending-magnet.md; docs/verification/magnet-import.md`. Це карта майбутнього коду; після створення каркаса проєкту перевірити фактичні шляхи й оновити карту в архітектурі.
-**Доказ виконання:** запис `docs/verification/011-magnet-metadata-storage-spike.md` або точне посилання на вже наявний звіт перевірки чи збірки в підсумку передачі роботи. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `docs/decisions/pending-magnet.md; docs/verification/magnet-import.md`. This is a map of future code; after the project skeleton is created, check the actual paths and update the map in the architecture.
+**Evidence of completion:** the record `docs/verification/011-magnet-metadata-storage-spike.md` or an exact link to an existing verification or build report in the work handoff summary. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] До явного підтвердження імпорту дані файлів не завантажуються й не віддаються.
-- [ ] Після підтвердження фізичні файли створюються саме у вибраному каталозі.
-- [ ] Скасування імпорту не змінює наявні записи бібліотеки та їхні дані.
-- [ ] Усі наведені нижче перевірки виконано на відповідному рівні; невиконані або невдалі перевірки не позначено як успішні.
+- [ ] Before explicit import confirmation, file data is neither downloaded nor uploaded.
+- [ ] After confirmation, physical files are created exactly in the selected directory.
+- [ ] Cancelling the import does not change existing library records or their data.
+- [ ] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed.
 
-## Перевірки
+## Checks
 
-- Не підключати жодного іншого клієнта, дочекатися граничного часу й окремо скасувати імпорт одночасно із сигналом `GotInfo`; у всіх випадках задачі мають завершитися, а дані файлів не повинні передаватися.
-- Повторити додавання при `new=false`, подвійне підтвердження та завершення програми; наявний торрент має залишитися неушкодженим, а новий запис не повинен дублюватися.
+- Do not connect any other client, wait for the time limit, and separately cancel the import simultaneously with the `GotInfo` signal; in all cases the tasks must finish and file data must not be transferred.
+- Repeat adding with `new=false`, double confirmation and program shutdown; the existing torrent must remain intact, and the new record must not be duplicated.
 
-**Як запускати:** використати фактичні команди, зафіксовані у [004](004-reproducible-check-commands.md) та кореневому README після створення каркаса проєкту. До появи цих команд перевірки залишаються планом. Записати точну команду, робочий каталог, тестові дані, конфігурацію, код завершення й результат. Системні сценарії виконувати у зібраній `.app`; перевірки інтерфейсу з тестовими замінами та перевірки справжнього рушія позначати окремо.
+**How to run:** use the actual commands recorded in [004](004-reproducible-check-commands.md) and the root README after the project skeleton is created. Until those commands exist, the checks remain a plan. Record the exact command, working directory, test data, configuration, exit code and result. Run system scenarios in the built `.app`; label UI checks with test doubles and checks of the real engine separately.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Незавершений імпорт не має права вилучати об’єкт наявного торрента, яким він не керує. `MergeSpec` не змінює `Storage`; правильність остаточної папки доводиться перевіркою фізичних файлів, а не лише значенням поля у знімку стану.
+A pending import has no right to remove the object of an existing torrent that it does not manage. `MergeSpec` does not change `Storage`; correctness of the final folder is proven by checking the physical files, not only by the field value in the state snapshot.
 
-**Підстава для технічних рішень:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). Під час реалізації звірити сигнатури й обмеження із зафіксованою версією. Читання документації API не замінює виконаної інтеграційної перевірки.
+**Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, reconcile signatures and constraints with the pinned version. Reading the API documentation does not replace a performed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for the failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all our own executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architectural decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architectural conclusion, RED/GREEN, the refactoring done, the inventory/profile and the check that no debt remains. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` ставити лише після виконання критеріїв і запису доказів.
-- Записати короткий результат: що змінено, точні перевірки зі статусами `pass`, `fail` або `not_run`, ADR, фактичні місця змін у коді й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст лише в чаті.
+- Update the status in this file and in the README navigation table at the same time; set `done` only after the criteria are met and the evidence is recorded.
+- Record a short outcome: what changed, exact checks with statuses `pass`, `fail` or `not_run`, ADR, actual change locations in the code and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

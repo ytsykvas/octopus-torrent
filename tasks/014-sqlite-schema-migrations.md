@@ -1,74 +1,74 @@
-# 014 — Створити схему SQLite й безпечні міграції
+# 014 — Create the SQLite schema and safe migrations
 
-**Статус:** `planned`  
-**Фаза:** P2 — Типи, дані й межі сервісів  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [005](005-domain-dto-and-bridge-contract.md), [008](008-sqlite-driver-durability-spike.md)  
-**Вимоги:** `STACK-04`, `SET-02`
+**Status:** `planned`  
+**Phase:** P2 — Types, data and service boundaries  
+**Priority:** critical path of the main scenario or completion  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [005](005-domain-dto-and-bridge-contract.md), [008](008-sqlite-driver-durability-spike.md)  
+**Requirements:** `STACK-04`, `SET-02`
 
-## Результат
+## Outcome
 
-Створити базову схему локальної бібліотеки й міграції, які не знищують наявні дані при помилці.
+Create the base schema of the local library and migrations that do not destroy existing data on error.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення, статуси та докази виконання.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `STACK-04`, `SET-02`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових попередніх задач. Якщо потрібний доказ відсутній, залежну частину роботи починати не можна.
+- [Task execution rules](README.md): conditions for starting and completing, statuses and evidence of completion.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `STACK-04`, `SET-02`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API and assumptions not yet confirmed by a prototype.
+- Outcomes and ADRs of all mandatory preceding tasks. If the required evidence is missing, the dependent part of the work must not start.
 
-## Порядок роботи
+## Work order
 
-1. Додати таблиці записів торрентів, повних хешів та їхніх відповідностей, вибору файлів, налаштувань і намірів виконання операцій.
-2. Зберігати початкові метадані, UUID, індекси файлів, джерело імпорту, шляхи й `manualPaused` без втрати значень.
-3. Надати міграціям версії та відмовлятися відкривати новішу непідтримувану схему без її скидання чи перезапису.
-4. Застосувати зовнішні ключі, пул з’єднань і рішення щодо збереження даних із задачі 008; розмістити БД окремо від файлів торрентів.
-5. Підготувати тестові БД попередніх схем і перевірити відкат незавершеної міграції при помилці.
+1. Add tables for torrent records, full hashes and their mappings, file selection, settings and operation execution intents.
+2. Store the initial metadata, UUID, file indexes, import source, paths and `manualPaused` without loss of values.
+3. Version the migrations and refuse to open a newer unsupported schema without resetting or overwriting it.
+4. Apply foreign keys, the connection pool and the data durability decision from task 008; place the DB separately from torrent files.
+5. Prepare test DBs of previous schemas and verify rollback of an unfinished migration on error.
 
-6. Зберігати незавершені й завершені нетривіальні операції незалежно від видалення запису торрента: каскадне видалення не повинно знищити журнал, потрібний для відновлення й повторного `operationID`. Перевірити це справжньою транзакцією SQLite.
+6. Store unfinished and completed non-trivial operations independently of torrent record deletion: a cascading delete must not destroy the log needed for recovery and for a repeated `operationID`. Verify this with a real SQLite transaction.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `internal/library/migrations; schema fixtures`. Це карта майбутнього коду; після створення каркаса проєкту перевірити фактичні шляхи й оновити карту в архітектурі.
-**Доказ виконання:** запис `docs/verification/014-sqlite-schema-migrations.md` або точне посилання на вже наявний звіт перевірки чи збірки в підсумку передачі роботи. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `internal/library/migrations; schema fixtures`. This is a map of future code; after the project skeleton is created, check the actual paths and update the map in the architecture.
+**Evidence of completion:** the record `docs/verification/014-sqlite-schema-migrations.md` or an exact link to an existing verification or build report in the work handoff summary. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Порожня БД і всі підтримувані попередні схеми переходять до поточної версії.
-- [ ] Помилка міграції не призводить до втрати наявних записів або файлів.
-- [ ] Обмеження унікальності ідентичностей і зовнішні ключі фактично перевіряються SQLite.
-- [ ] Усі наведені нижче перевірки виконано на відповідному рівні; невиконані або невдалі перевірки не позначено як успішні.
+- [ ] An empty DB and all supported previous schemas migrate to the current version.
+- [ ] A migration error does not cause loss of existing records or files.
+- [ ] Identity uniqueness constraints and foreign keys are actually enforced by SQLite.
+- [ ] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed.
 
-## Перевірки
+## Checks
 
-- Перервати міграцію, відкрити БД новішої версії та спробувати записати дубль повного хешу; кожен випадок має дати визначений результат без руйнування попередніх даних.
-- Відтворити відмову доступу, заповнення диска та одночасні підтвердження транзакцій; помилки мають повертатися виконавцю, а обмеження схеми — зберігатися.
+- Interrupt a migration, open a DB of a newer version and try to write a duplicate full hash; each case must produce a defined result without destroying previous data.
+- Reproduce an access denial, a full disk and concurrent transaction commits; errors must be returned to the caller, and schema constraints must be preserved.
 
-**Як запускати:** використати фактичні команди, зафіксовані у [004](004-reproducible-check-commands.md) та кореневому README після створення каркаса проєкту. До появи цих команд перевірки залишаються планом. Записати точну команду, робочий каталог, тестові дані, конфігурацію, код завершення й результат. Системні сценарії виконувати у зібраній `.app`; перевірки інтерфейсу з тестовими замінами та перевірки справжнього рушія позначати окремо.
+**How to run:** use the actual commands recorded in [004](004-reproducible-check-commands.md) and the root README after the project skeleton is created. Until those commands exist, the checks remain a plan. Record the exact command, working directory, test data, configuration, exit code and result. Run system scenarios in the built `.app`; label UI checks with test doubles and checks of the real engine separately.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Схема містить дані бібліотеки, а не внутрішні об’єкти рушія. Міграції виконуються через визначений шар доступу до SQLite. Непідтримувана версія або помилка міграції потребує явного повідомлення; автоматичне створення порожньої БД замість наявної неприпустиме.
+The schema contains library data, not internal engine objects. Migrations run through the defined SQLite access layer. An unsupported version or a migration error requires an explicit message; automatically creating an empty DB in place of the existing one is unacceptable.
 
-**Підстава для технічних рішень:** [SQLite WAL](https://www.sqlite.org/wal.html), [PRAGMA checks](https://www.sqlite.org/pragma.html#pragma_integrity_check). Під час реалізації звірити сигнатури й обмеження із зафіксованою версією. Читання документації API не замінює виконаної інтеграційної перевірки.
+**Basis for technical decisions:** [SQLite WAL](https://www.sqlite.org/wal.html), [PRAGMA checks](https://www.sqlite.org/pragma.html#pragma_integrity_check). During implementation, reconcile signatures and constraints with the pinned version. Reading the API documentation does not replace a performed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for the failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all our own executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architectural decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architectural conclusion, RED/GREEN, the refactoring done, the inventory/profile and the check that no debt remains. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` ставити лише після виконання критеріїв і запису доказів.
-- Записати короткий результат: що змінено, точні перевірки зі статусами `pass`, `fail` або `not_run`, ADR, фактичні місця змін у коді й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст лише в чаті.
+- Update the status in this file and in the README navigation table at the same time; set `done` only after the criteria are met and the evidence is recorded.
+- Record a short outcome: what changed, exact checks with statuses `pass`, `fail` or `not_run`, ADR, actual change locations in the code and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

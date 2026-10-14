@@ -1,72 +1,72 @@
-# 029 — Відновити бібліотеку після перезапуску й аварії
+# 029 — Restore the library after restart and crash
 
-**Статус:** `planned`  
-**Фаза:** P3 — Імпорт, передавання й безпека даних  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [028](028-application-startup-quit.md), [023](023-durable-import-commit.md), [024](024-file-folder-wanted-commands.md), [027](027-metrics-status-snapshots.md), [016](016-migration-backup-corruption-recovery.md), [009](009-storage-and-completion-spike.md)  
-**Вимоги:** `SET-02`, `TR-05`, `DATA-01`
+**Status:** `planned`  
+**Phase:** P3 — Import, transfer and data safety  
+**Priority:** critical path of the main scenario or completion  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [028](028-application-startup-quit.md), [023](023-durable-import-commit.md), [024](024-file-folder-wanted-commands.md), [027](027-metrics-status-snapshots.md), [016](016-migration-backup-corruption-recovery.md), [009](009-storage-and-completion-spike.md)  
+**Requirements:** `SET-02`, `TR-05`, `DATA-01`
 
-## Результат
+## Outcome
 
-Відновити збережений стан раніше дозволу передавання після звичайного й аварійного запуску.
+Restore the persisted state before transfer is allowed, after both a normal and a crash startup.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `SET-02`, `TR-05`, `DATA-01`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): task start and completion conditions, statuses and check evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `SET-02`, `TR-05`, `DATA-01`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTO, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API and assumptions not confirmed by a prototype.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Відкрити й мігрувати бібліотеку; прочитати незавершені операції.
-2. Відновити ідентичність, метадані, папку, wanted, ручну й глобальну політику; додавати об’єкти рушія з початково забороненим payload.
-3. Перевіряти змінені файли й недовірені позначки завершення за рішенням 009 з можливістю скасування.
-4. Узгодити незавершений імпорт/видалення через журнал, не очищаючи невідомі файли.
-5. Ізолювати помилку одного запису. Зниклу папку не замінювати новим завантаженням у випадкове місце.
+1. Open and migrate the library; read unfinished operations.
+2. Restore identity, metadata, folder, wanted, manual and global policy; add engine objects with payload initially disallowed.
+3. Check changed files and untrusted completion markers according to decision 009, with the ability to cancel.
+4. Reconcile unfinished import/deletion through the journal without cleaning up unknown files.
+5. Isolate an error of a single entry. Do not replace a missing folder with a new download to an arbitrary location.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `internal/app/recovery.go; recovery fixtures`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/029-restore-recheck-reconciliation.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `internal/app/recovery.go; recovery fixtures`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** an entry `docs/verification/029-restore-recheck-reconciliation.md` or an exact link to a test or build report in the context handoff. One report can be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Наявні коректні байти не завантажуються повторно, що підтверджують мережеві лічильники.
-- [ ] Вручну зупинений запис не передає payload навіть короткочасно при запуску.
-- [ ] Змінені дані не показуються як повністю готові.
-- [ ] Потрібні перевірки виконані на належній межі; невиконаний або невдалий тест не названо успішним.
+- [ ] Existing correct bytes are not downloaded again, as confirmed by the network counters.
+- [ ] A manually stopped entry does not transfer payload even briefly at startup.
+- [ ] Changed data is not shown as fully ready.
+- [ ] The required checks are performed at the proper boundary; a test that was not run or failed is not called successful.
 
-## Перевірки
+## Checks
 
-- Перевірити звичайне й примусове завершення на контрольних точках.
-- Пошкодити службові позначки завершення, змінити байти без зміни розміру, від’єднати диск та перервати імпорт/вибір файлів.
+- Check normal and forced termination at checkpoints.
+- Corrupt the service completion markers, change bytes without changing the size, disconnect the disk and interrupt import/file selection.
 
-**Як запускати:** використати фактичні команди з [004](004-reproducible-check-commands.md) та кореневого README. Записати команду, робочий каталог, конфігурацію, тестові дані, код завершення й спостереження. Перевірки справжнього рушія, тестового UI та системних можливостей у зібраній `.app` ведуться окремо.
+**How to run:** use the actual commands from [004](004-reproducible-check-commands.md) and the root README. Record the command, working directory, configuration, test data, exit code and observations. Checks of the real engine, the test UI and system capabilities in the built `.app` are kept separate.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Перевірка диска після аварії не означає повторне мережеве завантаження. TR-05 доводиться перевіркою хешів і лічильників, а не лише наявністю відновленого запису.
+Checking the disk after a crash does not mean downloading again from the network. TR-05 is proven by checking hashes and counters, not merely by the presence of a restored entry.
 
-**Підстава для технічних рішень:** [Storage API](https://pkg.go.dev/github.com/anacrolix/torrent/storage). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [Storage API](https://pkg.go.dev/github.com/anacrolix/torrent/storage). Cross-check signatures and limitations against the pinned version; reading the API is not a passed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of each session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** under the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are performed; absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and verification evidence.
+- Record a short result: what was changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

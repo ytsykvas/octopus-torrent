@@ -1,71 +1,71 @@
-# 048 — Реалізувати постійний груповий вибір
+# 048 — Implement persistent bulk selection
 
-**Статус:** `planned`  
-**Фаза:** P4 — React UI й native інтеграція  
-**Пріоритет:** обов’язкова функція або перевірка погодженого обсягу  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [045](045-torrent-cards-status-actions.md), [033](033-bulk-command-service.md), [043](043-modal-focus-operations.md)  
-**Вимоги:** `UI-07`, `DEL-05`
+**Status:** `planned`  
+**Phase:** P4 — React UI and native integration  
+**Priority:** mandatory feature or check of the agreed scope  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [045](045-torrent-cards-status-actions.md), [033](033-bulk-command-service.md), [043](043-modal-focus-operations.md)  
+**Requirements:** `UI-07`, `DEL-05`
 
-## Результат
+## Outcome
 
-Реалізувати постійні checkbox групового вибору окремо від відкритих деталей.
+Implement persistent bulk selection checkboxes separately from the open details.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `UI-07`, `DEL-05`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): conditions for starting and finishing a task, statuses and verification evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `UI-07`, `DEL-05`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Вибрані UUID відокремити від UUID деталей; checkbox не відкриває картку.
-2. Панель із кількістю, вибором усіх видимих, очищенням і діями показується при >=1; Done/mode button немає.
-3. Перед командою зафіксувати IDs і прибрати приховані при зміні запиту/розділу.
-4. Показати очікування й часткові помилки кожного UUID від 033.
-5. Видалення веде до 049; видалені UUID прибираються з вибору.
+1. Keep the selected UUIDs separate from the details UUID; a checkbox does not open the card.
+2. The panel with the count, select all visible, clear and actions is shown at >=1; there is no Done/mode button.
+3. Before a command, capture the IDs and remove hidden ones when the query/section changes.
+4. Show the pending state and partial errors for each UUID from 033.
+5. Deletion leads to 049; deleted UUIDs are removed from the selection.
 
-6. Під’єднати групові команди сервісу 033 до спільного facade, оновити bindings і перевірити фактичний результат для кожного UUID. Їх відсутність раніше не повинна блокувати базовий імпорт.
+6. Connect the bulk commands of service 033 to the shared facade, update the bindings and verify the actual result for each UUID. Their earlier absence must not block basic import.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `frontend/src/features/torrents/bulk`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/048-persistent-bulk-selection-ui.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `frontend/src/features/torrents/bulk`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** a `docs/verification/048-persistent-bulk-selection-ui.md` record or an exact reference to a test or build report in the context handoff. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Натискання картки не змінює груповий вибір.
-- [ ] Очищення вибору ховає панель.
-- [ ] Приховані й невибрані записи не отримують дію.
-- [ ] Потрібні перевірки виконані на належній межі; невиконаний або невдалий тест не названо успішним.
+- [ ] Clicking a card does not change the bulk selection.
+- [ ] Clearing the selection hides the panel.
+- [ ] Hidden and unselected records do not receive the action.
+- [ ] The required checks have been performed at the proper boundary; a test that was not run or failed is not called successful.
 
-## Перевірки
+## Checks
 
-- Перевірити різні стани, відсутність вибору й видалений UUID.
-- Після 055 повторити пошук із прихованим вибором і вибір усіх видимих.
+- Verify different states, an empty selection and a deleted UUID.
+- After 055, repeat a search with a hidden selection and select all visible.
 
-**Як запускати:** використати фактичні команди з [004](004-reproducible-check-commands.md) та кореневого README. Записати команду, робочий каталог, конфігурацію, тестові дані, код завершення й спостереження. Перевірки справжнього рушія, тестового UI та системних можливостей у зібраній `.app` ведуться окремо.
+**How to run:** use the actual commands from [004](004-reproducible-check-commands.md) and the root README. Record the command, working directory, configuration, test data, exit code and observations. Checks of the real engine, of the test UI and of system capabilities in the built `.app` are kept separate.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Пошук і фільтри вводяться пізніше у 055. Правило відсутності команд над прихованими записами закласти зараз і повторити після появи пошуку.
+Search and filters are introduced later in 055. Establish the rule that commands are not applied to hidden records now and re-verify it once search exists.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run a test/check of the expected result and record the proper reason for the failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** according to the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; rerun the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and verification evidence.
+- Record a short result: what was changed, the exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, state the concrete reason, the missing evidence/decision, how to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

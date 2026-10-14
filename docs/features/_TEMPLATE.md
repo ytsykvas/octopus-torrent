@@ -1,45 +1,45 @@
-# <Назва фічі>
+# <Feature name>
 
-**Статус:** `planned`  
-**Вимоги:** <ID>  
-**Пов’язані задачі:** <посилання>  
-**Остання перевірена версія:** <ще не реалізовано / commit або hash джерел>
+**Status:** `planned`  
+**Requirements:** <ID>  
+**Related tasks:** <links>  
+**Last verified version:** <not yet implemented / commit or source hash>
 
-## Мета й поведінка
+## Goal and behavior
 
-Хто виконує дію, вхідні умови, позитивний результат, межі й спостережувані помилки. Розрізнити заплановане та реалізоване.
+Who performs the action, preconditions, the positive outcome, boundaries and observable errors. Distinguish planned from implemented.
 
-## Архітектурний аналіз перед зміною
+## Architecture analysis before the change
 
-Зачеплені модулі, власник стану, залежності, побічні ефекти, скасування, узгодження після аварії. Що вже можна перевикористати; що потрібно рефакторити; чому обраний дизайн достатній. Посилання на ADR за потреби.
+Affected modules, state owner, dependencies, side effects, cancellation, reconciliation after a crash. What can already be reused; what needs refactoring; why the chosen design is sufficient. Links to ADRs if needed.
 
-## Контракти й дані
+## Contracts and data
 
-DTO/API, одиниці, валідація, збереження, міграції, ревізії й помилки. Власні об’єкти рушія не стають контрактом UI.
+DTO/API, units, validation, persistence, migrations, revisions and errors. The engine's own objects do not become a UI contract.
 
-## Сценарії й TDD
+## Scenarios and TDD
 
-- Очікувана поведінка та тест, який спочатку її не проходить.
-- Очікувана причина RED, команда та спостереження.
-- Мінімальна реалізація GREEN, потрібна регресія й рефакторинг на зелених тестах.
-- Негативні, аварійні й конкурентні випадки, які стосуються цієї фічі.
+- Expected behavior and the test that initially fails for it.
+- Expected RED reason, command and observation.
+- Minimal GREEN implementation, required regression and refactoring on green tests.
+- Negative, crash and concurrency cases relevant to this feature.
 
-## Реалізація й повторне використання
+## Implementation and reuse
 
-Фактичні модулі, спільні компоненти/сервіси та напрямки залежностей. Не копіювати сюди весь код; пояснити відповідальності й важливі інваріанти.
+Actual modules, shared components/services and dependency directions. Do not copy all the code here; explain responsibilities and important invariants.
 
-## Перевірки та 100% покриття
+## Checks and 100% coverage
 
-Точні команди, середовище, тестові дані, версія коду, `pass/fail/not_run`. Посилання на сирі профілі, інвентар власних файлів і всі визначені 100% метрики. Відокремити модульну перевірку від справжнього рушія й системної `.app`. До появи виконуваного коду — `not_applicable`, без вигаданого відсотка.
+Exact commands, environment, test data, code version, `pass/fail/not_run`. Links to raw profiles, the inventory of own files and all defined 100% metrics. Separate module-level checks from the real engine and the system `.app`. Until executable code exists — `not_applicable`, without an invented percentage.
 
-## Рефакторинг і перевірка боргу
+## Refactoring and debt check
 
-Які дублювання або неправильні межі усунено, як збережено поведінку та 100% покриття. Невирішений обхід, потрібний поточній функції, блокує завершення; пояснити спосіб усунення.
+Which duplications or wrong boundaries were removed, how behavior and 100% coverage were preserved. An unresolved workaround required by the current function blocks completion; explain how it will be removed.
 
-## Використання й відновлення
+## Usage and recovery
 
-Короткий маршрут, налаштування, можливі помилки та безпечне відновлення. Не показувати внутрішні технічні подробиці в продуктовому UI без потреби користувача.
+Short route, settings, possible errors and safe recovery. Do not show internal technical details in the product UI unless the user needs them.
 
-## Історія змін і докази
+## Change history and evidence
 
-Дата/версія, що змінилося, посилання на задачі, рішення й фактичні звіти. Не називати заплановані перевірки виконаними.
+Date/version, what changed, links to tasks, decisions and actual reports. Do not call planned checks completed.

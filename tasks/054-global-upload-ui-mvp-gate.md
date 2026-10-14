@@ -1,73 +1,73 @@
-# 054 — Завершити налаштування віддачі й прийняти повний MVP
+# 054 — Finish the upload settings and accept the full MVP
 
-**Статус:** `planned`  
-**Фаза:** P5 — Працездатний основний сценарій і повний MVP  
-**Пріоритет:** обов’язкова функція або перевірка погодженого обсягу  
-**Розмір:** Ворота/дослід із зафіксованим результатом  
-**Жорсткі залежності:** [053](053-global-upload-policy-production.md), [052](052-first-working-core-gate.md), [036](036-finder-magnet-open-queue.md), [038](038-native-drop-menus-shortcuts.md), [046](046-post-import-file-folder-tree.md), [047](047-inspector-full-path-recovery.md), [048](048-persistent-bulk-selection-ui.md), [049](049-delete-confirmation-result-ui.md), [050](050-settings-ui-save-feedback.md), [051](051-offline-errors-notifications.md)  
-**Вимоги:** `SET-08`, `TR-08`, `AI-08`
+**Status:** `planned`  
+**Phase:** P5 — Working main scenario and full MVP  
+**Priority:** mandatory feature or check of the agreed scope  
+**Size:** Gate/spike with a recorded result  
+**Hard dependencies:** [053](053-global-upload-policy-production.md), [052](052-first-working-core-gate.md), [036](036-finder-magnet-open-queue.md), [038](038-native-drop-menus-shortcuts.md), [046](046-post-import-file-folder-tree.md), [047](047-inspector-full-path-recovery.md), [048](048-persistent-bulk-selection-ui.md), [049](049-delete-confirmation-result-ui.md), [050](050-settings-ui-save-feedback.md), [051](051-offline-errors-notifications.md)  
+**Requirements:** `SET-08`, `TR-08`, `AI-08`
 
-## Результат
+## Outcome
 
-Завершити інтерфейс глобальної віддачі й прийняти весь погоджений MVP: базовий зріз 052 разом із системними входами, файлами/папками після додавання, деталями, груповими діями, видаленням, налаштуваннями й помилками. Пошук, колекції та автоматизація приймаються на наступному етапі.
+Finish the global upload interface and accept the entire agreed MVP: the basic slice from 052 together with system inputs, files/folders after adding, details, bulk actions, deletion, settings and errors. Search, collections and automation are accepted at the next stage.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `SET-08`, `TR-08`, `AI-08`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): task start and completion conditions, statuses and check evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `SET-08`, `TR-08`, `AI-08`, the relevant criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API and assumptions not confirmed by a prototype.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Додати локалізований перемикач віддачі, пояснення наслідків і стани очікування/помилки; джерелом підтвердження є Go та перевірена стратегія 053.
-2. На наявних, нових і відновлених записах пройти AS-18 із локальними й віддаленими лічильниками даних файлів; ручні паузи зберігаються.
-3. Після раннього зрізу 052 перевірити Finder і magnet при холодному/повторному запуску, перетягування, системні діалоги, вибір файлів після додавання, деталі та повні шляхи.
-4. Перевірити груповий запуск/паузу й обидва режими видалення, включно зі скасуванням, частковою помилкою Смітника та збереженням сторонніх файлів.
-5. Перевірити типову папку, мову/тему, ліміти, повідомлення про мережу й диск, відновлення після перезапуску. Підтвердити узгодженість усіх нових методів facade та згенерованих bindings.
-6. Записати покриття вимог MVP і результати AS-01–14/18/19. Пошук та великі навантаження перевіряються додатково в 055/064, повна доступність — у 065, організація й автоматика — у 062. Недоведений TR-08 або інша вимога MVP забороняє завершення цієї задачі.
+1. Add a localized upload toggle, an explanation of the consequences and pending/error states; the source of confirmation is Go and the verified strategy from 053.
+2. On existing, new and restored records, run AS-18 with local and remote file data counters; manual pauses are preserved.
+3. After the early slice from 052, check Finder and magnet on cold/repeated launch, drag-and-drop, system dialogs, file selection after adding, details and full paths.
+4. Check bulk start/pause and both deletion modes, including cancellation, a partial Trash error and preservation of foreign files.
+5. Check the default folder, language/theme, limits, network and disk messages, and restore after restart. Confirm consistency of all new facade methods and generated bindings.
+6. Record the coverage of MVP requirements and the results of AS-01–14/18/19. Search and heavy loads are additionally checked in 055/064, full accessibility in 065, organization and automation in 062. An unproven TR-08 or any other MVP requirement prohibits completing this task.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `frontend/src/features/settings/TransferSettings; docs/verification/mvp.md`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/054-global-upload-ui-mvp-gate.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `frontend/src/features/settings/TransferSettings; docs/verification/mvp.md`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** the record `docs/verification/054-global-upload-ui-mvp-gate.md` or an exact link to a test or build report in the context handoff. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Системні джерела імпорту, файлове дерево, деталі, групові дії, обидва режими видалення, налаштування й помилки перевірені у справжній `.app`.
-- [ ] Глобальна віддача діє на всі потрібні записи, збережена після перезапуску й не скасовує ручних пауз; перевірений час застосування пояснений у звіті.
-- [ ] Ранні часткові докази 052 доповнені фактичними інтеграційними перевірками, а не автоматично зараховані всьому MVP.
-- [ ] Кожна невиконана перевірка має `not_run` або `fail`; стан `done` неможливий із невиконаною погодженою вимогою MVP.
+- [ ] System import sources, the file tree, details, bulk actions, both deletion modes, settings and errors are verified in the real `.app`.
+- [ ] Global upload applies to all relevant records, persists after restart and does not cancel manual pauses; the verified time to apply is explained in the report.
+- [ ] Early partial evidence from 052 is supplemented by actual integration checks, not automatically credited to the whole MVP.
+- [ ] Every unfulfilled check has `not_run` or `fail`; the `done` state is impossible with an unfulfilled agreed MVP requirement.
 
-## Перевірки
+## Checks
 
-- Пройти AS-01–14/18/19 на відповідних межах, зазначаючи частини, що будуть остаточно перевірені у 055/064/065/066. Сценарії колекцій і автоматизації не зараховувати завчасно.
-- Спричинити збій збереження налаштування, перевищення часу зупинки віддачі й помилку одного файла при груповому видаленні; показати правдивий результат без втрати інших записів.
+- Run AS-01–14/18/19 at the appropriate boundaries, noting the parts that will be finally verified in 055/064/065/066. Do not credit collection and automation scenarios ahead of time.
+- Cause a settings persistence failure, a timeout while stopping upload and an error on one file during bulk deletion; show the truthful result without losing other records.
 
-**Як запускати:** використовувати збірку та дані з 004/006. Зберегти дату, версію, конфігурацію й докази для кожної функції. Результати мережевого рушія, React і системних можливостей не підмінюють одне одного.
+**How to run:** use the build and data from 004/006. Keep the date, version, configuration and evidence for each function. Results of the network engine, React and system capabilities do not substitute for one another.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Дотримуватися меж власних DTO, repository та адаптера рушія. Помилка має явний результат; прийняття команди не означає завершення операції. Нові продуктові можливості не додавати приховано. Зміни контракту й невизначені параметри записувати в ADR разом із реалізацією.
+Respect the boundaries of own DTOs, the repository and the engine adapter. An error has an explicit result; accepting a command does not mean the operation is complete. Do not add new product capabilities covertly. Record contract changes and undefined parameters in an ADR together with the implementation.
 
-**Підстава для технічних рішень:** [Upload implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [Upload implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go). Check signatures and constraints against the pinned version; reading the API is not a passed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architectural decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architectural conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and check evidence.
+- Write a short result: what changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, how to unblock it and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave necessary context only in the chat.

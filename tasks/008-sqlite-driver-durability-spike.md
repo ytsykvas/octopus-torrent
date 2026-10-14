@@ -1,72 +1,72 @@
-# 008 — Вибрати SQLite-драйвер і режим збереження даних
+# 008 — Choose the SQLite driver and data durability mode
 
-**Статус:** `planned`  
-**Фаза:** P1 — Прототипи ризикових контрактів  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Ворота/дослід із зафіксованим результатом  
-**Жорсткі залежності:** [004](004-reproducible-check-commands.md)  
-**Вимоги:** `STACK-04`, `SET-02`, `AI-07`
+**Status:** `planned`  
+**Phase:** P1 — Prototypes of risky contracts  
+**Priority:** critical path of the main scenario or completion  
+**Size:** Gate/spike with a recorded result  
+**Hard dependencies:** [004](004-reproducible-check-commands.md)  
+**Requirements:** `STACK-04`, `SET-02`, `AI-07`
 
-## Результат
+## Outcome
 
-Вибрати SQLite-драйвер за результатами збірки на Mac, перевірки збереження підтверджених змін і скасування операцій.
+Choose the SQLite driver based on the results of building on the Mac, checking persistence of committed changes and cancellation of operations.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення, статуси та докази виконання.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `STACK-04`, `SET-02`, `AI-07`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових попередніх задач. Якщо потрібний доказ відсутній, залежну частину роботи починати не можна.
+- [Task execution rules](README.md): conditions for starting and finishing, statuses and evidence of completion.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `STACK-04`, `SET-02`, `AI-07`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API and assumptions not confirmed by a prototype.
+- Results and ADRs of all mandatory preceding tasks. If required evidence is missing, the dependent part of the work must not start.
 
-## Порядок роботи
+## Work order
 
-1. Порівняти придатні драйвери за системними залежностями, потребою в CGO та API створення узгодженої резервної копії.
-2. Перевірити транзакції, скасування через `context`, граничний час очікування зайнятої БД та одночасну роботу читачів і записувача.
-3. Отримати значення `sqlite_version()` саме зі зібраної програми й записати його у звіт.
-4. Якщо обрано WAL, перевірити актуальність виправлень у включеній версії SQLite та одночасні запис і контрольне перенесення змін із журналу до БД.
-5. Зафіксувати драйвер, параметри пулу з’єднань, порядок запису, гарантії збереження підтверджених змін і каталог локальних даних застосунку.
+1. Compare suitable drivers by system dependencies, the need for CGO and an API for creating a consistent backup.
+2. Check transactions, cancellation via `context`, the busy-database timeout and concurrent operation of readers and a writer.
+3. Obtain the `sqlite_version()` value from the built program itself and record it in the report.
+4. If WAL is chosen, check that the fixes in the bundled SQLite version are current, and check concurrent writes together with checkpointing changes from the journal into the DB.
+5. Record the driver, connection pool parameters, write order, guarantees of persistence of committed changes and the application's local data directory.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `docs/decisions/sqlite-driver.md; internal/library prototype`. Це карта майбутнього коду; після створення каркаса проєкту перевірити фактичні шляхи й оновити карту в архітектурі.
-**Доказ виконання:** запис `docs/verification/008-sqlite-driver-durability-spike.md` або точне посилання на вже наявний звіт перевірки чи збірки в підсумку передачі роботи. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `docs/decisions/sqlite-driver.md; internal/library prototype`. This is a map of future code; after the project skeleton is created, verify the actual paths and update the map in the architecture.
+**Evidence of completion:** a `docs/verification/008-sqlite-driver-durability-spike.md` record or an exact reference to an existing verification or build report in the work handoff summary. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Невдале підтвердження транзакції повертає помилку, а не повідомлення про успішне збереження.
-- [ ] Зібрана програма запускається без бібліотек, установлених для кінцевого користувача через Homebrew.
-- [ ] Рішення про WAL спирається на перевірену версію SQLite та результати одночасного запису й перенесення журналу.
-- [ ] Усі наведені нижче перевірки виконано на відповідному рівні; невиконані або невдалі перевірки не позначено як успішні.
+- [ ] A failed transaction commit returns an error, not a message about successful persistence.
+- [ ] The built program launches without libraries installed for the end user via Homebrew.
+- [ ] The WAL decision is based on the verified SQLite version and the results of concurrent writes and journal checkpointing.
+- [ ] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as successful.
 
-## Перевірки
+## Checks
 
-- Виконати одночасні запис і перенесення журналу, а також скасування та перевищення часу очікування; кожна операція має завершитися визначеним результатом без прихованої втрати підтверджених змін.
-- Спробувати відкрити БД у каталозі без права запису та записати дані при заповненому диску; застосунок має показати причину й залишити наявну БД без автоматичного скидання.
+- Perform concurrent writes and journal checkpointing, as well as cancellation and timeouts; each operation must end with a defined result without hidden loss of committed changes.
+- Try to open the DB in a directory without write permission and write data with a full disk; the application must show the reason and keep the existing DB without automatically resetting it.
 
-**Як запускати:** використати фактичні команди, зафіксовані у [004](004-reproducible-check-commands.md) та кореневому README після створення каркаса проєкту. До появи цих команд перевірки залишаються планом. Записати точну команду, робочий каталог, тестові дані, конфігурацію, код завершення й результат. Системні сценарії виконувати у зібраній `.app`; перевірки інтерфейсу з тестовими замінами та перевірки справжнього рушія позначати окремо.
+**How to run:** use the actual commands recorded in [004](004-reproducible-check-commands.md) and the root README after the project skeleton is created. Until those commands exist, the checks remain a plan. Record the exact command, working directory, test data, configuration, exit code and result. Run system scenarios in the built `.app`; label UI checks with test doubles and checks of the real engine separately.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Параметри SQL `PRAGMA` мають діяти на всіх з’єднаннях, для яких вони потрібні. Якщо WAL не дає практичної користі, можна обрати простіший режим, описавши його гарантії збереження даних. Налаштування за замовчуванням не вважати перевіреними гарантіями.
+SQL `PRAGMA` parameters must apply to all connections that need them. If WAL gives no practical benefit, a simpler mode may be chosen, describing its data persistence guarantees. Default settings must not be treated as verified guarantees.
 
-**Підстава для технічних рішень:** [SQLite WAL](https://www.sqlite.org/wal.html), [database/sql](https://pkg.go.dev/database/sql). Під час реалізації звірити сигнатури й обмеження із зафіксованою версією. Читання документації API не замінює виконаної інтеграційної перевірки.
+**Basis for technical decisions:** [SQLite WAL](https://www.sqlite.org/wal.html), [database/sql](https://pkg.go.dev/database/sql). During implementation, check signatures and constraints against the pinned version. Reading API documentation does not replace a performed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architectural decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architectural conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` ставити лише після виконання критеріїв і запису доказів.
-- Записати короткий результат: що змінено, точні перевірки зі статусами `pass`, `fail` або `not_run`, ADR, фактичні місця змін у коді й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст лише в чаті.
+- Update the status in this file and in the README navigation table at the same time; set `done` only after the criteria are met and the evidence is recorded.
+- Record a short result: what was changed, the exact checks with the statuses `pass`, `fail` or `not_run`, ADRs, actual code change locations and known limitations.
+- For `blocked`, state the concrete reason, the missing evidence/decision, how to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

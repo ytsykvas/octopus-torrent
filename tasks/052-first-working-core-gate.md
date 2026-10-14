@@ -1,71 +1,71 @@
-# 052 — Прийняти перший працездатний наскрізний сценарій
+# 052 — Accept the first working end-to-end scenario
 
-**Статус:** `planned`  
-**Фаза:** P5 — Працездатний основний сценарій і повний MVP  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Ворота/дослід із зафіксованим результатом  
-**Жорсткі залежності:** [034](034-wails-facade-real-bindings.md), [035](035-react-bridge-state-resync.md), [040](040-app-shell-fixed-geometry.md), [044](044-import-preview-ui-tree.md), [045](045-torrent-cards-status-actions.md), [029](029-restore-recheck-reconciliation.md)  
-**Вимоги:** `AI-08`, `STACK-05`, `TR-02`
+**Status:** `planned`  
+**Phase:** P5 — Working main scenario and full MVP  
+**Priority:** critical path of the main scenario or completion  
+**Size:** Gate/spike with a recorded result  
+**Hard dependencies:** [034](034-wails-facade-real-bindings.md), [035](035-react-bridge-state-resync.md), [040](040-app-shell-fixed-geometry.md), [044](044-import-preview-ui-tree.md), [045](045-torrent-cards-status-actions.md), [029](029-restore-recheck-reconciliation.md)  
+**Requirements:** `AI-08`, `STACK-05`, `TR-02`
 
-## Результат
+## Outcome
 
-Отримати ранню працездатну `.app`: вибрати `.torrent` або вставити magnet, переглянути вміст, вибрати файли й папку, завантажити, призупинити та відновити стан після перезапуску. Це вузька контрольна перевірка базової інтеграції, а не повний MVP.
+Get an early working `.app`: choose a `.torrent` or paste a magnet, preview the contents, choose files and a folder, download, pause and restore the state after a restart. This is a narrow control check of the basic integration, not the full MVP.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `AI-08`, `STACK-05`, `TR-02`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): task start and completion conditions, statuses and check evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `AI-08`, `STACK-05`, `TR-02`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTO, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Зібрати справжню `.app` із базовим facade, SQLite та anacrolix/torrent. Використати контрольовані файли з 006; почати з порожньої тестової бібліотеки.
-2. Через кнопку вибрати `.torrent`, переглянути дерево, вказати папку й файли та додати на паузі. До явного запуску не повинно бути передавання даних файлів.
-3. Запустити торрент, побачити реальний поступ у картці, призупинити й відновити передавання. Порівняти отримані байти з тестовими джерелами.
-4. Повторити основний імпорт через вставлення magnet; до підтвердження передаються лише потрібні метадані, а дані файлів потрапляють у вибрану папку.
-5. Закрити й повторно запустити `.app`; перевірити один запис без дублювання, вибір файлів, шлях, поступ і ручну паузу. Наявні коректні дані не завантажуються заново.
-6. Зберегти докази саме цього зрізу. Finder, перетягування, групові дії, Смітник, повні налаштування й незалежна віддача мають окреме приймання у 054 та не є умовою цієї ранньої демонстрації.
+1. Build a real `.app` with the basic facade, SQLite and anacrolix/torrent. Use the controlled files from 006; start with an empty test library.
+2. Choose a `.torrent` through the button, preview the tree, specify the folder and files and add it paused. There must be no transfer of file data until an explicit start.
+3. Start the torrent, see real progress in the card, pause and resume the transfer. Compare the received bytes with the test sources.
+4. Repeat the core import by pasting a magnet; before confirmation only the required metadata is transferred, and file data lands in the chosen folder.
+5. Close and relaunch the `.app`; check a single entry without duplication, the file selection, path, progress and manual pause. Existing correct data is not downloaded again.
+6. Keep evidence of exactly this slice. Finder, drag and drop, group actions, Trash, full settings and independent upload have separate acceptance in 054 and are not a condition of this early demonstration.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `docs/verification/core-slice.md`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/052-first-working-core-gate.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `docs/verification/core-slice.md`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** an entry `docs/verification/052-first-working-core-gate.md` or an exact link to a test or build report in the context handoff. One report can be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Власник може повторити додавання → запуск → пауза → продовження → перезапуск у справжній `.app` без тестового bridge.
-- [ ] Поступ і завершені файли відповідають байтам та лічильникам справжнього рушія; вибір і пауза переживають перезапуск.
-- [ ] До підтвердження імпорту й при початковій паузі дані файлів не передаються.
-- [ ] Відсутні групове видалення, Finder або Смітник не блокують цей зріз; заборонено називати його повним MVP чи доказом повного покриття 72 вимог.
+- [ ] The owner can repeat add → start → pause → resume → restart in the real `.app` without the test bridge.
+- [ ] Progress and completed files match the bytes and counters of the real engine; selection and pause survive a restart.
+- [ ] Before import confirmation and with the initial pause, file data is not transferred.
+- [ ] Missing group deletion, Finder or Trash do not block this slice; it is forbidden to call it the full MVP or evidence of full coverage of the 72 requirements.
 
-## Перевірки
+## Checks
 
-- Для `.torrent` і magnet виконати наведений маршрут з перевіркою хешів, реальних лічильників і збережених значень SQLite.
-- Повторно відкрити той самий торрент; перевірити відсутність дубліката. Скасувати попередній перегляд; активний запис не повинен з’явитися.
-- Завершити програму на ручній паузі й повторно відкрити її; до явного запуску передавання не відновлюється.
+- For `.torrent` and magnet, walk the route above with checks of hashes, real counters and persisted SQLite values.
+- Reopen the same torrent; check that there is no duplicate. Cancel the preview; an active entry must not appear.
+- Quit the program on a manual pause and reopen it; the transfer does not resume until an explicit start.
 
-**Як запускати:** використати фактичну команду збірки з 004 та конкретні тестові дані 006. Записати версію `.app`, команди й результати. AS-01/02/03/09/19 тут перевіряються лише в зазначених частинах; системне відкриття, інші екрани та повне приймання лишаються в 054/065/068.
+**How to run:** use the actual build command from 004 and the specific test data from 006. Record the `.app` version, commands and results. AS-01/02/03/09/19 are checked here only in the stated parts; system opening, other screens and full acceptance remain in 054/065/068.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Ця контрольна точка має показати розриви між рушієм, БД, Wails та React до завершення всіх функцій. Невдала 010 не забороняє незалежні перевірки завантаження, але ручна пауза має пройти власні перевірки 025. Недоведений незалежний upload не позначається успішним; повний MVP не приймається до 054.
+This checkpoint must show the gaps between the engine, the DB, Wails and React before all functions are completed. A failed 010 does not forbid independent download checks, but the manual pause must pass the own checks of 025. Unproven independent upload is not marked successful; the full MVP is not accepted before 054.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of each session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** under the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are performed; absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and verification evidence.
+- Record a short result: what was changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

@@ -1,58 +1,60 @@
-# OctopusTorrent: обов’язкові правила агента
+# OctopusTorrent: mandatory agent rules
 
-Проєкт особистого локального macOS-застосунку: React + TypeScript strict/Vite, Wails v2, Go, anacrolix/torrent, SQLite. Джерело поведінки — [вимоги](PROJECT_REQUIREMENTS.md); порядок роботи — [tasks/README.md](tasks/README.md). Погоджений стек і продуктовий обсяг не змінювати самостійно.
+A personal local macOS application project: React + TypeScript strict/Vite, Wails v2, Go, anacrolix/torrent, SQLite. Source of behavior: [requirements](PROJECT_REQUIREMENTS.md); work order: [tasks/README.md](tasks/README.md). Do not change the agreed stack or product scope on your own.
 
-## На початку КОЖНОЇ сесії
+## At the start of EVERY session
 
-1. Прочитати [архітектуру](APPLICATION_ARCHITECTURE.md), [інженерні правила](docs/engineering/TDD_AND_QUALITY.md), поточну задачу, документацію фічі та фактичні зміни коду.
-2. Проаналізувати межі, стан, залежності, побічні ефекти, помилки й завершення ресурсів. Знайти код для повторного використання.
-3. Перед редагуванням записати короткий архітектурний план, тести, потрібний рефакторинг і документацію. Якщо дизайн не потребує зміни, пояснити чому. Повторювати при продовженні роботи в новій сесії.
+1. Read the [architecture](APPLICATION_ARCHITECTURE.md), the [engineering rules](docs/engineering/TDD_AND_QUALITY.md), the current task, the feature documentation and the actual code changes.
+2. Analyze boundaries, state, dependencies, side effects, errors and resource cleanup. Find code to reuse.
+3. Before editing, write down a short architecture plan, tests, the required refactoring and documentation. If the design does not need to change, explain why. Repeat this when continuing work in a new session.
 
-## Для кожної зміни
+## For every change
 
-- TDD: **RED → GREEN → REFACTOR**. Нову поведінку/виправлення спочатку довести невдалим тестом; рефакторинг починається з гарантій поведінки й зберігає зелені тести.
-- **100% покриття всього власного виконуваного коду** за точними метриками й незмінним інвентарем у політиці. Прототипи, startup, scripts і власні системні адаптери також входять. Не знижувати пороги, не приховувати файли й не вимикати тести.
-- Чистий і повторно використовуваний код: явні залежності, невеликі модулі, одна реалізація спільної політики, композиція React, Go-сервіси/адаптери, SQL тільки через repository. Офіційні правила зафіксованих версій мають конкретні перевірки.
-- Рефакторити зачеплений сценарій одразу на зелених тестах. Не залишати новий технічний борг, дублікати, потрібні заглушки чи «потім виправимо». Якщо усунення не завершене, задача `blocked`, а не `done`.
-- Створювати й оновлювати [документацію фічі](docs/features/_TEMPLATE.md) та [індекс](docs/README.md) у тій самій зміні; значущі рішення — в `docs/decisions/`.
-- Завершення дозволене лише після тестів, 100% покриття, аналізаторів, актуальних документів і перевірки відсутності боргу. У звіті зберегти архітектурний висновок, RED/GREEN-команди, рефакторинг і фактичні результати.
+- TDD: **RED → GREEN → REFACTOR**. Prove new behavior/fixes with a failing test first; refactoring starts from behavior guarantees and keeps the tests green.
+- **100% coverage of all owned executable code** by the exact metrics and the fixed inventory in the policy. Prototypes, startup, scripts and owned system adapters are included too. Do not lower thresholds, hide files or disable tests.
+- Clean and reusable code: explicit dependencies, small modules, a single implementation of shared policy, React composition, Go services/adapters, SQL only through the repository. The official rules of the pinned versions have concrete checks.
+- Refactor the affected scenario immediately on green tests. Do not leave new technical debt, duplicates, required stubs or "we will fix it later". If the cleanup is not finished, the task is `blocked`, not `done`.
+- Create and update the [feature documentation](docs/features/_TEMPLATE.md) and the [index](docs/README.md) in the same change; significant decisions go to `docs/decisions/`.
+- Completion is allowed only after tests, 100% coverage, analyzers, up-to-date documents and a check that there is no debt. In the report, keep the architecture conclusion, the RED/GREEN commands, the refactoring and the actual results.
 
-Сам застосунок наразі запланований, HTML-макет існує; не вигадувати виконані тести чи поточний відсоток для будь-якого артефакту. Недоступна перевірка — `not_run`/`blocked`. Під час RED очікувана невдача не є готовою зміною. Синхронізовані `sources/`, якщо є, лишаються тільки для читання. Чужі зміни й користувацькі файли не перезаписувати.
+The application itself is currently planned; an HTML mockup exists. Do not invent executed tests or a current percentage for any artifact. An unavailable check is `not_run`/`blocked`. During RED, the expected failure is not a finished change. Synchronized `sources/`, if present, stay read-only. Do not overwrite other people's changes or user files.
 
-## Межі модулів
+**Language:** everything written into the repository — documents, task files, reports, agent instructions, code comments, commit messages — is English; reply to the owner in Ukrainian ([decision](docs/decisions/repository-language.md)).
 
-Напрямок залежностей: React → власний bridge → Wails facade (`AppAPI`) → Go-сервіси → адаптер рушія / repository / файловий сервіс. Деталі — [архітектура §2–§4](APPLICATION_ARCHITECTURE.md#2-компоненти-й-напрямки-залежностей); шляхи — у [README](README.md#карта-каталогів) (більшість ще не створено).
+## Module boundaries
 
-| Шар | Може | Не може |
+Dependency direction: React → own bridge → Wails facade (`AppAPI`) → Go services → engine adapter / repository / file service. Details: [architecture §2–§4](APPLICATION_ARCHITECTURE.md#2-components-and-dependency-directions); paths: in the [README](README.md#directory-map) (most do not exist yet).
+
+| Layer | May | May not |
 |---|---|---|
-| React (`frontend/src/features`, `state`) | Показувати DTO/snapshots, надсилати команди через bridge, локалізувати тексти. | Мати доступ до файлової системи чи рушія; дублювати Go-політику (пауза, віддача, wanted); визначати успіх запису даних. |
-| Frontend bridge (`frontend/src/bridge`) | Єдина точка виклику згенерованих bindings і підписок на події; тестовий bridge для browser-тестів. | Містити бізнес-правила. |
-| Wails facade (`internal/app`) | Прийняти DTO, повторно перевірити, делегувати сервісу, повернути результат/operationID і `AppError`. | Передавати в TS об’єкти рушія, pointers, channels; виконувати shell-команди за запитом UI. |
-| Go-сервіси | Політика, порядок команд одного торрента, імпорт, відновлення. | Писати SQL напряму або торкатися anacrolix поза адаптером. |
-| Адаптер рушія (`internal/torrentengine`) | Єдине місце з типами anacrolix/torrent; перетворення стану й помилок на власні DTO. | Видаляти файли (`Drop()` — не видалення). |
-| Repository (`internal/library`) | Увесь SQL, міграції, явні транзакції. | Редагувати piece completion рушія. |
-| Файли й платформа (`internal/files`, `internal/platform`) | Діалоги, створення папок, перевірка кожного шляху, Смітник. | Видаляти без явного переліку й підтвердження; довіряти шляху з UI без перевірки в Go. |
+| React (`frontend/src/features`, `state`) | Show DTOs/snapshots, send commands through the bridge, localize texts. | Access the file system or the engine; duplicate Go policy (pause, upload, wanted); decide whether a data write succeeded. |
+| Frontend bridge (`frontend/src/bridge`) | The single point for calling generated bindings and subscribing to events; a test bridge for browser tests. | Contain business rules. |
+| Wails facade (`internal/app`) | Accept a DTO, re-validate it, delegate to a service, return a result/operationID and `AppError`. | Pass engine objects, pointers or channels to TS; run shell commands at the UI's request. |
+| Go services | Policy, command ordering for a single torrent, import, recovery. | Write SQL directly or touch anacrolix outside the adapter. |
+| Engine adapter (`internal/torrentengine`) | The only place with anacrolix/torrent types; converts state and errors into own DTOs. | Delete files (`Drop()` is not deletion). |
+| Repository (`internal/library`) | All SQL, migrations, explicit transactions. | Edit the engine's piece completion. |
+| Files and platform (`internal/files`, `internal/platform`) | Dialogs, folder creation, validation of every path, Trash. | Delete without an explicit list and confirmation; trust a path from the UI without validation in Go. |
 
-## Файлові операції
+## File operations
 
-- Payload користувача — лише у вибраній ним папці; жодна дія не видаляє файли без окремого вибору й підтвердження (DEL-01–05).
-- Go повторно перевіряє кожен фізичний шлях: межі save path, symlink, колізії, спільні файли.
-- Досліди й тести працюють тільки з власними штучними файлами в тимчасових каталогах або `testdata/`; ніколи з особистими торрентами чи завантаженнями власника.
-- Особисті `.torrent`, завантажені дані, робочі БД і журнали не комітяться ([.gitignore](.gitignore)).
+- The user's payload goes only into the folder they chose; no action deletes files without a separate selection and confirmation (DEL-01–05).
+- Go re-validates every physical path: save path boundaries, symlinks, collisions, shared files.
+- Spikes and tests work only with their own synthetic files in temporary directories or `testdata/`; never with the owner's personal torrents or downloads.
+- Personal `.torrent` files, downloaded data, working databases and logs are not committed ([.gitignore](.gitignore)).
 
-## Залежності
+## Dependencies
 
-Політика — [toolchain-versions](docs/decisions/toolchain-versions.md): для npm і Go-модулів (включно з транзитивними) — остання стабільна версія, **опублікована щонайменше 14 днів тому**; пре-релізи заборонені; 14-денну паузу не прибирати. Patch-релізи Go/Node — одразу, нові minor/major — через 14 днів. Перед додаванням або оновленням перевірити дату релізу, `npm audit`, `govulncheck`; npm install-скрипти — лише через явний `allowScripts`. Таблицю версій в ADR оновлювати в тій самій зміні.
+Policy: [toolchain-versions](docs/decisions/toolchain-versions.md). For npm and Go modules (including transitive ones), use the latest stable version **published at least 14 days ago**; pre-releases are forbidden; do not remove the 14-day cooldown. Go/Node patch releases are taken immediately, new minor/major releases after 14 days. Before adding or updating, check the release date, `npm audit`, `govulncheck`; npm install scripts only through an explicit `allowScripts`. Update the version table in the ADR in the same change.
 
-## Згенерований код (Wails bindings)
+## Generated code (Wails bindings)
 
-- `frontend/wailsjs/` генерує Wails із Go-методів facade; **не редагувати вручну**. Змінився контракт Go → перегенерувати bindings командою `go tool wails generate module` ([README](README.md#команди-збірки-й-перевірок)) і закомітити разом зі зміною.
-- React звертається до bindings тільки через `frontend/src/bridge`; власні обгортки вимірюються покриттям, незмінений згенерований код обліковується окремо за [політикою](docs/engineering/TDD_AND_QUALITY.md#незмінні-межі-вимірювання).
+- `frontend/wailsjs/` is generated by Wails from the facade's Go methods; **do not edit it by hand**. If the Go contract changed, regenerate the bindings with `go tool wails generate module` ([README](README.md#build-and-check-commands)) and commit them together with the change.
+- React accesses bindings only through `frontend/src/bridge`; own wrappers are measured by coverage, unchanged generated code is accounted for separately according to the [policy](docs/engineering/TDD_AND_QUALITY.md#fixed-measurement-boundaries).
 
-## Як знайти, виконати й передати задачу
+## How to find, execute and hand off a task
 
-1. Наступна задача — у [README](README.md#поточний-стан) і [навігації плану](tasks/README.md#навігація-всіх-задач): статус `planned`, усі залежності `done`.
-2. Критерії, кроки й перевірки — у файлі задачі; ID вимог — у [вимогах](PROJECT_REQUIREMENTS.md); відкриті питання — у [реєстрі рішень](docs/decisions/project-baseline.md#6-реєстр-відкритих-рішень).
-3. Статус змінювати одночасно у файлі задачі й у таблиці навігації.
-4. Рішення — `docs/decisions/<slug>.md` за [шаблоном ADR](docs/decisions/_ADR_TEMPLATE.md); докази — `docs/verification/<NNN>-<task-slug>.md` (план сесії, RED/GREEN-команди й результати `pass`/`fail`/`not_run`, рефакторинг, покриття, борг); фічі — `docs/features/<feature>.md`.
-5. Передача: у кінці файла задачі — розділ «Результат виконання» з датою, статусом, змінами, перевірками, обмеженнями й наступною задачею. Коміт пояснює результат і спосіб перевірки (AI-09). Контекст, потрібний наступному агенту, зберігається в репозиторії, а не в чаті.
+1. The next task is in the [README](README.md#current-state) and the [plan navigation](tasks/README.md#navigation-of-all-tasks): status `planned`, all dependencies `done`.
+2. Criteria, steps and checks are in the task file; requirement IDs are in the [requirements](PROJECT_REQUIREMENTS.md); open questions are in the [decision register](docs/decisions/project-baseline.md#6-open-decision-register).
+3. Change the status in the task file and in the navigation table at the same time.
+4. Decisions: `docs/decisions/<slug>.md` following the [ADR template](docs/decisions/_ADR_TEMPLATE.md); evidence: `docs/verification/<NNN>-<task-slug>.md` (session plan, RED/GREEN commands and results `pass`/`fail`/`not_run`, refactoring, coverage, debt); features: `docs/features/<feature>.md`.
+5. Handoff: at the end of the task file, an "Execution result" section with the date, status, changes, checks, limitations and the next task. The commit explains the result and how it was verified (AI-09). Context needed by the next agent is stored in the repository, not in the chat.

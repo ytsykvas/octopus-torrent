@@ -1,71 +1,71 @@
-# 038 — Додати системне перетягування, меню й клавіатуру
+# 038 — Add native drag and drop, menus and keyboard
 
-**Статус:** `planned`  
-**Фаза:** P4 — React UI й native інтеграція  
-**Пріоритет:** обов’язкова функція або перевірка погодженого обсягу  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [034](034-wails-facade-real-bindings.md), [036](036-finder-magnet-open-queue.md), [037](037-native-dialogs-clipboard.md)  
-**Вимоги:** `ADD-06`, `UI-04`, `UI-17`
+**Status:** `planned`  
+**Phase:** P4 — React UI and native integration  
+**Priority:** mandatory feature or check of the agreed scope  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [034](034-wails-facade-real-bindings.md), [036](036-finder-magnet-open-queue.md), [037](037-native-dialogs-clipboard.md)  
+**Requirements:** `ADD-06`, `UI-04`, `UI-17`
 
-## Результат
+## Outcome
 
-Реалізувати системне перетягування й звичайні Mac меню та клавіатурні команди.
+Implement system drag-and-drop and the standard Mac menus and keyboard commands.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `ADD-06`, `UI-04`, `UI-17`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): task start and completion conditions, statuses and check evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `ADD-06`, `UI-04`, `UI-17`, the relevant criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Налаштувати EnableFileDrop/OnFileDrop з абсолютними шляхами й очищенням через OnFileDropOff.
-2. Кількість, тип і метадані перевіряти в Go; підсвічування відмовляє відомому неприйнятному типу.
-3. Зберегти збільшену зону перетягування з макета; натискання відкриває системний вибір файла.
-4. На Mac додати AppMenu першим і EditMenu для Cmd+C/V/Z.
-5. Вставлення magnet та shortcut Add ведуть у спільний імпорт без дубльованих keyboard listeners.
+1. Set up EnableFileDrop/OnFileDrop with absolute paths and cleanup via OnFileDropOff.
+2. Check the count, type and metadata in Go; the highlight rejects a known unacceptable type.
+3. Keep the enlarged drop zone from the mockup; clicking it opens the system file picker.
+4. On the Mac, add AppMenu first and EditMenu for Cmd+C/V/Z.
+5. Pasting a magnet and the Add shortcut lead into the shared import without duplicated keyboard listeners.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `internal/platform/menu; frontend/src/bridge/drop`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/038-native-drop-menus-shortcuts.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `internal/platform/menu; frontend/src/bridge/drop`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** the record `docs/verification/038-native-drop-menus-shortcuts.md` or an exact link to a test or build report in the context handoff. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Один правильний файл відкриває перегляд.
-- [ ] Кілька або пошкоджені файли дають зрозумілу відмову.
-- [ ] Cmd+C/V працюють у справжньому вікні.
-- [ ] Потрібні перевірки виконані на належній межі; невиконаний або невдалий тест не названо успішним.
+- [ ] A single valid file opens the preview.
+- [ ] Several or corrupted files produce a clear rejection.
+- [ ] Cmd+C/V work in the real window.
+- [ ] The required checks are performed at the proper boundary; a test that was not run or failed is not called successful.
 
-## Перевірки
+## Checks
 
-- Перетягнути з Finder Unicode, кілька й неправильний файл.
-- Пройти додавання/вставлення лише клавіатурою та перевірити cleanup після reload.
+- Drag from Finder a Unicode-named file, several files and an invalid file.
+- Go through adding/pasting using only the keyboard and check cleanup after reload.
 
-**Як запускати:** використати фактичні команди з [004](004-reproducible-check-commands.md) та кореневого README. Записати команду, робочий каталог, конфігурацію, тестові дані, код завершення й спостереження. Перевірки справжнього рушія, тестового UI та системних можливостей у зібраній `.app` ведуться окремо.
+**How to run:** use the actual commands from [004](004-reproducible-check-commands.md) and the root README. Record the command, working directory, configuration, test data, exit code and observations. Checks of the real engine, the test UI and system capabilities in the built `.app` are kept separate.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Системне перетягування Wails повертає абсолютні шляхи. Browser File.path не використовувати як контракт системного drop.
+Wails system drag-and-drop returns absolute paths. Do not use the browser File.path as the contract of the system drop.
 
-**Підстава для технічних рішень:** [Wails drag/drop](https://wails.io/docs/reference/runtime/draganddrop/), [Menus](https://wails.io/docs/reference/menus/). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [Wails drag/drop](https://wails.io/docs/reference/runtime/draganddrop/), [Menus](https://wails.io/docs/reference/menus/). Check signatures and constraints against the pinned version; reading the API is not a passed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architectural decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architectural conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and check evidence.
+- Write a short result: what changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, how to unblock it and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave necessary context only in the chat.

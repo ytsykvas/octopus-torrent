@@ -1,72 +1,72 @@
-# 022 — Створити єдиний координатор незавершених імпортів
+# 022 — Create a single coordinator for pending imports
 
-**Статус:** `planned`  
-**Фаза:** P3 — Імпорт, передавання й безпека даних  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [011](011-magnet-metadata-storage-spike.md), [019](019-metainfo-parser-file-tree.md), [020](020-destination-filesystem-service.md), [021](021-full-hash-deduplication.md)  
-**Вимоги:** `ADD-01`, `ADD-02`, `ADD-06`, `ADD-07`, `STACK-03`
+**Status:** `planned`  
+**Phase:** P3 — Import, transfer and data safety  
+**Priority:** critical path of the main scenario or completion  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [011](011-magnet-metadata-storage-spike.md), [019](019-metainfo-parser-file-tree.md), [020](020-destination-filesystem-service.md), [021](021-full-hash-deduplication.md)  
+**Requirements:** `ADD-01`, `ADD-02`, `ADD-06`, `ADD-07`, `STACK-03`
 
-## Результат
+## Outcome
 
-Створити `ImportCoordinator`, який обробляє всі джерела додавання однаково й підтримує скасування незавершеного імпорту.
+Create an `ImportCoordinator` that handles all adding sources in the same way and supports canceling a pending import.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення, статуси та докази виконання.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `ADD-01`, `ADD-02`, `ADD-06`, `ADD-07`, `STACK-03`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових попередніх задач. Якщо потрібний доказ відсутній, залежну частину роботи починати не можна.
+- [Task execution rules](README.md): conditions for starting and finishing, statuses and evidence of completion.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `ADD-01`, `ADD-02`, `ADD-06`, `ADD-07`, `STACK-03`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): the API and assumptions not yet confirmed by a prototype.
+- Results and ADRs of all mandatory preceding tasks. If the required evidence is missing, the dependent part of the work must not be started.
 
-## Порядок роботи
+## Work order
 
-1. Описати таблицю станів незавершеного імпорту, його ідентифікатор, версію, джерело та контекст скасування.
-2. Для `.torrent` розбирати метадані без активного передавання файлів; magnet-імпорт реалізувати за перевіреним рішенням задачі 011.
-3. У Go перевіряти кількість і формат вхідних об’єктів, ідентифікатори та версію попереднього перегляду, яку підтверджує користувач.
-4. Організувати обмежену чергу попередніх переглядів, перехід до наявного дубліката, скасування й граничний час очікування.
-5. Надати спільний API для кнопки, Finder, перетягування й папки спостереження; остаточне збереження імпорту виконувати через задачу 023.
+1. Describe the state table of a pending import, its identifier, version, source and cancellation context.
+2. For `.torrent`, parse the metadata without active file transfer; implement magnet import according to the verified decision of task 011.
+3. In Go, validate the number and format of the incoming objects, the identifiers and the version of the preview that the user confirms.
+4. Organize a bounded queue of previews, navigation to an existing duplicate, cancellation and a timeout.
+5. Provide a shared API for the button, Finder, drag-and-drop and the watch folder; perform the final persistence of the import through task 023.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `internal/app/import_coordinator.go; pending states`. Це карта майбутнього коду; після створення каркаса проєкту перевірити фактичні шляхи й оновити карту в архітектурі.
-**Доказ виконання:** запис `docs/verification/022-pending-import-coordinator.md` або точне посилання на вже наявний звіт перевірки чи збірки в підсумку передачі роботи. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `internal/app/import_coordinator.go; pending states`. This is a map of future code; after the project skeleton is created, verify the actual paths and update the map in the architecture.
+**Evidence of completion:** a `docs/verification/022-pending-import-coordinator.md` record or an exact reference to an existing verification or build report in the work handoff summary. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Скасований або прострочений імпорт не може створити активний запис після пізнього підтвердження.
-- [ ] Стан очікування метаданих відповідає фактичному перебігу операції.
-- [ ] Новий вхід не замінює відкритий попередній перегляд без явної дії користувача.
-- [ ] Усі наведені нижче перевірки виконано на відповідному рівні; невиконані або невдалі перевірки не позначено як успішні.
+- [ ] A canceled or expired import cannot create an active record after a late confirmation.
+- [ ] The metadata-waiting state matches the actual progress of the operation.
+- [ ] A new input does not replace an open preview without an explicit user action.
+- [ ] All checks listed below have been performed at the appropriate level; checks that were not run or failed are not marked as successful.
 
-## Перевірки
+## Checks
 
-- Скасувати імпорт одночасно із сигналом `GotInfo` та підтвердженням; лише допустима актуальна операція може перейти до збереження.
-- Передати підроблені ідентифікатори й шляхи, повторно відкрити інтерфейс, завершити програму та повторити підготовку; не повинні виникати дублікати, застарілі підтвердження або залишені задачі.
+- Cancel an import simultaneously with the `GotInfo` signal and a confirmation; only the valid current operation may proceed to persistence.
+- Pass forged identifiers and paths, reopen the interface, quit the program and repeat the preparation; no duplicates, stale confirmations or leftover tasks may arise.
 
-**Як запускати:** використати фактичні команди, зафіксовані у [004](004-reproducible-check-commands.md) та кореневому README після створення каркаса проєкту. До появи цих команд перевірки залишаються планом. Записати точну команду, робочий каталог, тестові дані, конфігурацію, код завершення й результат. Системні сценарії виконувати у зібраній `.app`; перевірки інтерфейсу з тестовими замінами та перевірки справжнього рушія позначати окремо.
+**How to run:** use the actual commands recorded in [004](004-reproducible-check-commands.md) and the root README after the project skeleton is created. Until those commands exist, the checks remain a plan. Record the exact command, working directory, test data, configuration, exit code and result. Run system scenarios in the built `.app`; mark interface checks with test doubles and checks of the real engine separately.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Координатор перевіряє команди незалежно від інтерфейсу й не дозволяє застарілому перегляду підтвердити інший набір файлів. Прийняття запиту не означає завершення імпорту. Після скасування очищаються лише ресурси, які належать саме цьому незавершеному імпорту.
+The coordinator validates commands independently of the interface and does not allow a stale preview to confirm a different set of files. Accepting a request does not mean the import is complete. After cancellation, only the resources that belong to this specific pending import are cleaned up.
 
-**Підстава для технічних рішень:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). Під час реалізації звірити сигнатури й обмеження із зафіксованою версією. Читання документації API не замінює виконаної інтеграційної перевірки.
+**Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, check the signatures and constraints against the pinned version. Reading the API documentation does not replace a performed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run a test/check of the expected result and record the proper reason for the failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** according to the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; rerun the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` ставити лише після виконання критеріїв і запису доказів.
-- Записати короткий результат: що змінено, точні перевірки зі статусами `pass`, `fail` або `not_run`, ADR, фактичні місця змін у коді й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст лише в чаті.
+- Update the status in this file and in the README navigation table at the same time; set `done` only after the criteria are met and the evidence is recorded.
+- Record a short result: what was changed, the exact checks with the statuses `pass`, `fail` or `not_run`, ADRs, actual code change locations and known limitations.
+- For `blocked`, state the concrete reason, the missing evidence/decision, how to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

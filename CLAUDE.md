@@ -2,54 +2,54 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Обов’язкові правила агента — в AGENTS.md, вони діють повністю:
+The mandatory agent rules are in AGENTS.md; they apply in full:
 
 @AGENTS.md
 
-Документація й спілкування з власником — українською; ідентифікатори коду й назви модулів — англійською.
+Everything written into the repository is English; replies to the owner are in Ukrainian ([decision](docs/decisions/repository-language.md)).
 
-## Команди
+## Commands
 
-Усі команди — з кореня репозиторію. Повний перевірений перелік і передумови — [README → Команди](README.md#команди-збірки-й-перевірок). Єдиної команди «перевірити все» ще немає, її створює задача [004](tasks/004-reproducible-check-commands.md).
+All commands run from the repository root. The full verified list and prerequisites are in [README → Commands](README.md#build-and-check-commands). There is no single "check everything" command yet; task [004](tasks/004-reproducible-check-commands.md) creates it.
 
 ```sh
-npm --prefix frontend ci                      # .npmrc: min-release-age=14 — не обходити
+npm --prefix frontend ci                      # .npmrc: min-release-age=14 — do not bypass
 npm --prefix frontend run typecheck
-npm --prefix frontend run test:coverage       # поріг 100% на кожен файл, 4 метрики
-npm --prefix frontend run build               # обов’язково до go test: main.go вбудовує frontend/dist
+npm --prefix frontend run test:coverage       # 100% threshold per file, 4 metrics
+npm --prefix frontend run build               # required before go test: main.go embeds frontend/dist
 gofmt -l . && go vet ./... && go test ./...
-go tool wails generate module                 # після зміни методів internal/app; frontend/wailsjs комітиться
+go tool wails generate module                 # after changing internal/app methods; frontend/wailsjs is committed
 go tool wails build -clean -trimpath          # → build/bin/OctopusTorrent.app
 go tool wails dev
 ```
 
-Окремий тест:
+A single test:
 
 ```sh
 go test ./internal/app -run TestGetRuntimeInfoReportsCompiledGoRuntime -v
 npm --prefix frontend test -- src/features/runtime-check/RuntimeCheck.test.tsx -t 'Go'
 ```
 
-Для одного файла використовуйте `test`, а не `test:coverage`: поріг `perFile` впаде на файлах, які цей запуск не виконав.
+For a single file use `test`, not `test:coverage`: the `perFile` threshold will fail on files that this run did not execute.
 
-Wails CLI береться лише через `go tool wails` (версія закріплена в `go.mod` директивою `tool`); глобальний `wails` не встановлювати.
+The Wails CLI is used only through `go tool wails` (the version is pinned in `go.mod` with the `tool` directive); do not install a global `wails`.
 
-## Покриття Go
+## Go coverage
 
-`main()` виконується лише в справжньому застосунку, тому 100% для Go — це злитий профіль юніт-тестів та інструментованої `.app` (процедура в [README](README.md#команди-збірки-й-перевірок)). Критерій — порожній вивід `awk 'NR>1 && $NF==0' build/coverage/go.out`, а не округлений напис `100.0%`. Після інструментованої збірки зробіть звичайну релізну.
+`main()` runs only in the real application, so 100% for Go is the merged profile of the unit tests and the instrumented `.app` (procedure in the [README](README.md#build-and-check-commands)). The criterion is empty output from `awk 'NR>1 && $NF==0' build/coverage/go.out`, not the rounded `100.0%` label. After an instrumented build, make a regular release build.
 
-Для TS джерела задає `vite.config.ts` (`include: src/**/*.{ts,tsx}`). `frontend/wailsjs/` лежить поза `src/` і не є власним кодом; власні обгортки над ним живуть у `frontend/src/bridge` і вимірюються.
+For TS, the sources are defined by `vite.config.ts` (`include: src/**/*.{ts,tsx}`). `frontend/wailsjs/` lies outside `src/` and is not own code; own wrappers over it live in `frontend/src/bridge` and are measured.
 
-## Загальна картина
+## Big picture
 
-- Зараз реалізована лише оболонка із задачі 003: `frontend/src/features/runtime-check` → `frontend/src/bridge/runtimeInfo.ts` → `frontend/wailsjs/go/app/App.js` → `internal/app.App.GetRuntimeInfo`. Цей самий ланцюжок — шаблон для кожної нової команди UI → Go.
-- `main.go` тримає `main()` без розгалужень: `run(start, stderr)` приймає функцію запуску Wails, тож тести підставляють фейк замість вікна. Нові залежності facade передаються явно через `app.New(...)` і `options.App.Bind`.
-- Компоненти React отримують залежності від bridge пропсами (див. `RuntimeCheck`), тому тестуються без Wails. `App.tsx` з’єднує їх зі справжнім bridge.
-- Цільова структура (`internal/torrentengine`, `internal/library`, `internal/files`, `internal/platform`, `frontend/src/state` тощо) описана в [архітектурі §3](APPLICATION_ARCHITECTURE.md#3-структура-репозиторію-для-ai-first). Більшості каталогів ще немає. Їх створюють numbered tasks, а не вигадуються наперед.
-- Джерело поведінки — [PROJECT_REQUIREMENTS.md](PROJECT_REQUIREMENTS.md) з ID вимог. Що робити далі — [tasks/README.md](tasks/README.md#навігація-всіх-задач). Відкриті питання O1–O18 — в [реєстрі рішень](docs/decisions/project-baseline.md#6-реєстр-відкритих-рішень). `MOCKUP.html` — лише орієнтир вигляду; його демо-логіка не є вимогою.
+- Currently only the shell from task 003 is implemented: `frontend/src/features/runtime-check` → `frontend/src/bridge/runtimeInfo.ts` → `frontend/wailsjs/go/app/App.js` → `internal/app.App.GetRuntimeInfo`. This same chain is the template for every new UI → Go command.
+- `main.go` keeps `main()` free of branches: `run(start, stderr)` takes the Wails start function, so tests substitute a fake instead of a window. New facade dependencies are passed explicitly through `app.New(...)` and `options.App.Bind`.
+- React components receive their bridge dependencies as props (see `RuntimeCheck`), so they are tested without Wails. `App.tsx` wires them to the real bridge.
+- The target structure (`internal/torrentengine`, `internal/library`, `internal/files`, `internal/platform`, `frontend/src/state`, etc.) is described in [architecture §3](APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first). Most of these directories do not exist yet. They are created by numbered tasks, not invented in advance.
+- The source of behavior is [PROJECT_REQUIREMENTS.md](PROJECT_REQUIREMENTS.md) with requirement IDs. What to do next is in [tasks/README.md](tasks/README.md#navigation-of-all-tasks). Open questions O1–O18 are in the [decision register](docs/decisions/project-baseline.md#6-open-decision-register). `MOCKUP.html` is only a visual reference; its demo logic is not a requirement.
 
-## Особливості середовища
+## Environment specifics
 
-- Перевірене середовище одне: Apple M4, macOS 27.0.1 arm64 ([macos-target](docs/decisions/macos-target.md)). Bundle ID — `dev.tsykvas.octopustorrent`; закрити застосунок зі скрипта: `osascript -e 'tell application id "dev.tsykvas.octopustorrent" to quit'` (повертає -128, але застосунок завершується).
-- Попередження лінкера про macOS 13.0 проти 11.0 нешкідливе ([toolchain-versions](docs/decisions/toolchain-versions.md#наслідки)).
-- Перевіряйте посилання в Markdown лише у файлах Git (`git ls-files --cached --others --exclude-standard '*.md'`), бо інакше перевірка заходить у `frontend/node_modules`.
+- There is one verified environment: Apple M4, macOS 27.0.1 arm64 ([macos-target](docs/decisions/macos-target.md)). The bundle ID is `dev.tsykvas.octopustorrent`; to quit the application from a script: `osascript -e 'tell application id "dev.tsykvas.octopustorrent" to quit'` (returns -128, but the application quits).
+- The linker warning about macOS 13.0 versus 11.0 is harmless ([toolchain-versions](docs/decisions/toolchain-versions.md#consequences)).
+- Check Markdown links only in Git files (`git ls-files --cached --others --exclude-standard '*.md'`), because otherwise the check descends into `frontend/node_modules`.

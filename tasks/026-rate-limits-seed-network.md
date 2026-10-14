@@ -1,72 +1,72 @@
-# 026 — Реалізувати загальні ліміти, роздачу й відновлення мережі
+# 026 — Implement global limits, seeding and network recovery
 
-**Статус:** `planned`  
-**Фаза:** P3 — Імпорт, передавання й безпека даних  
-**Пріоритет:** обов’язкова функція або перевірка погодженого обсягу  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [025](025-pause-resume-application.md), [015](015-transactional-repositories.md)  
-**Вимоги:** `TR-03`, `TR-04`, `TR-05`
+**Status:** `planned`  
+**Phase:** P3 — Import, transfer and data safety  
+**Priority:** mandatory feature or check of the agreed scope  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [025](025-pause-resume-application.md), [015](015-transactional-repositories.md)  
+**Requirements:** `TR-03`, `TR-04`, `TR-05`
 
-## Результат
+## Outcome
 
-Реалізувати загальні ліміти швидкості, роздачу після завершення та відновлення мережі зі збереженням ручних пауз.
+Implement global speed limits, seeding after completion and network recovery while preserving manual pauses.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `TR-03`, `TR-04`, `TR-05`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): task start and completion conditions, statuses and check evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `TR-03`, `TR-04`, `TR-05`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTO, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API and assumptions not confirmed by a prototype.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Створити об’єкти обмеження швидкості до запуску клієнта; режим без обмеження задати явно.
-2. Валідувати додатні значення й одиниці. Змінювати ліміти підтримуваним потокобезпечним API, а не прямою зміною конфігурації клієнта.
-3. Обрати політику роздачі завершених вибраних даних; метод Seeding() не використовувати як єдине джерело статусу.
-4. Розрізняти відсутність мережі, учасників передавання і помилки трекера. Відновлення з’єднання не створює нового клієнта.
-5. Зберігати налаштування й не запускати вручну зупинені записи після повернення мережі.
+1. Create the rate-limiting objects before the client starts; set the unlimited mode explicitly.
+2. Validate positive values and units. Change limits through the supported thread-safe API, not by directly modifying the client configuration.
+3. Choose the policy for seeding completed selected data; do not use the Seeding() method as the only source of status.
+4. Distinguish absence of network, absence of transfer participants and tracker errors. Restoring the connection does not create a new client.
+5. Persist settings and do not start manually stopped entries after the network returns.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `internal/torrentengine/limits; internal/app/preferences`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/026-rate-limits-seed-network.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `internal/torrentengine/limits; internal/app/preferences`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** an entry `docs/verification/026-rate-limits-seed-network.md` or an exact link to a test or build report in the context handoff. One report can be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Завершений торрент може передати дані новому учаснику.
-- [ ] Загальний ліміт поширюється на кілька одночасних торрентів.
-- [ ] Нульове значення ліміту не підмінює глобальне вимкнення віддачі.
-- [ ] Потрібні перевірки виконані на належній межі; невиконаний або невдалий тест не названо успішним.
+- [ ] A completed torrent can transfer data to a new participant.
+- [ ] The global limit applies to several simultaneous torrents.
+- [ ] A zero limit value does not substitute for globally disabling upload.
+- [ ] The required checks are performed at the proper boundary; a test that was not run or failed is not called successful.
 
-## Перевірки
+## Checks
 
-- Виміряти сумарну швидкість кількох торрентів при додатному ліміті та без нього; врахувати короткі пакетні сплески.
-- Перервати мережу, повернути її та перевірити активний і вручну зупинений запис.
+- Measure the total speed of several torrents with a positive limit and without one; account for short burst spikes.
+- Cut the network, bring it back and check an active and a manually stopped entry.
 
-**Як запускати:** використати фактичні команди з [004](004-reproducible-check-commands.md) та кореневого README. Записати команду, робочий каталог, конфігурацію, тестові дані, код завершення й спостереження. Перевірки справжнього рушія, тестового UI та системних можливостей у зібраній `.app` ведуться окремо.
+**How to run:** use the actual commands from [004](004-reproducible-check-commands.md) and the root README. Record the command, working directory, configuration, test data, exit code and observations. Checks of the real engine, the test UI and system capabilities in the built `.app` are kept separate.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Дотримуватися меж власних DTO, repository та адаптера рушія. Помилка має явний результат; прийняття команди не означає завершення операції. Нові продуктові можливості не додавати приховано. Зміни контракту й невизначені параметри записувати в ADR разом із реалізацією.
+Respect the boundaries of own DTO, repository and engine adapter. An error has an explicit result; accepting a command does not mean the operation is complete. Do not add new product capabilities covertly. Record contract changes and undefined parameters in an ADR together with the implementation.
 
-**Підстава для технічних рішень:** [Client config](https://raw.githubusercontent.com/anacrolix/torrent/master/config.go). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [Client config](https://raw.githubusercontent.com/anacrolix/torrent/master/config.go). Cross-check signatures and limitations against the pinned version; reading the API is not a passed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of each session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** under the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are performed; absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and verification evidence.
+- Record a short result: what was changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

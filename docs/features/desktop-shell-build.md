@@ -1,82 +1,82 @@
-# Desktop-оболонка, збірка `.app` і перший зв’язок React → Go
+# Desktop shell, `.app` build and the first React → Go connection
 
-**Статус:** `implemented` (прототип задачі 003; продуктовий UI замінить його в 034/035/040)  
-**Вимоги:** REL-01, REL-02, STACK-05, UI-04 (частково), AI-07, QA-01, QA-02, QA-05 (частково)  
-**Пов’язані задачі:** [003](../../tasks/003-wails-macos-build-spike.md); наступні — [004](../../tasks/004-reproducible-check-commands.md) (єдина команда перевірок), [034](../../tasks/034-wails-facade-real-bindings.md) (справжній facade), [035](../../tasks/035-react-bridge-state-resync.md) (bridge і стан)  
-**Остання перевірена версія:** коміт задачі 003
+**Status:** `implemented` (prototype from task 003; the product UI will replace it in 034/035/040)  
+**Requirements:** REL-01, REL-02, STACK-05, UI-04 (partially), AI-07, QA-01, QA-02, QA-05 (partially)  
+**Related tasks:** [003](../../tasks/003-wails-macos-build-spike.md); next — [004](../../tasks/004-reproducible-check-commands.md) (single check command), [034](../../tasks/034-wails-facade-real-bindings.md) (real facade), [035](../../tasks/035-react-bridge-state-resync.md) (bridge and state)  
+**Last verified version:** task 003 commit
 
-## Мета й поведінка
+## Goal and behavior
 
-Власник відкриває `OctopusTorrent.app` з Finder на своєму Mac. У вікні Wails (системний WebView) показано локальний React UI з кнопкою **Check Go connection**. Натискання викликає Go-метод через згенеровані bindings і показує відповідь `Go go1.27.2 · darwin/arm64`. Помилка виклику показується як `role="alert"` з текстом причини. UI вбудований у бінарник і працює без інтернету; готовий пакет не потребує Go, Node.js чи Wails CLI.
+The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window (system WebView) shows a local React UI with a **Check Go connection** button. Clicking it calls a Go method through the generated bindings and shows the response `Go go1.27.2 · darwin/arm64`. A call error is shown as `role="alert"` with the reason text. The UI is embedded in the binary and works without internet; the finished package does not need Go, Node.js or the Wails CLI.
 
-Реалізовано лише цей доказ шляху. Список торрентів, теми, i18n та інше — у наступних задачах (тексти прототипу англійською, локалізацію додає 041).
+Only this proof of the path is implemented. The torrent list, themes, i18n and the rest are in later tasks (prototype texts are in English; localization is added by 041).
 
-## Архітектурний аналіз перед зміною
+## Architecture analysis before the change
 
-- Перший код репозиторію; повторно використовувати нічого. Межі взято з [архітектури §2–§3](../../APPLICATION_ARCHITECTURE.md#2-компоненти-й-напрямки-залежностей): facade у `internal/app`, власний bridge у `frontend/src/bridge`, UI у `frontend/src/features`.
-- Стану й побічних ефектів у Go немає; `GetRuntimeInfo` — чиста функція від вбудованого runtime. Контекст Wails (`OnStartup`) не потрібен, тому не доданий.
-- Точку входу `main` зведено до одного рядка без розгалужень; уся логіка в `run(start, stderr)` із явною залежністю `start` (у продукті — `wails.Run`), що робить її тестопридатною без вікна.
-- React-компонент отримує `loadRuntimeInfo` пропсом; лише `App` під’єднує реальний bridge. Тести працюють із fake-функцією, без Wails.
+- The first code in the repository; nothing to reuse. Boundaries are taken from [architecture §2–§3](../../APPLICATION_ARCHITECTURE.md#2-components-and-dependency-directions): facade in `internal/app`, own bridge in `frontend/src/bridge`, UI in `frontend/src/features`.
+- There is no state or side effects in Go; `GetRuntimeInfo` is a pure function of the embedded runtime. The Wails context (`OnStartup`) is not needed, so it was not added.
+- The `main` entry point is reduced to a single line without branches; all logic is in `run(start, stderr)` with an explicit `start` dependency (`wails.Run` in the product), which makes it testable without a window.
+- The React component receives `loadRuntimeInfo` as a prop; only `App` wires up the real bridge. Tests work with a fake function, without Wails.
 
-## Контракти й дані
+## Contracts and data
 
 | Go (`internal/app`) | JSON / TS (`frontend/src/bridge/runtimeInfo.ts`) |
 |---|---|
 | `func (*App) GetRuntimeInfo() RuntimeInfo` | `getRuntimeInfo(): Promise<RuntimeInfo>` |
 | `RuntimeInfo{GoVersion, OS, Arch string}` | `{ goVersion: string; os: string; arch: string }` |
 
-Bridge повертає власний plain-об’єкт, а не згенерований клас `app.RuntimeInfo`. Відхилений проміс передається далі без змін; компонент перетворює `Error` на його `message`, інше значення — на `String(value)`.
+The bridge returns its own plain object, not the generated `app.RuntimeInfo` class. A rejected promise is passed on unchanged; the component turns an `Error` into its `message`, any other value into `String(value)`.
 
-## Сценарії й TDD
+## Scenarios and TDD
 
-| Сценарій | Тест | RED (до реалізації) |
+| Scenario | Test | RED (before implementation) |
 |---|---|---|
-| Facade повертає значення вбудованого runtime; JSON-ключі контракту | `internal/app/app_test.go` | `undefined: New`, `undefined: RuntimeInfo` |
-| `run` передає `wails.Run` назву, вбудований `frontend/dist/index.html`, рівно один bind `*app.App`; помилка старту → stderr і код 1 | `main_test.go` | `undefined: run` |
-| Bridge: успіх → plain DTO; помилка → reject | `src/bridge/runtimeInfo.test.ts` | `Failed to resolve import "./runtimeInfo"` |
-| UI: початковий стан, «Checking…», успіх, помилки `Error`/не-`Error`, клавіатура (Tab + Enter) і фокус | `src/features/runtime-check/RuntimeCheck.test.tsx` | `Failed to resolve import "./RuntimeCheck"` |
-| `App` під’єднує bridge; заголовок | `src/App.test.tsx` | `Failed to resolve import "./App"` |
-| `main.tsx` монтує застосунок у `#root`; без `#root` — зрозуміла помилка | `src/main.test.tsx` | `Failed to resolve import "./main"` |
-| Реальна `.app`: клік → відповідь Go; запуск із Finder; повторний запуск; офлайн | ручна + System Events | див. [звіт 003](../verification/003-wails-macos-build-spike.md) |
+| Facade returns embedded runtime values; contract JSON keys | `internal/app/app_test.go` | `undefined: New`, `undefined: RuntimeInfo` |
+| `run` passes `wails.Run` the name, the embedded `frontend/dist/index.html`, exactly one bind `*app.App`; startup error → stderr and code 1 | `main_test.go` | `undefined: run` |
+| Bridge: success → plain DTO; error → reject | `src/bridge/runtimeInfo.test.ts` | `Failed to resolve import "./runtimeInfo"` |
+| UI: initial state, "Checking…", success, `Error`/non-`Error` errors, keyboard (Tab + Enter) and focus | `src/features/runtime-check/RuntimeCheck.test.tsx` | `Failed to resolve import "./RuntimeCheck"` |
+| `App` wires up the bridge; heading | `src/App.test.tsx` | `Failed to resolve import "./App"` |
+| `main.tsx` mounts the app into `#root`; without `#root` — a clear error | `src/main.test.tsx` | `Failed to resolve import "./main"` |
+| Real `.app`: click → Go response; launch from Finder; repeated launch; offline | manual + System Events | see [report 003](../verification/003-wails-macos-build-spike.md) |
 
-## Реалізація й повторне використання
+## Implementation and reuse
 
 ```text
 main.go                         embed frontend/dist; run(start, stderr); main()
 internal/app/app.go             App facade, RuntimeInfo DTO
-frontend/src/main.tsx           монтування в #root
-frontend/src/App.tsx            композиція: RuntimeCheck + реальний bridge
-frontend/src/bridge/runtimeInfo.ts       єдиний виклик згенерованого GetRuntimeInfo
-frontend/src/features/runtime-check/     UI перевірки зв’язку
-frontend/wailsjs/               згенеровано `go tool wails generate module` — не редагувати
-build/darwin/Info*.plist        bundle ID, мінімальна macOS (ADR macos-target)
+frontend/src/main.tsx           mounting into #root
+frontend/src/App.tsx            composition: RuntimeCheck + real bridge
+frontend/src/bridge/runtimeInfo.ts       the single call of the generated GetRuntimeInfo
+frontend/src/features/runtime-check/     connection check UI
+frontend/wailsjs/               generated by `go tool wails generate module` — do not edit
+build/darwin/Info*.plist        bundle ID, minimum macOS (ADR macos-target)
 wails.json                      npm ci, npm run build
 ```
 
-## Перевірки та 100% покриття
+## Checks and 100% coverage
 
-Команди — у [README](../../README.md#команди-збірки-й-перевірок); фактичні результати — у [звіті 003](../verification/003-wails-macos-build-spike.md).
+Commands are in the [README](../../README.md#build-and-check-commands); actual results are in [report 003](../verification/003-wails-macos-build-spike.md).
 
-- **Go:** юніт-профіль (`-test.gocoverdir`) + профіль інструментованого реального запуску `.app` (`GOFLAGS=-cover`), злиті `go tool covdata textfmt`. Інвентар: `main.go`, `internal/app/app.go`. Блоків із нульовим лічильником — 0; `covdata percent`: 100,0% для обох пакетів. Одних юніт-тестів недостатньо: вони дають 83,3% для `main` (непокритий рядок `main()`), тому інструментований запуск є обов’язковим.
-- **TypeScript:** Vitest + v8, `include: src/**/*.{ts,tsx}`, поріг 100 для lines/statements/functions/branches **на кожен файл**. 4 файли, 19/19 операторів, 10/10 гілок, 6/6 функцій. Негативна перевірка: тимчасовий неімпортований файл без тестів валить поріг.
-- Не обліковуються як власний код: `frontend/wailsjs/` (відтворюваний згенерований), `src/**/*.test.*`, `src/test/setup.ts` (тестова інфраструктура).
-- Аналізатори: `gofmt -l` порожньо, `go vet` чисто, `tsc --noEmit` (strict, `noUncheckedIndexedAccess`, `noUnused*`) чисто. ESLint і централізована команда — 004.
+- **Go:** unit profile (`-test.gocoverdir`) + profile of an instrumented real `.app` run (`GOFLAGS=-cover`), merged with `go tool covdata textfmt`. Inventory: `main.go`, `internal/app/app.go`. Blocks with a zero counter: 0; `covdata percent`: 100.0% for both packages. Unit tests alone are not enough: they give 83.3% for `main` (the `main()` line is uncovered), so the instrumented run is mandatory.
+- **TypeScript:** Vitest + v8, `include: src/**/*.{ts,tsx}`, threshold 100 for lines/statements/functions/branches **per file**. 4 files, 19/19 statements, 10/10 branches, 6/6 functions. Negative check: a temporary unimported file without tests fails the threshold.
+- Not counted as own code: `frontend/wailsjs/` (reproducible generated), `src/**/*.test.*`, `src/test/setup.ts` (test infrastructure).
+- Analyzers: `gofmt -l` empty, `go vet` clean, `tsc --noEmit` (strict, `noUncheckedIndexedAccess`, `noUnused*`) clean. ESLint and the centralized command — 004.
 
-## Рефакторинг і перевірка боргу
+## Refactoring and debt check
 
-- Логіку шаблону Wails (`Greet`, `OnStartup` без потреби, шрифти, лого, CSS) не перенесено.
-- `main` спрощено до виклику без розгалужень, щоб інструментований запуск покривав його повністю.
-- Знайдено й виправлено: абсолютні шляхи розробника в бінарнику (`-trimpath`); кеш Wails `frontend/package.json.md5` додано в `.gitignore`.
-- Тимчасових обходів і TODO немає. Прототипний UI — погоджена проміжна фіча до 034/035/040, а не борг.
+- The Wails template logic (`Greet`, an unneeded `OnStartup`, fonts, logo, CSS) was not carried over.
+- `main` was simplified to a call without branches so that the instrumented run covers it fully.
+- Found and fixed: absolute developer paths in the binary (`-trimpath`); the Wails cache `frontend/package.json.md5` added to `.gitignore`.
+- No temporary workarounds or TODOs. The prototype UI is an agreed interim feature until 034/035/040, not debt.
 
-## Використання й відновлення
+## Usage and recovery
 
-1. Встановити Go (`brew install go`), мати Node.js ≥ 22.12 і Xcode Command Line Tools.
+1. Install Go (`brew install go`), have Node.js ≥ 22.12 and Xcode Command Line Tools.
 2. `go tool wails build -clean -trimpath` → `build/bin/OctopusTorrent.app`.
-3. Відкрити з Finder. Якщо macOS старіша за 27.0, запуск заборонено (див. ADR).
+3. Open from Finder. If macOS is older than 27.0, launch is refused (see ADR).
 
-## Історія змін і докази
+## Change history and evidence
 
-| Дата | Зміна | Докази |
+| Date | Change | Evidence |
 |---|---|---|
-| 2026-10-14 | Перша `.app`, facade `GetRuntimeInfo`, bridge, UI перевірки, 100% покриття Go/TS | [звіт 003](../verification/003-wails-macos-build-spike.md), ADR [toolchain-versions](../decisions/toolchain-versions.md), [macos-target](../decisions/macos-target.md) |
+| 2026-10-14 | First `.app`, `GetRuntimeInfo` facade, bridge, check UI, 100% Go/TS coverage | [report 003](../verification/003-wails-macos-build-spike.md), ADR [toolchain-versions](../decisions/toolchain-versions.md), [macos-target](../decisions/macos-target.md) |

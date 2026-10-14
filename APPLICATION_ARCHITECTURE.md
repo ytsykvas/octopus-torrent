@@ -1,26 +1,26 @@
-# OctopusTorrent — архітектура React/TypeScript + Wails + Go
+# OctopusTorrent — React/TypeScript + Wails + Go architecture
 
-**Статус:** обраний стек, 14 жовтня 2026 року. Ціль — особистий desktop-застосунок для macOS, спочатку власний Apple Silicon Mac. Критерії поведінки містить `PROJECT_REQUIREMENTS.md`; відповідність API рушія — `ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md`.
+**Status:** chosen stack, 14 October 2026. The target is a personal desktop application for macOS, initially the owner's own Apple Silicon Mac. Behavior criteria are in `PROJECT_REQUIREMENTS.md`; mapping to the engine API is in `ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md`.
 
-## 1. Стек і межа системи
+## 1. Stack and system boundary
 
-| Частина | Рішення |
+| Part | Decision |
 |---|---|
-| UI | React + TypeScript у strict mode; Vite для frontend-збірки. |
-| Desktop оболонка | Стабільна гілка Wails v2; точний patch-реліз фіксується після пробної збірки. |
-| Логіка й доступ до файлів | Go, стандартні контексти скасування та явно керовані goroutines. |
-| Рушій | github.com/anacrolix/torrent, ізольований адаптером власного інтерфейсу. |
-| Локальна бібліотека | SQLite через Go repository; драйвер перевіряється й фіксується у прототипі. |
+| UI | React + TypeScript in strict mode; Vite for the frontend build. |
+| Desktop shell | Stable Wails v2 branch; the exact patch release is pinned after a trial build. |
+| Logic and file access | Go, standard cancellation contexts and explicitly managed goroutines. |
+| Engine | github.com/anacrolix/torrent, isolated behind an adapter of our own interface. |
+| Local library | SQLite through a Go repository; the driver is verified and pinned in the prototype. |
 
-Готова `.app` містить локальні frontend assets і Go-застосунок. UI працює в системному WebView; виклики Go й події проходять через Wails. Wails підтримує генерацію bindings і TS-моделей. [Wails: будова застосунку](https://wails.io/docs/howdoesitwork/).
+The finished `.app` contains local frontend assets and the Go application. The UI runs in the system WebView; Go calls and events go through Wails. Wails supports generating bindings and TS models. [Wails: how the application works](https://wails.io/docs/howdoesitwork/).
 
-Власного віддаленого сервера, акаунтів, оплат, ліцензійного API, хмарної синхронізації та продуктової аналітики немає. Інтернет потрібен для BitTorrent. Go/Node.js/Wails CLI — інструменти розробки; готовий застосунок перевіряється як самодостатній пакет на цільовому Mac. Native залежності Wails і обраного storage/transport, включно з вимогами CGO, враховуються у збірці.
+There is no own remote server, accounts, payments, licensing API, cloud sync or product analytics. Internet is needed for BitTorrent. Go/Node.js/Wails CLI are development tools; the finished application is verified as a self-contained package on the target Mac. Native dependencies of Wails and the chosen storage/transport, including CGO requirements, are accounted for in the build.
 
-## 2. Компоненти й напрямки залежностей
+## 2. Components and dependency directions
 
 ```mermaid
 flowchart LR
-  UI[React і TypeScript] --> API[Wails AppAPI: команди та DTO]
+  UI[React and TypeScript] --> API[Wails AppAPI: commands and DTO]
   API --> Service[Go TorrentService / ImportCoordinator]
   Service --> Engine[TorrentEngine adapter]
   Engine --> Torrent[anacrolix/torrent]
@@ -31,141 +31,141 @@ flowchart LR
   Snapshots --> UI
 ```
 
-| Компонент | Відповідальність |
+| Component | Responsibility |
 |---|---|
-| React Views | Картки, інспектор, дерева, модалки, груповий вибір, алерти та налаштування. |
-| Frontend bridge adapter | Єдина точка виклику generated bindings і підписок на події; тестовий адаптер для browser-тестів. |
-| AppAPI | Вузький Wails facade: прийняти запит, перевірити DTO, делегувати й повернути результат/operation ID. |
-| TorrentService | Політика паузи/віддачі/wanted, порядок команд, відповідність записів UUID об’єктам рушія. |
-| TorrentEngine | Власний контракт над anacrolix/torrent, перетворення фактичного стану й помилок на DTO. |
-| ImportCoordinator | Валідація, дедуплікація, pending previews, підтвердження та скасування всіх способів імпорту. |
-| LibraryRepository | SQLite-схеми, міграції, транзакції, торренти, файли, налаштування, теги, колекції й правила. |
-| FileAccessService | Системний вибір, створення папок, нормалізація, колізії, перевірка доступу й явне видалення. |
-| AutomationService | Watch folder і правила, що використовують той самий ImportCoordinator. |
-| SnapshotPublisher | Узгоджені знімки з ревізіями, агрегування частих змін і відновлення після пропуску події. |
-| LocalDiagnostics | Коди, ID операцій і причини проблем; автоматичного надсилання немає. |
+| React Views | Cards, inspector, trees, modals, bulk selection, alerts and settings. |
+| Frontend bridge adapter | The single call point for generated bindings and event subscriptions; a test adapter for browser tests. |
+| AppAPI | A narrow Wails facade: accept a request, validate the DTO, delegate and return a result/operation ID. |
+| TorrentService | Pause/upload/wanted policy, command order, mapping of record UUIDs to engine objects. |
+| TorrentEngine | Our own contract over anacrolix/torrent, converting actual state and errors into DTOs. |
+| ImportCoordinator | Validation, deduplication, pending previews, confirmation and cancellation for all import methods. |
+| LibraryRepository | SQLite schemas, migrations, transactions, torrents, files, settings, tags, collections and rules. |
+| FileAccessService | System picker, folder creation, normalization, collisions, access checks and explicit deletion. |
+| AutomationService | Watch folder and rules that use the same ImportCoordinator. |
+| SnapshotPublisher | Consistent snapshots with revisions, aggregation of frequent changes and recovery after a missed event. |
+| LocalDiagnostics | Codes, operation IDs and causes of problems; there is no automatic sending. |
 
-Один довгоживучий torrent.Client обслуговує бібліотеку. Об’єкти рушія використовуються лише в Go adapter. Frontend не має filesystem/engine API і не визначає успіх запису даних самостійно.
+One long-lived torrent.Client serves the library. Engine objects are used only in the Go adapter. The frontend has no filesystem/engine API and does not decide on its own whether a data write succeeded.
 
-## 3. Структура репозиторію для AI-first
+## 3. Repository structure for AI-first
 
-Це погоджена карта майбутнього кодового репозиторію, а не опис уже створених файлів:
+This is the agreed map of the future code repository, not a description of files that already exist:
 
 ```text
-main.go / wails.json             запуск і конфігурація оболонки
-go.mod / go.sum                 Go toolchain і залежності
-internal/app/                   facade, lifecycle, координація команд
-internal/torrentengine/         інтерфейс і anacrolix adapter
-internal/library/               SQLite repositories і migrations
-internal/files/                 доступ, шляхи, папки, видалення
-internal/automation/            правила й watch folder
-internal/platform/              Wails runtime, Finder, URL, системні діалоги
-internal/diagnostics/            локальні помилки й журнали
-frontend/src/features/          UI за функціями
-frontend/src/bridge/            власний адаптер generated bindings
-frontend/src/state/             snapshots і презентаційний стан
-frontend/src/i18n/              словники шести мов
-frontend/src/styles/            кольори, відступи, теми й матеріали
-frontend/wailsjs/               bindings, згенеровані Wails v2
+main.go / wails.json             shell startup and configuration
+go.mod / go.sum                 Go toolchain and dependencies
+internal/app/                   facade, lifecycle, command coordination
+internal/torrentengine/         interface and anacrolix adapter
+internal/library/               SQLite repositories and migrations
+internal/files/                 access, paths, folders, deletion
+internal/automation/            rules and watch folder
+internal/platform/              Wails runtime, Finder, URL, system dialogs
+internal/diagnostics/            local errors and logs
+frontend/src/features/          UI by feature
+frontend/src/bridge/            our own adapter for generated bindings
+frontend/src/state/             snapshots and presentation state
+frontend/src/i18n/              dictionaries for six languages
+frontend/src/styles/            colors, spacing, themes and materials
+frontend/wailsjs/               bindings generated by Wails v2
 frontend/package.json / lockfile
-scripts/                        відтворювані build/check-команди
-docs/README.md                  індекс актуальної документації
-docs/engineering/               TDD, 100% покриття, правила роботи
-docs/features/                  поведінка й реалізація кожної фічі
-docs/decisions/                 важливі вибори та їхні причини
-docs/verification/              докази тестів, покриття й аналізу
-README.md / AGENTS.md            карта проєкту й інструкції агенту
+scripts/                        reproducible build/check commands
+docs/README.md                  index of current documentation
+docs/engineering/               TDD, 100% coverage, working rules
+docs/features/                  behavior and implementation of each feature
+docs/decisions/                 important choices and their reasons
+docs/verification/              evidence of tests, coverage and analysis
+README.md / AGENTS.md            project map and agent instructions
 ```
 
-Модулі й методи мають предметні англійські назви. Власний bridge adapter відділяє React від конкретних generated шляхів; генерований код не редагується вручну. Сервіси отримують залежності явно; їхні unit-тести не запускають Wails-вікно. Новий АІ-агент має знайти сценарій від UI до Go/рушія лише за репозиторієм. Обов’язкові критерії AI-01–AI-10 містить розділ 5.2 вимог.
+Modules and methods have domain-specific English names. Our own bridge adapter separates React from specific generated paths; generated code is not edited by hand. Services receive dependencies explicitly; their unit tests do not start a Wails window. A new AI agent must be able to trace a scenario from the UI to Go/the engine using only the repository. The mandatory criteria AI-01–AI-10 are in section 5.2 of the requirements.
 
-## 4. Контракт Go–TypeScript
+## 4. Go–TypeScript contract
 
-Методи facade групуються за задачами: отримати бібліотеку/налаштування, підготувати імпорт, підтвердити/скасувати його, запустити/зупинити записи, змінити wanted файла/папки, виконати видалення, змінити налаштування, колекції та правила. Це власний API продукту; його назви не зобов’язані повторювати API бібліотеки.
+Facade methods are grouped by task: get the library/settings, prepare an import, confirm/cancel it, start/stop records, change wanted for a file/folder, perform deletion, change settings, collections and rules. This is the product's own API; its names do not have to mirror the library API.
 
-Запит містить UUID або pendingImportID, конкретні параметри й operationID для нетривіалих мутацій. Відповідь відрізняє прийняту операцію від завершеної. `AppError` має стабільний code, operationID, torrentID за потреби та параметри для локалізації. Технічний error не показується як перекладений користувацький текст автоматично.
+A request contains a UUID or pendingImportID, specific parameters and an operationID for non-trivial mutations. The response distinguishes an accepted operation from a completed one. `AppError` has a stable code, operationID, torrentID when needed, and parameters for localization. A technical error is not automatically shown as translated user text.
 
-`TorrentSnapshot` містить UUID, revision, фактичний статус, ручну паузу, wanted-обсяг, завершені байти, швидкості в bytes/sec, кількість peers, ETA за наявності, файли та помилки. Через bridge передаються власні структури з JSON-полями й одиницями; не pointers, channels або об’єкти рушія. Інтеграційний тест перевіряє точність великих чисел; значення поза безпечним числовим діапазоном TS передаються узгодженим десятковим рядком.
+`TorrentSnapshot` contains UUID, revision, actual status, manual pause, wanted size, completed bytes, speeds in bytes/sec, peer count, ETA when available, files and errors. Our own structures with JSON fields and units cross the bridge; not pointers, channels or engine objects. An integration test verifies precision of large numbers; values outside the safe TS numeric range are passed as an agreed decimal string.
 
-Кожен запуск Go має тимчасовий `runtimeID`; ревізії порівнюються лише всередині нього. Це ідентичність поточного виконання в пам’яті, а не ідентифікатор установки або аналітика. Нове підключення підтверджує свій актуальний повний стан; пізні відповіді попереднього підключення не можуть його замінити. Повний знімок може пропускати номери через об’єднання оновлень; для часткової події перевіряється її базова ревізія. Результат нетривіалої операції доступний повторним запитом, навіть якщо подію завершення втрачено.
+Each Go run has a temporary `runtimeID`; revisions are compared only within it. It is the identity of the current in-memory execution, not an installation identifier or analytics. A new connection confirms its current full state; late responses from a previous connection cannot replace it. A full snapshot may skip numbers because updates are merged; for a partial event its base revision is checked. The result of a non-trivial operation is available on repeated request, even if the completion event was lost.
 
-Frontend спочатку підписується, потім отримує повний snapshot; revision відкидає застарілі події. Після порушення базової ревізії часткових подій, зміни runtime або remount отримується новий повний snapshot. React effect очищає listener; frontend reload не створює ще одного torrent.Client. Wails має emit/listener API; правила ревізій і відновлення є нашою логікою. [Wails Events](https://wails.io/docs/reference/runtime/events/).
+The frontend first subscribes, then fetches the full snapshot; revision discards stale events. After a violated base revision of partial events, a runtime change or a remount, a new full snapshot is fetched. A React effect cleans up the listener; a frontend reload does not create another torrent.Client. Wails has an emit/listener API; the revision and recovery rules are our own logic. [Wails Events](https://wails.io/docs/reference/runtime/events/).
 
-Snapshot publisher агрегує часті зміни. Початкова частота вимірюється на прототипі; важливі стани й помилки не губляться при агрегуванні. Browser `navigator.onLine` не вважається доказом доступності tracker або peers.
+The snapshot publisher aggregates frequent changes. The initial rate is measured in the prototype; important states and errors are not lost during aggregation. Browser `navigator.onLine` is not considered evidence that a tracker or peers are reachable.
 
-## 5. Потоки виконання й політики
+## 5. Execution flows and policies
 
-Wails lifecycle запускає Go-компоненти й задає контекст завершення. Довгі операції мають власний context, cancellation і контроль завершення; goroutines не залишаються після Drop/quit. Команди, що змінюють один торрент, серіалізуються. Паралельний імпорт і snapshot-читання не повинні дублювати записи або створювати data race.
+The Wails lifecycle starts Go components and sets the shutdown context. Long operations have their own context, cancellation and completion control; goroutines do not remain after Drop/quit. Commands that change one torrent are serialized. Parallel import and snapshot reads must not duplicate records or create a data race.
 
-Збережена політика відокремлена від фактичного стану:
+Stored policy is separate from actual state:
 
-- `manualPaused` забороняє payload в обох напрямках;
-- `globalUploadDisabled` забороняє тільки віддачу;
-- file wanted/priority визначає цільове завантаження;
-- помилка доступу або видалення має власний стан і не змінює ручну паузу мовчки.
+- `manualPaused` forbids payload in both directions;
+- `globalUploadDisabled` forbids only upload;
+- file wanted/priority defines the target download;
+- an access or deletion error has its own state and does not silently change the manual pause.
 
-Ефективний дозвіл віддачі обчислюється з усіх цих умов. Вимкнення globalUploadDisabled не запускає manualPaused. Збереження бажаного стану в SQLite й застосування до engine мають видимий результат: якщо engine або запис БД не спрацювали, UI показує незавершеність/помилку. При перезапуску політика застосовується до дозволу payload.
+Effective upload permission is computed from all these conditions. Turning off globalUploadDisabled does not start a manualPaused torrent. Saving the desired state in SQLite and applying it to the engine have a visible result: if the engine or the DB write failed, the UI shows incompleteness/an error. On restart the policy is applied before payload is permitted.
 
-Для завершеного торрента текст «Завершено» й «Роздається» залежить від готовності вибраних даних і політики; `Seeding()` не використовується як єдине джерело статусу. Перевірка, metadata waiting, filesystem error й ручна пауза мають пріоритетні правила відображення.
+For a completed torrent, the text "Completed" and "Seeding" depends on readiness of the selected data and on policy; `Seeding()` is not used as the sole source of status. Checking, metadata waiting, filesystem error and manual pause have priority display rules.
 
-## 6. SQLite та відновлення
+## 6. SQLite and restore
 
-| Сутність | Дані |
+| Entity | Data |
 |---|---|
-| TorrentRecord | UUID, повні необов’язкові v1/v2 infohash, metainfo/magnet, назва, джерело, дата, save path, manualPaused. |
-| FileSelection | UUID, file index і перевірений відносний шлях, wanted, попередній пріоритет. |
-| Tags / Collections | ID, назви, зв’язки й визначення локальних фільтрів. |
-| ImportRules / Preferences | Умови, порядок, local paths, тема, мова, ліміти, глобальна віддача, watch folder і явне auto-add. |
-| Operations | Нетривіальна операція, її стан і результат; потрібна для відновлення перерваного імпорту/видалення. |
+| TorrentRecord | UUID, full optional v1/v2 infohash, metainfo/magnet, name, source, date, save path, manualPaused. |
+| FileSelection | UUID, file index and validated relative path, wanted, previous priority. |
+| Tags / Collections | IDs, names, links and definitions of local filters. |
+| ImportRules / Preferences | Conditions, order, local paths, theme, language, limits, global upload, watch folder and explicit auto-add. |
+| Operations | A non-trivial operation, its state and result; needed to recover an interrupted import/deletion. |
 
-Застосунок використовує явні SQL-міграції й транзакції через repository. Драйвер обирається за збіркою на Mac, конкурентністю та вимогами CGO і фіксується в Go module. Payload лежить у вибраній папці; бібліотека й внутрішні дані engine — у data directory застосунку.
+The application uses explicit SQL migrations and transactions through the repository. The driver is chosen based on the build on the Mac, concurrency and CGO requirements and is pinned in the Go module. Payload lives in the selected folder; the library and internal engine data live in the application's data directory.
 
-Piece completion належить storage backend рушія й не замінює власну SQLite-бібліотеку. Його базу не редагує React або repository продукту. Наші manualPaused/wanted зберігаються й відновлюються явно через SQLite repository. Чужі або застарілі completion-ознаки не замінюють перевірку фактичних файлів.
+Piece completion belongs to the engine's storage backend and does not replace our own SQLite library. Its database is not edited by React or the product repository. Our manualPaused/wanted are stored and restored explicitly through the SQLite repository. Foreign or stale completion markers do not replace checking the actual files.
 
-При запуску: відкрити й мігрувати БД → завантажити записи → перевірити папки → додати їх із забороненим payload → відновити wanted і глобальну політику → дозволити передавання лише потрібним записам. Відсутня папка дає помилку й вибір нового розташування, а не новий download у випадкову папку. Аварія перевіряється окремо від звичайного quit.
+On startup: open and migrate the DB → load records → check folders → add them with payload forbidden → restore wanted and global policy → allow transfer only for the records that need it. A missing folder produces an error and a choice of a new location, not a new download into a random folder. A crash is tested separately from a normal quit.
 
-## 7. Імпорт, metadata і вибір файлів
+## 7. Import, metadata and file selection
 
-Кнопка, drag-and-drop, Finder, magnet і watch folder входять через ImportCoordinator. Перед створенням library record перевіряються кількість/формат, межі метаданих, шляхи, symlink, колізії й повні v1/v2 ідентичності. Імпорт підтверджується транзакційно; повторне джерело відкриває вже наявний запис.
+The button, drag-and-drop, Finder, magnet and watch folder all enter through ImportCoordinator. Before a library record is created, count/format, metadata limits, paths, symlinks, collisions and full v1/v2 identities are checked. Import is confirmed transactionally; a repeated source opens the existing record.
 
-`.torrent` можна розібрати до активного engine-запису. Для magnet потрібен pending metadata-only сценарій без payload і нескінченної goroutine очікування. Тимчасова папка належить конкретному pendingImportID. На підтвердженні створюється запис із остаточним storage й папкою; не припускаємо, що зміну storage можна виконати звичайним MergeSpec. Скасування очищає лише відомі тимчасові артефакти й закриває pending engine object. Цей процес перевіряється до реалізації всіх екранів.
+A `.torrent` can be parsed before an active engine record exists. A magnet needs a pending metadata-only scenario without payload and without an endless waiting goroutine. The temporary folder belongs to a specific pendingImportID. On confirmation a record is created with the final storage and folder; we do not assume that storage can be changed with an ordinary MergeSpec. Cancellation cleans up only known temporary artifacts and closes the pending engine object. This process is verified before all screens are implemented.
 
-UI будує дерево з перевірених шляхів. До додавання файли/папки вибираються чекбоксами; після додавання play/pause змінює wanted. Pause папки виключає всі нащадки, play за часткового стану вибирає все; згортання не змінює політику. Рядок дитини зсунений праворуч разом із кнопкою й прогресом.
+The UI builds the tree from validated paths. Before adding, files/folders are selected with checkboxes; after adding, play/pause changes wanted. Pausing a folder excludes all descendants, play in a partial state selects everything; collapsing does not change policy. A child row is indented to the right together with its button and progress.
 
-Пропуск файла не видаляє байти і не є незалежною зупинкою його віддачі. Shared pieces враховуються при тестуванні. Зміна пріоритету не змінює ручну паузу торрента.
+Skipping a file does not delete bytes and is not an independent stop of its upload. Shared pieces are taken into account in testing. Changing priority does not change the torrent's manual pause.
 
-## 8. Файли й безпечне видалення
+## 8. Files and safe deletion
 
-Системні file/directory dialogs викликає platform adapter; Go повторно перевіряє отриманий шлях. Створення папки — явна дія з назвою й батьківським каталогом. Зміна типової папки впливає тільки на майбутні імпорти. Для окремого торрента storage створюється з його save path; один глобальний DataDir не підмінює індивідуальні папки.
+System file/directory dialogs are invoked by the platform adapter; Go re-validates the returned path. Creating a folder is an explicit action with a name and a parent directory. Changing the default folder affects only future imports. For each torrent, storage is created from its save path; a single global DataDir does not replace individual folders.
 
-Видалення запису спершу зберігає намір операції, припиняє payload і вилучає torrent із client. Далі режими розділяються: `record_only` фіналізує видалення library record; `with_files` лишає його зупиненим до завершення перевірених файлових дій. Спільна підготовка не викликає передчасну фіналізацію першого режиму. Видалення даних додатково потребує переліку й підтвердження. Go перевіряє кожний фізичний шлях, спільні файли, symlink і сторонній вміст. `Drop()` не використовується як команда видалення файлів.
+Deleting a record first saves the operation intent, stops payload and removes the torrent from the client. Then the modes diverge: `record_only` finalizes deletion of the library record; `with_files` keeps it stopped until the validated file actions complete. The shared preparation does not trigger premature finalization of the first mode. Deleting data additionally requires a listing and confirmation. Go validates every physical path, shared files, symlinks and foreign content. `Drop()` is not used as a file deletion command.
 
-Файлова система й SQLite не утворюють спільної транзакції. Нетривіальне видалення записує intent/стан операції; після аварії відновлюється або показується частковий результат. Якщо payload не вдалося перемістити в Смітник, запис лишається зупиненим із зрозумілою помилкою. Аварія після фізичного переміщення, але до запису результату, створює явно невизначений результат до узгодження журналу й файлів; сама відсутність файла не доводить успіх. Конкретний механізм macOS Trash треба перевірити; видалення назавжди не видається за переміщення в Смітник. Для bulk delete результат відстежується по кожному UUID.
+The filesystem and SQLite do not form a shared transaction. A non-trivial deletion records the intent/state of the operation; after a crash it is recovered or a partial result is shown. If payload could not be moved to the Trash, the record stays stopped with a clear error. A crash after the physical move but before the result is recorded creates an explicitly undetermined result until the log and the files are reconciled; the absence of a file alone does not prove success. The specific macOS Trash mechanism must be verified; permanent deletion is never presented as moving to the Trash. For bulk delete the result is tracked per UUID.
 
-## 9. macOS та frontend
+## 9. macOS and frontend
 
-Wails platform adapter обробляє відкриття файла/URL. Якщо UI ще не готовий, джерело потрапляє в pending queue; після готовності відкривається звичайний preview, а не автоматичне payload-завантаження. Пакет `.app` реєструє `.torrent` і magnet, default association визначає користувач. Перевіряються холодний запуск, уже відкрита `.app` і дублікати. [Wails Options](https://wails.io/docs/reference/options/), [Wails Dialog](https://wails.io/docs/reference/runtime/dialog/).
+The Wails platform adapter handles opening a file/URL. If the UI is not ready yet, the source goes into a pending queue; once ready, the normal preview opens, not an automatic payload download. The `.app` bundle registers `.torrent` and magnet; the default association is decided by the user. Cold start, an already open `.app` and duplicates are verified. [Wails Options](https://wails.io/docs/reference/options/), [Wails Dialog](https://wails.io/docs/reference/runtime/dialog/).
 
-HTML-макет є візуальним і поведінковим орієнтиром, а не production-сервісом. React переносить його розміщення й стилі в компоненти. Семантичний HTML, фокус, keyboard, VoiceOver, світла/темна тема та контраст тестуються у macOS WebView. Скляні панелі реалізуються React/CSS із непрозорим fallback.
+The HTML mockup is a visual and behavioral reference, not a production service. React transfers its layout and styles into components. Semantic HTML, focus, keyboard, VoiceOver, light/dark theme and contrast are tested in the macOS WebView. Glass panels are implemented in React/CSS with an opaque fallback.
 
-Словники шести мов живуть у frontend. Go повертає стабільні коди помилок із параметрами. Реальні назви й шляхи не перекладаються; full path доступний у tooltip, accessibility label і копіюванні.
+Dictionaries for the six languages live in the frontend. Go returns stable error codes with parameters. Real names and paths are not translated; the full path is available in a tooltip, the accessibility label and on copy.
 
-## 10. Перевірки й етапи
+## 10. Checks and stages
 
-1. Зафіксувати toolchain і зробити Wails `.app` на власному Mac; встановити однозначні build/check-команди.
-2. Прототип anacrolix/torrent: `.torrent`, magnet, payload, пауза, file priorities, глобальна віддача, різні папки, перезапуск і Drop без видалення даних.
-3. Repository/міграції, AppAPI, snapshots і React UI з тестовим engine/bridge.
-4. Реальна інтеграція, алерти, файлові операції, великі дерева й групові дії.
-5. Теги, колекції, правила й watch folder.
+1. Pin the toolchain and build a Wails `.app` on the owner's Mac; establish unambiguous build/check commands.
+2. anacrolix/torrent prototype: `.torrent`, magnet, payload, pause, file priorities, global upload, different folders, restart and Drop without deleting data.
+3. Repository/migrations, AppAPI, snapshots and React UI with a test engine/bridge.
+4. Real integration, alerts, file operations, large trees and bulk actions.
+5. Tags, collections, rules and watch folder.
 
-Go-тести перевіряють сервісні інваріанти, SQLite і контрольований swarm. React component/browser-тести перевіряють UI через fake bridge; WebKit-тест допомагає виявити відмінності від Chromium. Окремий smoke test запускає фактичну `.app` із Finder/діалогами/quit. Race detector, скасування subscriptions і завершення goroutines є перевірками реальних конкурентних ризиків. Невиконаний тест не позначається успішним.
+Go tests verify service invariants, SQLite and a controlled swarm. React component/browser tests verify the UI through a fake bridge; a WebKit test helps detect differences from Chromium. A separate smoke test launches the actual `.app` with Finder/dialogs/quit. The race detector, subscription cancellation and goroutine shutdown are checks of real concurrency risks. A test that was not run is not marked as passed.
 
-## 11. Обов’язкові інваріанти розробки
+## 11. Mandatory development invariants
 
-Перед кожною сесією агент перевіряє цю архітектуру проти фактичного коду й планує зміну з явними власниками стану, залежностями, побічними ефектами, помилками та повторним використанням. Висновок і план записуються до редагування; зміна контракту актуалізує цей документ/ADR одразу.
+Before each session the agent checks this architecture against the actual code and plans the change with explicit state owners, dependencies, side effects, errors and reuse. The conclusion and plan are recorded before editing; a contract change updates this document/ADR immediately.
 
-Усі модулі та прототипи розробляються через RED → GREEN → REFACTOR. Власний виконуваний код, включно з точками запуску, інструментами й системними адаптерами, досягає 100% визначених метрик; окремі приклади або тільки нові рядки не замінюють повний інвентар. Тестопридатні межі створюються явним передаванням залежностей; складну логіку не виключають із вимірювання.
+All modules and prototypes are developed through RED → GREEN → REFACTOR. Our own executable code, including entry points, tools and system adapters, reaches 100% of the defined metrics; individual examples or only new lines do not replace the full inventory. Testable boundaries are created by passing dependencies explicitly; complex logic is not excluded from measurement.
 
-Спільні UI-компоненти/hooks, політики Go, репозиторії та адаптери перевикористовуються за відповідальністю. Бізнес-правило не реалізується окремо в React і Go. Рефакторинг зачепленого сценарію виконується на зелених тестах у поточній задачі; незавершений обхід або технічний борг блокує її завершення.
+Shared UI components/hooks, Go policies, repositories and adapters are reused according to responsibility. A business rule is not implemented separately in React and Go. Refactoring of the affected scenario is done on green tests within the current task; an unfinished workaround or technical debt blocks its completion.
 
-Поведінка й фактичні модулі фічі підтримуються в `docs/features/`, рішення — у `docs/decisions/`, перевірки — у `docs/verification/`. Вимоги [QA-01–QA-08](PROJECT_REQUIREMENTS.md) та [TDD_AND_QUALITY.md](docs/engineering/TDD_AND_QUALITY.md) визначають обов’язкові умови; [AGENTS.md](AGENTS.md) застосовує їх у кожній сесії.
+Feature behavior and actual modules are maintained in `docs/features/`, decisions in `docs/decisions/`, checks in `docs/verification/`. Requirements [QA-01–QA-08](PROJECT_REQUIREMENTS.md) and [TDD_AND_QUALITY.md](docs/engineering/TDD_AND_QUALITY.md) define the mandatory conditions; [AGENTS.md](AGENTS.md) applies them in every session.

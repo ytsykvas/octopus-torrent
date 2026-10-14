@@ -1,70 +1,70 @@
-# 050 — Побудувати налаштування з правдивим результатом збереження
+# 050 — Build settings with a truthful save result
 
-**Статус:** `planned`  
-**Фаза:** P4 — React UI й native інтеграція  
-**Пріоритет:** обов’язкова функція або перевірка погодженого обсягу  
-**Розмір:** Одна завершена поведінка або модуль; за потреби виділити незалежно перевірювану частину в окрему задачу  
-**Жорсткі залежності:** [037](037-native-dialogs-clipboard.md), [041](041-six-languages-formatters.md), [042](042-appearance-theme-opaque.md), [026](026-rate-limits-seed-network.md), [015](015-transactional-repositories.md)  
-**Вимоги:** `SET-01`, `SET-04`, `SET-05`, `SET-06`, `SET-07`, `TR-04`
+**Status:** `planned`  
+**Phase:** P4 — React UI and native integration  
+**Priority:** mandatory feature or check of the agreed scope  
+**Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
+**Hard dependencies:** [037](037-native-dialogs-clipboard.md), [041](041-six-languages-formatters.md), [042](042-appearance-theme-opaque.md), [026](026-rate-limits-seed-network.md), [015](015-transactional-repositories.md)  
+**Requirements:** `SET-01`, `SET-04`, `SET-05`, `SET-06`, `SET-07`, `TR-04`
 
-## Результат
+## Outcome
 
-Побудувати налаштування з явним збереженням і правдивим результатом.
+Build settings with explicit saving and a truthful result.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `SET-01`, `SET-04`, `SET-05`, `SET-06`, `SET-07`, `TR-04`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): conditions for starting and completing a task, statuses and verification evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `SET-01`, `SET-04`, `SET-05`, `SET-06`, `SET-07`, `TR-04`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- Outcomes and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Відокремити чернетку від збережених налаштувань; вибір/створення папки викликати через Go.
-2. Типова папка впливає тільки на майбутні імпорти.
-3. Валідувати режим без обмеження, додатні ліміти й узгоджені одиниці.
-4. Тему/мову застосувати через 041/042, інструкції типового застосунку — через 036.
-5. Збій збереження лишає підтверджене значення й показує помилку.
-6. Глобальну віддачу інтегрувати в 053/054; account/plan/sync не додаються.
+1. Separate the draft from the saved settings; invoke folder selection/creation through Go.
+2. The default folder affects only future imports.
+3. Validate the unlimited mode, positive limits and consistent units.
+4. Apply theme/language through 041/042, default-application instructions through 036.
+5. A save failure keeps the confirmed value and shows an error.
+6. Integrate global upload into 053/054; account/plan/sync are not added.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `frontend/src/features/settings`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/050-settings-ui-save-feedback.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `frontend/src/features/settings`. This is a map of future code; after the initial setup, check the actual paths and update the architecture if needed.
+**Evidence of completion:** the record `docs/verification/050-settings-ui-save-feedback.md` or an exact link to a test or build report in the context handoff. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Налаштування збережені після restart.
-- [ ] Зміна типової папки не переміщує наявних файлів.
-- [ ] Скасування/помилка створення не змінює попередній вибір.
-- [ ] Потрібні перевірки виконані на належній межі; невиконаний або невдалий тест не названо успішним.
+- [ ] Settings are preserved after a restart.
+- [ ] Changing the default folder does not move existing files.
+- [ ] Cancellation/creation error does not change the previous choice.
+- [ ] The required checks are performed at the proper boundary; a test that was not run or failed is not called passed.
 
-## Перевірки
+## Checks
 
-- Перевірити некоректні ліміти, overflow і збій save.
-- Перевірити системний cancel, шість мов і клавіатуру.
+- Check invalid limits, overflow and a save failure.
+- Check system cancel, six languages and the keyboard.
 
-**Як запускати:** використати фактичні команди з [004](004-reproducible-check-commands.md) та кореневого README. Записати команду, робочий каталог, конфігурацію, тестові дані, код завершення й спостереження. Перевірки справжнього рушія, тестового UI та системних можливостей у зібраній `.app` ведуться окремо.
+**How to run:** use the actual commands from [004](004-reproducible-check-commands.md) and the root README. Record the command, working directory, configuration, test data, exit code and observations. Checks of the real engine, the test UI and system capabilities in the built `.app` are kept separate.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Дотримуватися меж власних DTO, repository та адаптера рушія. Помилка має явний результат; прийняття команди не означає завершення операції. Нові продуктові можливості не додавати приховано. Зміни контракту й невизначені параметри записувати в ADR разом із реалізацією.
+Stay within the boundaries of our own DTOs, repository and engine adapter. An error has an explicit result; accepting a command does not mean the operation is complete. Do not add new product capabilities covertly. Record contract changes and undefined parameters in an ADR together with the implementation.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for the failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all our own executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architectural decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architectural conclusion, RED/GREEN, the refactoring done, the inventory/profile and the check that no debt remains. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and verification evidence.
+- Record a short outcome: what changed, exact checks with pass/fail/not_run, ADR, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

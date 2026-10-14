@@ -1,79 +1,79 @@
-# 007 — Перевірити API та життєвий цикл anacrolix на одній версії
+# 007 — Check the anacrolix API and lifecycle on a single version
 
-**Статус:** `planned`  
-**Фаза:** P1 — Прототипи ризикових контрактів  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Ворота/дослід із зафіксованим результатом  
-**Жорсткі залежності:** [006](006-controlled-torrent-fixtures.md), [005](005-domain-dto-and-bridge-contract.md)  
-**Вимоги:** `AI-05`, `AI-07`, `STACK-03`
+**Status:** `planned`  
+**Phase:** P1 — Prototypes of risky contracts  
+**Priority:** critical path of the main scenario or completion  
+**Size:** Gate/spike with a recorded result  
+**Hard dependencies:** [006](006-controlled-torrent-fixtures.md), [005](005-domain-dto-and-bridge-contract.md)  
+**Requirements:** `AI-05`, `AI-07`, `STACK-03`
 
-## Результат
+## Outcome
 
-Зафіксувати одну версію anacrolix/torrent і перевірити створення, роботу та завершення об’єктів рушія, які потрібні застосунку.
+Pin a single version of anacrolix/torrent and verify the creation, operation and shutdown of the engine objects the application needs.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення, статуси та докази виконання.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `AI-05`, `AI-07`, `STACK-03`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- [Технічний план рушія](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API й непідтверджені прототипом припущення.
-- Результати й ADR усіх обов’язкових попередніх задач. Якщо потрібний доказ відсутній, залежну частину роботи починати не можна.
+- [Task execution rules](README.md): conditions for starting and finishing, statuses and evidence of completion.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `AI-05`, `AI-07`, `STACK-03`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): the API and assumptions not yet confirmed by a prototype.
+- Results and ADRs of all mandatory preceding tasks. If the required evidence is missing, the dependent part of the work must not be started.
 
-## Порядок роботи
+## Work order
 
-1. Зафіксувати тег версії anacrolix/torrent у залежностях і звірити з ним сигнатури всіх потрібних методів.
-2. На контрольованих торрентах перевірити `NewClient`, `AddTorrentSpec`, `GotInfo`, `Stats`, `Drop`, `Closed` і `Close`; записати результати та помилки кожної операції.
-3. Зібрати програму на цільовому Mac і описати фактичні залежності мережевих транспортів, системних бібліотек та CGO.
-4. Кілька разів створити й завершити клієнт із активним торрентом та торрентом, який очікує метадані; перевірити завершення пов’язаних фонових задач.
-5. Описати, коли імпорт керує новим об’єктом рушія, а коли отримує об’єкт уже наявного торрента; визначити, які ресурси кожен із цих сценаріїв має право звільняти.
+1. Pin the anacrolix/torrent version tag in the dependencies and check the signatures of all required methods against it.
+2. On controlled torrents, verify `NewClient`, `AddTorrentSpec`, `GotInfo`, `Stats`, `Drop`, `Closed` and `Close`; record the results and errors of each operation.
+3. Build the program on the target Mac and describe the actual dependencies on network transports, system libraries and CGO.
+4. Create and shut down the client several times with an active torrent and a torrent awaiting metadata; verify that the associated background tasks finish.
+5. Describe when an import manages a new engine object and when it receives the object of an already existing torrent; define which resources each of these scenarios is allowed to release.
 
-6. Зібрати найменший наскрізний прототип на результатах 003/005/006: контрольований торрент передає справжні байти, Go повертає власний DTO, а React у справжньому Wails-вікні показує зміну прогресу. Поки що не потрібні SQLite, повний preview, колекції або готовий дизайн. Експеримент ізольований від продуктового UI; його тимчасові команди не потрапляють у особисту робочу збірку.
-7. Змінити стан контрольованого передавання, перевірити відображення через bindings і події, перезавантажити UI та завершити `.app`. Записати, що доведено на цій межі; матеріали мережевих тестів повторно використати в 018/034, а не підтримувати другий робочий рушій.
+6. Build the smallest end-to-end prototype on the results of 003/005/006: a controlled torrent transfers real bytes, Go returns its own DTO, and React in a real Wails window shows the progress change. SQLite, the full preview, collections or the finished design are not needed yet. The experiment is isolated from the product UI; its temporary commands do not end up in the personal working build.
+7. Change the state of the controlled transfer, verify the display through bindings and events, reload the UI and quit the `.app`. Record what has been proven at this boundary; reuse the network test materials in 018/034 rather than maintaining a second working engine.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `docs/decisions/engine-version.md; docs/verification/engine-lifecycle.md`. Це карта майбутнього коду; після створення каркаса проєкту перевірити фактичні шляхи й оновити карту в архітектурі.
-**Доказ виконання:** запис `docs/verification/007-engine-api-lifecycle-spike.md` або точне посилання на вже наявний звіт перевірки чи збірки в підсумку передачі роботи. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `docs/decisions/engine-version.md; docs/verification/engine-lifecycle.md`. This is a map of future code; after the project skeleton is created, verify the actual paths and update the map in the architecture.
+**Evidence of completion:** a `docs/verification/007-engine-api-lifecycle-spike.md` record or an exact reference to an existing verification or build report in the work handoff summary. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Усі потрібні виклики компілюються й виконуються на одній зафіксованій версії рушія.
-- [ ] Клієнт і задачі очікування метаданих завершуються без зависання та залишених фонових задач.
-- [ ] Звіт відокремлює перевірений життєвий цикл від ще не доведених зупинки віддачі та відновлення даних.
-- [ ] Усі наведені нижче перевірки виконано на відповідному рівні; невиконані або невдалі перевірки не позначено як успішні.
+- [ ] All required calls compile and run on a single pinned engine version.
+- [ ] The client and the metadata-waiting tasks shut down without hanging and without leftover background tasks.
+- [ ] The report separates the verified lifecycle from the not-yet-proven stopping of upload and data restore.
+- [ ] All checks listed below have been performed at the appropriate level; checks that were not run or failed are not marked as successful.
 
-- [ ] На ранньому прототипі видно справжнє передавання через Go → Wails → React; статичні дані або браузерна заміна не зараховані. Закриття прототипу завершує його власний торрент-клієнт і не лишає активного передавання.
+- [ ] The early prototype shows a real transfer through Go → Wails → React; static data or a browser substitute does not count. Closing the prototype shuts down its own torrent client and leaves no active transfer.
 
-## Перевірки
+## Checks
 
-- Повторити завершення клієнта, зокрема під час отримання метаданих; програма має завершитися без зависання або повторного звільнення ресурсів.
-- Відтворити невдале додавання та повернення `new=false`: помилка має бути явною, а наявний торрент має продовжити роботу. Виконати ці сценарії з виявленням гонок даних у підтримуваній конфігурації.
+- Repeat the client shutdown, including during metadata retrieval; the program must exit without hanging or releasing resources twice.
+- Reproduce a failed add and a `new=false` return: the error must be explicit, and the existing torrent must continue to work. Run these scenarios with data race detection in the supported configuration.
 
-**Як запускати:** використати фактичні команди, зафіксовані у [004](004-reproducible-check-commands.md) та кореневому README після створення каркаса проєкту. До появи цих команд перевірки залишаються планом. Записати точну команду, робочий каталог, тестові дані, конфігурацію, код завершення й результат. Системні сценарії виконувати у зібраній `.app`; перевірки інтерфейсу з тестовими замінами та перевірки справжнього рушія позначати окремо.
+**How to run:** use the actual commands recorded in [004](004-reproducible-check-commands.md) and the root README after the project skeleton is created. Until those commands exist, the checks remain a plan. Record the exact command, working directory, test data, configuration, exit code and result. Run system scenarios in the built `.app`; mark interface checks with test doubles and checks of the real engine separately.
 
-- Зіставити зміну лічильників контрольованого клієнта з DTO та відображенням у `.app`; перевірити очищення підписок після повторного монтування. Після закриття перевірити звільнення лише ресурсів цього досліду. Це доказ інтеграційного шляху, а не відновлення з SQLite або повного MVP.
+- Match the change in the controlled client's counters with the DTO and the display in the `.app`; verify that subscriptions are cleaned up after remounting. After closing, verify that only this spike's resources are released. This is evidence of the integration path, not of restore from SQLite or of the full MVP.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Застосунок має обмінюватися власними DTO через адаптер рушія, а збереження виконувати через репозиторії. Повернення керування з методу не доводить завершення всієї операції. Контракти завершення та права керування ресурсами зафіксувати в ADR разом із результатами перевірок.
+The application must exchange its own DTOs through the engine adapter and perform persistence through repositories. Returning control from a method does not prove that the whole operation has finished. Record the completion contracts and resource management rights in an ADR together with the verification results.
 
-**Підстава для технічних рішень:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). Під час реалізації звірити сигнатури й обмеження із зафіксованою версією. Читання документації API не замінює виконаної інтеграційної перевірки.
+**Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, check the signatures and constraints against the pinned version. Reading the API documentation does not replace a performed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run a test/check of the expected result and record the proper reason for the failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** according to the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; rerun the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` ставити лише після виконання критеріїв і запису доказів.
-- Записати короткий результат: що змінено, точні перевірки зі статусами `pass`, `fail` або `not_run`, ADR, фактичні місця змін у коді й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст лише в чаті.
+- Update the status in this file and in the README navigation table at the same time; set `done` only after the criteria are met and the evidence is recorded.
+- Record a short result: what was changed, the exact checks with the statuses `pass`, `fail` or `not_run`, ADRs, actual code change locations and known limitations.
+- For `blocked`, state the concrete reason, the missing evidence/decision, how to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

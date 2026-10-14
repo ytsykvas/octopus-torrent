@@ -1,101 +1,101 @@
-# OctopusTorrent — концепт особистого застосунку
+# OctopusTorrent: personal application concept
 
-**Актуальне рішення:** 14 жовтня 2026 року. Проєкт для особистого використання; обраний стек — React + TypeScript, Wails, Go, anacrolix/torrent і SQLite.
+**Current decision:** 14 October 2026. The project is for personal use; the chosen stack is React + TypeScript, Wails, Go, anacrolix/torrent and SQLite.
 
-## Ідея
+## Idea
 
-OctopusTorrent — desktop BitTorrent-клієнт для macOS із локальним інтерфейсом React + TypeScript у Wails і торрент-сервісом на Go з anacrolix/torrent. Він має зручно додавати торренти, вибирати файли й місце збереження, показувати стан передавання та надійно продовжувати роботу після перезапуску.
+OctopusTorrent is a desktop BitTorrent client for macOS with a local React + TypeScript interface in Wails and a Go torrent service built on anacrolix/torrent. It should make it convenient to add torrents, choose files and the save location, show the transfer state and reliably continue working after a restart.
 
-Це одна локальна версія без акаунтів, планів Free/Pro, підписок, платежів, перевірок ліцензії та хмарного сервісу. Кількість торрентів не обмежується штучно; усі реалізовані можливості доступні одразу. Продуктова аналітика й публічний сайт для продажу не потрібні.
+This is a single local version without accounts, Free/Pro plans, subscriptions, payments, license checks or a cloud service. The number of torrents is not artificially limited; all implemented capabilities are available right away. Product analytics and a public sales website are not needed.
 
-## Обраний стек
+## Chosen stack
 
-| Частина | Технологія |
+| Part | Technology |
 |---|---|
-| Інтерфейс із макета | React + TypeScript у strict mode, Vite |
-| Вікно й зв’язок із Go | Wails v2, стабільна гілка |
-| Торренти, файлові операції, правила | Go |
-| Торрент-рушій | anacrolix/torrent |
-| Локальна бібліотека | SQLite через Go repository |
+| Interface from the mockup | React + TypeScript in strict mode, Vite |
+| Window and connection to Go | Wails v2, stable branch |
+| Torrents, file operations, rules | Go |
+| Torrent engine | anacrolix/torrent |
+| Local library | SQLite through a Go repository |
 
-Frontend assets входять у `.app`; UI працює в системному WebView, а всі дії з диском і рушієм виконуються в Go. Наш HTML-макет переноситься в React-компоненти. Обраний стек не створює вимоги випускати застосунок для інших платформ. Конкретні версії та SQLite-драйвер фіксуються після пробної збірки. Wails v3 не є частиною поточного рішення.
+Frontend assets are bundled into the `.app`; the UI runs in the system WebView, and all disk and engine actions are performed in Go. Our HTML mockup is ported into React components. The chosen stack does not create a requirement to ship the application for other platforms. Specific versions and the SQLite driver are pinned after a trial build. Wails v3 is not part of the current decision.
 
-## Принципи
+## Principles
 
-1. **Дані залишаються на Mac.** Бібліотека, метадані, локальні шляхи, теги, правила та стан відновлення зберігаються локально. Власний сервер не потрібен. Інтернет використовується для BitTorrent.
-2. **Контроль перед запуском.** Додавання `.torrent` відкриває перегляд справжніх файлів; для magnet спершу отримуються метадані. Користувач обирає папку, файли та запуск одразу або на паузі.
-3. **Збереження файлів за замовчуванням.** Видалення торрента зі списку зупиняє передавання, але залишає отримані файли. Видалення файлів — окрема дія з переліком і підтвердженням.
-4. **Зрозумілі стани.** Текст статусу, прогрес, іконка напрямку й актуальні швидкості узгоджені. Помилки пояснюють наслідок і наступну дію.
-5. **Надійність раніше автоматизації.** Спершу доводимо роботу рушія, збереження й відновлення; потім додаємо організацію бібліотеки та правила.
+1. **Data stays on the Mac.** The library, metadata, local paths, tags, rules and restore state are stored locally. No own server is needed. The internet is used for BitTorrent.
+2. **Control before start.** Adding a `.torrent` opens a preview of the real files; for a magnet, the metadata is fetched first. The user chooses the folder, the files and whether to start immediately or paused.
+3. **Files are kept by default.** Removing a torrent from the list stops the transfer but keeps the received files. Deleting files is a separate action with a list and confirmation.
+4. **Clear states.** The status text, progress, direction icon and current speeds are consistent. Errors explain the consequence and the next action.
+5. **Reliability before automation.** First we prove the engine, persistence and restore work; then we add library organization and rules.
 
-## Основні можливості
+## Core capabilities
 
-- Додавання `.torrent` через кнопку, перетягування та Finder; вставлення й системне відкриття magnet-посилань.
-- Зона перетягування внизу бічної панелі, яка приймає один коректний `.torrent`. Розширення й вміст перевіряються автоматично.
-- Попередній перегляд файлів із вкладеними папками, згортанням і чекбоксами всієї папки. Частковий вибір має проміжний стан.
-- Вибір наявної папки або створення нової за назвою всередині вибраної батьківської папки.
-- Список будь-якої кількості торрентів і панель деталей: прогрес, обсяг, файли, підключення, завантаження та віддача.
-- Запуск, пауза, відновлення, роздача після завершення й загальні ліміти швидкостей.
-- Постійні чекбокси для вибору кількох торрентів. Панель групового запуску, зупинки й видалення з’являється після вибору; «Зняти вибір» скидає його.
-- Кнопки pause/play з діями «Не завантажувати» / «Завантажувати» для окремих файлів і цілих папок у вже доданому торренті. Якщо частина файлів папки пропущена, її play знову вибирає всі дочірні файли. Уже записані байти не видаляються; межі pieces враховуються в поясненні поведінки.
-- Відновлення бібліотеки, ручних пауз, вибору файлів і даних рушія після звичайного чи аварійного перезапуску.
-- Локальні фільтри станів і пошук за назвою, як у макеті.
-- Налаштування типової папки, теми «Як у системі» / «Світла» / «Темна», мови та передавання.
-- Шість мов: англійська, українська, іспанська, німецька, французька та португальська. Назви файлів і торрентів не перекладаються.
-- Реєстрація `.torrent` у macOS та інструкція, як призначити OctopusTorrent типовим застосунком.
+- Adding a `.torrent` via a button, drag and drop and Finder; pasting and system opening of magnet links.
+- A drop zone at the bottom of the sidebar that accepts one valid `.torrent`. The extension and contents are checked automatically.
+- A file preview with nested folders, collapsing and whole-folder checkboxes. A partial selection has an indeterminate state.
+- Choosing an existing folder or creating a new one by name inside the chosen parent folder.
+- A list of any number of torrents and a details panel: progress, size, files, connections, download and upload.
+- Start, pause, resume, seeding after completion and global speed limits.
+- Persistent checkboxes for selecting multiple torrents. A panel for bulk start, stop and removal appears after selection; "Clear selection" resets it.
+- Pause/play buttons with the actions "Do not download" / "Download" for individual files and whole folders in an already added torrent. If some files in a folder are skipped, its play selects all child files again. Bytes already written are not deleted; piece boundaries are taken into account when explaining the behavior.
+- Restore of the library, manual pauses, file selection and engine data after a normal or crash restart.
+- Local state filters and search by name, as in the mockup.
+- Settings for the default folder, the theme "System" / "Light" / "Dark", the language and transfer.
+- Six languages: English, Ukrainian, Spanish, German, French and Portuguese. File and torrent names are not translated.
+- Registration of `.torrent` in macOS and instructions on how to make OctopusTorrent the default application.
 
-## Організація бібліотеки й автоматизація
+## Library organization and automation
 
-Ці можливості залишаються частиною особистого проєкту та не мають обмежень доступу.
+These capabilities remain part of the personal project and have no access restrictions.
 
-**Теги й розумні колекції.** Торрент може мати кілька тегів. Колекція — збережений локальний фільтр за тегами та станом; її склад змінюється автоматично. Один торрент може належати кільком колекціям без дублювання й переміщення файлів. Видалення колекції не видаляє її торренти.
+**Tags and smart collections.** A torrent can have several tags. A collection is a saved local filter by tags and state; its contents change automatically. One torrent can belong to several collections without duplicating or moving files. Deleting a collection does not delete its torrents.
 
-**Правила.** За назвою або джерелом додавання правило призначає теги й локальну папку збереження. Видно порядок правил і результат до підтвердження. Помилка правила чи недоступна папка не запускає завантаження й не змінює дані мовчки.
+**Rules.** Based on the name or the add source, a rule assigns tags and a local save folder. The rule order and the result are visible before confirmation. A rule error or an unavailable folder does not start the download and does not change data silently.
 
-**Папка спостереження.** Користувач явно вибирає папку на цьому Mac. Новий `.torrent` після завершення запису проходить перевірку метаданих і дублікатів. Типово відкривається перегляд; автоматичне додавання треба ввімкнути окремо, і воно створює торрент на паузі. Вихідний `.torrent` не видаляється автоматично.
+**Watch folder.** The user explicitly chooses a folder on this Mac. A new `.torrent`, once it has finished being written, goes through metadata and duplicate checks. By default a preview opens; automatic adding must be enabled separately, and it creates the torrent paused. The source `.torrent` is not deleted automatically.
 
-Серверну синхронізацію між Mac вилучено з поточного обсягу. Якщо вона знадобиться для власних пристроїв, спосіб обміну визначимо окремо.
+Server synchronization between Macs has been removed from the current scope. If it is needed for own devices, the exchange method will be decided separately.
 
-## Глобальне вимкнення віддачі
+## Global upload shutdown
 
-У налаштуваннях є «Зупинити віддачу для всіх торрентів». Задум: активні завантаження тривають, віддача payload припиняється для поточних і нових торрентів, завершені записи не починають роздачу. Після вимкнення режиму повертається звичайна політика передавання зі збереженням ручних пауз.
+The settings have "Stop upload for all torrents". The intent: active downloads continue, payload upload stops for current and new torrents, and completed entries do not start seeding. After the mode is turned off, the normal transfer policy returns while manual pauses are preserved.
 
-Макет демонструє цей стан. Go-сервіс використовує окремий дозвіл upload у anacrolix/torrent; методи `DisallowDataUpload()` / `AllowDataUpload()` не повинні скасовувати ручні паузи або wanted. Для нових записів політика задається до payload. Мережевий прототип перевіряє вплив на швидкість, службовий трафік та вже буферизовані дані. Деталі містить `ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md`.
+The mockup demonstrates this state. The Go service uses a separate upload permission in anacrolix/torrent; the methods `DisallowDataUpload()` / `AllowDataUpload()` must not cancel manual pauses or wanted. For new entries, the policy is set before payload. A network prototype checks the effect on speed, protocol overhead traffic and already buffered data. Details are in `ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md`.
 
-## Інтерфейс
+## Interface
 
-Бічна панель містить назву застосунку, розділи бібліотеки й зону перетягування. Верхня панель — «Додати торрент», пошук і налаштування. Алерти розташовані під верхньою панеллю та не перекривають основні дії.
+The sidebar contains the application name, library sections and the drop zone. The top bar has "Add torrent", search and settings. Alerts are located under the top bar and do not cover the main actions.
 
-Вікно зберігає розмір незалежно від кількості торрентів і розгорнутих файлів. Список та деталі прокручуються незалежно; довгі назви й шляхи скорочуються з доступом до повного значення. Шлях можна розгорнути й скопіювати повністю.
+The window keeps its size regardless of the number of torrents and expanded files. The list and details scroll independently; long names and paths are truncated with access to the full value. A path can be expanded and copied in full.
 
-На початку картки видно ↓ для завантаження, ↑ для роздачі та знак паузи для зупиненого передавання. Завершений торрент без роздачі також має знак паузи й точний напис «Завершено». Завантаження й роздача мають однаковий колір бейджа, завершення — червоний, пауза — нейтральний. Швидкості показуються тільки під час передавання.
+At the start of a card, ↓ shows a download, ↑ shows seeding and a pause sign shows a stopped transfer. A completed torrent without seeding also has a pause sign and the exact label "Completed". Download and seeding have the same badge color, completion is red, pause is neutral. Speeds are shown only during a transfer.
 
-React/CSS відтворюють скляний вигляд навігаційних панелей із макета в системному WebView; вміст лишається читабельним, за потреби застосовується непрозорий fallback. Передбачені клавіатура, VoiceOver, системне масштабування, зменшення прозорості та збільшення контрасту.
+React/CSS reproduce the glass look of the navigation panels from the mockup in the system WebView; the content remains readable, and an opaque fallback is applied when needed. Keyboard, VoiceOver, system scaling, Reduce Transparency and Increase Contrast are supported.
 
-## Архітектура й розробка
+## Architecture and development
 
-**AI-first — принцип розробки й підтримки.** Власник задає бажану поведінку, а код має бути зрозумілим для АІ, який надалі його читає, перевіряє й змінює. Для цього потрібні явна структура, однозначні назви, прості межі компонентів, пояснення важливих рішень і відтворювані перевірки. Репозиторій зберігає весь необхідний контекст, щоб новий агент міг продовжити роботу без історії чатів і без потреби власника глибоко знати стек. Конкретні критерії — AI-01–AI-10 у вимогах.
+**AI-first is the development and maintenance principle.** The owner specifies the desired behavior, and the code must be understandable to the AI that later reads, checks and changes it. This requires an explicit structure, unambiguous names, simple component boundaries, explanations of important decisions and reproducible checks. The repository stores all the necessary context so that a new agent can continue the work without the chat history and without the owner needing deep knowledge of the stack. The concrete criteria are AI-01–AI-10 in the requirements.
 
-React показує власні snapshots і надсилає команди Go через Wails bindings. TorrentService керує одним client anacrolix/torrent, порядок команд зберігає паузи й політику віддачі. UUID, повні v1/v2 infohash, SQLite й metainfo/magnet відновлюють бібліотеку; storage engine окремо зберігає piece completion. Відновлення після аварії перевіряється на реальних файлах.
+React shows its own snapshots and sends commands to Go through Wails bindings. TorrentService manages one anacrolix/torrent client; the command ordering preserves pauses and the upload policy. UUIDs, full v1/v2 infohashes, SQLite and metainfo/magnet restore the library; the storage engine stores piece completion separately. Recovery after a crash is verified on real files.
 
-Код тримаємо в Git-репозиторії. Go modules і frontend lockfile фіксують залежності, Wails CLI збирає `.app`; README описує Go, Node.js і потрібні macOS build tools. Для особистої версії потрібна працездатна `.app` на власному Mac; сайт, публічний інсталятор і серверні компоненти не блокують розробку. Підпис та спосіб встановлення визначаються для цього Mac. Перевірка ліцензій сторонніх бібліотек лишається технічною вимогою.
+We keep the code in a Git repository. Go modules and the frontend lockfile pin dependencies, the Wails CLI builds the `.app`; the README describes Go, Node.js and the required macOS build tools. The personal version needs a working `.app` on the owner's own Mac; a website, a public installer and server components do not block development. Signing and the installation method are decided for this Mac. Checking third-party library licenses remains a technical requirement.
 
-Документи: `PROJECT_REQUIREMENTS.md` — критерії приймання, `APPLICATION_ARCHITECTURE.md` — локальні компоненти й потоки даних, `ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md` — технічний план обраного рушія. HTML-макет демонструє інтерфейс і не виконує реального BitTorrent-передавання.
+Documents: `PROJECT_REQUIREMENTS.md` holds the acceptance criteria, `APPLICATION_ARCHITECTURE.md` the local components and data flows, `ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md` the technical plan for the chosen engine. The HTML mockup demonstrates the interface and does not perform real BitTorrent transfer.
 
-## Обов’язковий спосіб розробки
+## Mandatory development method
 
-Кожна зміна виконується через **TDD: RED → GREEN → REFACTOR**. Перед завершенням кожного зеленого кроку й інтеграцією весь власний виконуваний код має **100% покриття** за визначеними метриками. Знижувати пороги, приховувати файли або писати потрібні тести після готової реалізації заборонено.
+Every change is made through **TDD: RED → GREEN → REFACTOR**. Before each green step is finished and integrated, all owned executable code must have **100% coverage** by the defined metrics. Lowering thresholds, hiding files or writing the required tests after the implementation is done is forbidden.
 
-На початку кожної сесії агент аналізує архітектуру й фактичний код, планує найпростіші достатні межі та повторне використання. Код чистий, ідіоматичний для Go/React/TypeScript/Wails/SQLite; спільні правила не копіюються. Рефакторинг виконується по ходу на зелених тестах, технічний борг не переноситься в завершені задачі.
+At the start of every session, the agent analyzes the architecture and the actual code, plans the simplest sufficient boundaries and reuse. The code is clean and idiomatic for Go/React/TypeScript/Wails/SQLite; shared rules are not copied. Refactoring is done along the way on green tests; technical debt is not carried into completed tasks.
 
-Папка [docs/](docs/README.md) містить інженерні правила, документацію кожної фічі, рішення й докази. Опис і реалізація розвиваються в тій самій зміні. Точні правила визначають [QA-01–QA-08](PROJECT_REQUIREMENTS.md) та [інженерна політика](docs/engineering/TDD_AND_QUALITY.md).
+The [docs/](docs/README.md) folder contains the engineering rules, documentation for each feature, decisions and evidence. The description and the implementation evolve in the same change. The exact rules are defined by [QA-01–QA-08](PROJECT_REQUIREMENTS.md) and the [engineering policy](docs/engineering/TDD_AND_QUALITY.md).
 
-## Етапи
+## Stages
 
-1. Прототип Wails + anacrolix/torrent на власному Mac: `.app`, імпорт, передавання, пауза, пріоритети, глобальна віддача, папки й відновлення.
-2. Основний React/TypeScript-інтерфейс, Wails bindings, SQLite, файлові діалоги, безпечне видалення, алерти й налаштування.
-3. Групові дії, пошук, фільтри та великі дерева файлів.
-4. Теги й колекції, потім правила та папка спостереження.
-5. Перевірка особистої збірки на реальних сценаріях і виправлення помилок.
+1. A Wails + anacrolix/torrent prototype on the owner's own Mac: `.app`, import, transfer, pause, priorities, global upload, folders and restore.
+2. The main React/TypeScript interface, Wails bindings, SQLite, file dialogs, safe deletion, alerts and settings.
+3. Bulk actions, search, filters and large file trees.
+4. Tags and collections, then rules and the watch folder.
+5. Verification of the personal build on real scenarios and bug fixing.
 
-Каталог контенту, телевізійний стрімінг, вебверсія, мобільний застосунок і хмарне копіювання даних не входять у цей обсяг.
+A content catalog, TV streaming, a web version, a mobile application and cloud data copying are not in this scope.

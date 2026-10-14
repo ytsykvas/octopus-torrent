@@ -1,106 +1,106 @@
-# OctopusTorrent — технічний план anacrolix/torrent і Wails
+# OctopusTorrent — anacrolix/torrent and Wails technical plan
 
-**Статус:** обраний стек, 14 жовтня 2026 року. React + TypeScript / Wails v2 / Go / anacrolix/torrent / SQLite. Це перевірка документації та план інтеграції; реальне передавання й відновлення нашим застосунком ще не прототиповані.
+**Status:** chosen stack, 14 October 2026. React + TypeScript / Wails v2 / Go / anacrolix/torrent / SQLite. This is a documentation review and integration plan; real transfer and restore by our application have not yet been prototyped.
 
-Поведінку продукту визначає `PROJECT_REQUIREMENTS.md`, межі модулів — `APPLICATION_ARCHITECTURE.md`. API нижче звірено з офіційними сторінками та відкритими вихідними файлами. Сторінки package documentation і master можуть описувати різні версії: перед кодом обираємо один module tag і повторно перевіряємо сигнатури на ньому. Старе дослідження libtorrent збережено в `archive/LIBTORRENT_TECHNICAL_RESEARCH.md` як довідка про попередній стек.
+Product behavior is defined by `PROJECT_REQUIREMENTS.md`, module boundaries by `APPLICATION_ARCHITECTURE.md`. The API below has been checked against the official pages and the open source files. The package documentation pages and master may describe different versions: before writing code we choose one module tag and re-verify the signatures against it. The old libtorrent research is kept in `archive/LIBTORRENT_TECHNICAL_RESEARCH.md` as a reference about the previous stack.
 
-## 1. Що дає рушій
+## 1. What the engine provides
 
-anacrolix/torrent — Go-бібліотека BitTorrent із metainfo/magnet, DHT, PEX, uTP, web seeds і v2. Вона використовується як компонент інших проєктів. Модель бібліотеки зручна для нашого Go-сервісу, але сама не зберігає продуктові колекції, правила й ручні рішення власника. [Офіційний репозиторій](https://github.com/anacrolix/torrent).
+anacrolix/torrent is a Go BitTorrent library with metainfo/magnet, DHT, PEX, uTP, web seeds and v2. It is used as a component of other projects. The library model is convenient for our Go service, but by itself it does not store product collections, rules or the owner's manual decisions. [Official repository](https://github.com/anacrolix/torrent).
 
-Для продукту потрібен власний adapter, який переводить наші UUID і команди у бібліотечні операції. Версія module фіксується в `go.mod`/`go.sum`; сторонній код не копіюється у наш сервіс і не переробляється для відповідності UI.
+The product needs its own adapter that translates our UUIDs and commands into library operations. The module version is pinned in `go.mod`/`go.sum`; third-party code is not copied into our service and is not reworked to fit the UI.
 
-## 2. Карта API
+## 2. API map
 
-| Потреба | API-кандидат |
+| Need | Candidate API |
 |---|---|
 | Client | `NewClient`, `Client.Close` |
-| Імпорт | `AddTorrentSpec`, `TorrentSpecFromMagnetUri`, `TorrentSpecFromMetaInfoErr` |
+| Import | `AddTorrentSpec`, `TorrentSpecFromMagnetUri`, `TorrentSpecFromMetaInfoErr` |
 | Metadata | `GotInfo`, `Info`, `Metainfo`, `Files` |
-| Payload-пауза | `DisallowDataDownload`, `DisallowDataUpload` |
-| Відновлення дозволів | `AllowDataDownload`, `AllowDataUpload` |
-| Вибір файла | `File.SetPriority`, `PiecePriorityNone`, попередній пріоритет |
-| Прогрес | `File.BytesCompleted`, `File.Length`, `Stats` |
-| Перевірка | `VerifyDataContext` |
-| Вилучення із client | `Drop`, `Closed` |
+| Payload pause | `DisallowDataDownload`, `DisallowDataUpload` |
+| Restoring permissions | `AllowDataDownload`, `AllowDataUpload` |
+| File selection | `File.SetPriority`, `PiecePriorityNone`, previous priority |
+| Progress | `File.BytesCompleted`, `File.Length`, `Stats` |
+| Verification | `VerifyDataContext` |
+| Removal from client | `Drop`, `Closed` |
 
-Новий TorrentSpec може задати початкову заборону download/upload. До отримання metadata `Info` може бути nil; це не готовий список файлів. `MergeSpec` не є способом замінити storage. [Документація API](https://pkg.go.dev/github.com/anacrolix/torrent).
+A new TorrentSpec can set an initial download/upload prohibition. Before metadata is received, `Info` may be nil; that is not a ready file list. `MergeSpec` is not a way to replace storage. [API documentation](https://pkg.go.dev/github.com/anacrolix/torrent).
 
-Це карта інтеграції, а не обіцянка, що один виклик реалізує весь продуктовий сценарій. Adapter контролює порядок, локальний запис, cancellation, помилки та результат.
+This is an integration map, not a promise that a single call implements the whole product scenario. The adapter controls ordering, the local record, cancellation, errors and the result.
 
-## 3. Manual pause і глобальна віддача
+## 3. Manual pause and global upload
 
-Зберігаємо окремо `manualPaused`, `globalUploadDisabled`, file wanted і фактичну помилку. Політика обчислює дозволи заново після кожної команди; натискання play не повертає upload, якщо його глобально вимкнено.
+We store `manualPaused`, `globalUploadDisabled`, file wanted and the actual error separately. The policy recomputes permissions after every command; pressing play does not restore upload if it is globally disabled.
 
-У поточному коді рушія download й upload мають окремі прапорці; download-заборона скасовує запити. В upload-реалізації є TODO про оновлення активних peer connections, тому лише наявність методу не доводить миттєве припинення всього буферизованого payload. Контрольований тест має визначити межу підтвердження й виміряти залишковий трафік. [Реалізація torrent.go](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go).
+In the current engine code, download and upload have separate flags; a download prohibition cancels requests. The upload implementation contains a TODO about updating active peer connections, so the mere existence of the method does not prove an immediate stop of all buffered payload. A controlled test must determine the confirmation boundary and measure the residual traffic. [torrent.go implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go).
 
-Проєктне рішення: використовувати per-torrent дозволи для runtime-перемикача; нові записи додаються з відповідними початковими заборонами. Не мутувати конфігурацію client без перевіреного контракту потокобезпечності. Окремий `NoUpload` є конфігураційним вимкненням відправлення chunks. `Seed` керує готовністю роздавати без взаємної вигоди, а upload limiter стосується chunks. [Client config](https://raw.githubusercontent.com/anacrolix/torrent/master/config.go).
+Design decision: use per-torrent permissions for the runtime switch; new records are added with the corresponding initial prohibitions. Do not mutate the client configuration without a verified thread-safety contract. A separate `NoUpload` is a configuration-level disabling of sending chunks. `Seed` controls readiness to seed without reciprocity, and the upload limiter applies to chunks. [Client config](https://raw.githubusercontent.com/anacrolix/torrent/master/config.go).
 
-Для звичайної роздачі після завершення потрібна явно обрана seed-політика client і per-torrent дозволи. Зупинений запис не закриваємо тільки заради паузи. Протокольні повідомлення, tracker/DHT або перевірка диска не повинні видаватися за payload-завантаження.
+Ordinary seeding after completion requires an explicitly chosen client seed policy and per-torrent permissions. A stopped record is not closed merely for the sake of a pause. Protocol messages, tracker/DHT or disk verification must not be presented as payload downloading.
 
-## 4. Файли, папки й pieces
+## 4. Files, folders and pieces
 
-`File.SetPriority` змінює пріоритет pieces файла; `Download` використовує normal priority, а старий `Cancel` позначений deprecated. Readers теж впливають на piece-потреби, тому для простого клієнта не додаємо приховані readers до пропущених файлів. [File implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/file.go).
+`File.SetPriority` changes the priority of a file's pieces; `Download` uses normal priority, and the old `Cancel` is marked deprecated. Readers also affect piece demand, so for a simple client we do not add hidden readers to skipped files. [File implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/file.go).
 
-Wanted належить нашій БД. Pause файла задає None, play відновлює збережений пріоритет. Кнопка папки проходить усі перевірені leaf indices; це операція сервісу, не об’єкт folder у engine. Згортання не має побічного ефекту. За partial wanted кнопка play вибирає всі нащадки.
+Wanted belongs to our DB. Pausing a file sets None; play restores the saved priority. The folder button goes through all verified leaf indices; this is a service operation, not a folder object in the engine. Collapsing has no side effect. With partial wanted, the play button selects all descendants.
 
-Вибір завантаження не є дозволом upload конкретного файла й не видаляє bytes. Для v1 boundary pieces між двома файлами перевіряються окремо; при None одного файла не можна обіцяти відсутність будь-яких байтів його діапазону, якщо вони потрібні сусідньому. Завершені файли мають точний прогрес незалежно від wanted.
+A download selection is not an upload permission for a specific file and does not delete bytes. For v1, boundary pieces between two files are verified separately; with None on one file, we cannot promise the absence of any bytes of its range if they are needed by the neighboring file. Completed files have exact progress regardless of wanted.
 
-## 5. Metadata, шляхи й імпорт
+## 5. Metadata, paths and import
 
-`.torrent` розбираємо через metainfo до активного запису. Metainfo API має Load/UnmarshalInfo, v1/v2-відомості, file tree і piece layers. Повний metainfo зберігається без повторного перекодування info лише заради назви; ідентичність не підмінюється коротким display name. [Metainfo API](https://pkg.go.dev/github.com/anacrolix/torrent/metainfo).
+`.torrent` is parsed through metainfo before an active record is created. The metainfo API has Load/UnmarshalInfo, v1/v2 data, a file tree and piece layers. The full metainfo is stored without re-encoding info merely for the sake of the name; identity is not replaced by a short display name. [Metainfo API](https://pkg.go.dev/github.com/anacrolix/torrent/metainfo).
 
-Власна валідація задає межі розміру, числа файлів і глибини, перевіряє абсолютні шляхи, `..`, symlink та колізії. Назви — недовірені дані. Frontend preview не замінює Go-валідацію. Зберігаємо UUID та окремі повні v1/v2 ідентичності; hybrid або metadata, отримані пізніше, можуть виявити дублікат.
+Our own validation sets limits on size, number of files and depth, and checks absolute paths, `..`, symlinks and collisions. Names are untrusted data. A frontend preview does not replace Go validation. We store the UUID and separate full v1/v2 identities; hybrid or later-received metadata may reveal a duplicate.
 
-Для magnet pending import має cancellable очікування, власне тимчасове сховище й payload-заборони. Успішний confirm обирає остаточний storage; якщо потрібно Drop/re-add із отриманим metainfo, це робиться до дозволу payload зі збереженням UUID. Cancel очищає лише артефакти цього pendingImportID. Не обіцяємо відсутності порожніх файлів до підтвердження без тесту.
+For a magnet, the pending import has a cancellable wait, its own temporary storage and payload prohibitions. A successful confirm chooses the final storage; if Drop/re-add with the received metainfo is needed, it is done before payload is allowed, preserving the UUID. Cancel cleans up only the artifacts of this pendingImportID. We do not promise the absence of empty files before confirmation without a test.
 
-Finder, URL, кнопка й watch folder викликають один coordinator. Автоматичне додавання явно вмикається й створює manualPaused. Недоступна папка або правило не підставляють випадкове призначення.
+Finder, URL, the button and the watch folder call one coordinator. Automatic adding is switched on explicitly and creates manualPaused. An unavailable folder or rule does not substitute a random destination.
 
-## 6. Storage та відновлення
+## 6. Storage and restore
 
-Storage API має файлові backend-и, options для шляхів і piece-completion реалізації, зокрема SQLite. Деякі custom-path конструктори deprecated; конкретний backend і його native залежності обираються на зафіксованому tag. Окремі backend-и використовують різну структуру папок, тому бібліотечний default не дорівнює нашому save path. [Storage API](https://pkg.go.dev/github.com/anacrolix/torrent/storage).
+The Storage API has file backends, options for paths and piece-completion implementations, including SQLite. Some custom-path constructors are deprecated; the specific backend and its native dependencies are chosen on the pinned tag. Individual backends use different folder structures, so the library default is not the same as our save path. [Storage API](https://pkg.go.dev/github.com/anacrolix/torrent/storage).
 
-Проєктний план: власна SQLite-бібліотека з міграціями, payload у вибраній папці, окремий довговічний piece completion. На запуску додаємо записи з payload-забороною, відновлюємо wanted/паузу й лише потім дозволяємо transfer. Наявні bytes і completion-позначки перевіряються за обраною політикою; повна повторна перевірка може бути потрібною після пошкодження чи зовнішньої зміни.
+Design plan: our own SQLite library with migrations, payload in the chosen folder, separate durable piece completion. At startup we add records with a payload prohibition, restore wanted/pause and only then allow transfer. Existing bytes and completion marks are verified according to the chosen policy; a full recheck may be needed after corruption or an external change.
 
-Не переносимо до цього стеку обіцянку готового serialized fast-resume з іншої бібліотеки. Поведінку при звичайному close, crash, зіпсованому completion, переміщенні файлів і зміні storage треба довести окремо. Періодичне збереження продуктових налаштувань не відкладається до quit.
+We do not carry over to this stack the promise of a ready-made serialized fast-resume from another library. Behavior on normal close, crash, corrupted completion, moved files and storage change must be proven separately. Periodic saving of product settings is not deferred until quit.
 
-## 7. Прогрес, швидкості й помилки
+## 7. Progress, speeds and errors
 
-Наш adapter агрегує завершені байти тільки wanted real files для прогресу торрента; folder progress охоплює реальні нащадки й показує wanted count окремо. Pad-файли не потрапляють у продуктовий вибір. Якщо wanted files відсутні, показуємо «Не вибрано файлів»; нульовий реальний файл не спричиняє ділення на нуль.
+Our adapter aggregates completed bytes of only wanted real files for torrent progress; folder progress covers real descendants and shows the wanted count separately. Pad files are not included in product selection. If there are no wanted files, we show "No files selected"; a zero-length real file does not cause division by zero.
 
-BytesCompleted є оцінкою наявних завершених/частково отриманих даних, а не лічильником швидкості. Для rates беремо дельту payload counters за час; після restart/reset потрібна нова базова вибірка. Перевірка даних може змінити завершені bytes. [File progress source](https://raw.githubusercontent.com/anacrolix/torrent/master/file.go), [Stats API](https://pkg.go.dev/github.com/anacrolix/torrent).
+BytesCompleted is an estimate of the available completed/partially received data, not a speed counter. For rates we take the delta of payload counters over time; after restart/reset a new baseline sample is needed. Data verification may change the completed bytes. [File progress source](https://raw.githubusercontent.com/anacrolix/torrent/master/file.go), [Stats API](https://pkg.go.dev/github.com/anacrolix/torrent).
 
-UI приховує rates для pause/done. ETA обчислюється лише за коректної додатної швидкості. Документуємо, чи bytes означають уже записані або також очікувані chunks; дані інспектора й картки походять з одного snapshot.
+The UI hides rates for pause/done. ETA is computed only with a valid positive speed. We document whether bytes mean already written chunks or also pending ones; inspector and card data come from the same snapshot.
 
-Go перетворює disk/network/metadata errors у власні AppError. Callback помилки запису не означає автоматично «торрент видалено»; його життєвий цикл відокремлено від ручної паузи. Error listeners, pollers і piece subscriptions мають teardown. Весь бізнес-стан не віддається React як бібліотечний pointer або mutable engine object.
+Go converts disk/network/metadata errors into our own AppError. A write-error callback does not automatically mean "torrent deleted"; its lifecycle is separate from manual pause. Error listeners, pollers and piece subscriptions have teardown. No business state is handed to React as a library pointer or mutable engine object.
 
-## 8. Drop та видалення файлів
+## 8. Drop and file deletion
 
-Бібліотечне вилучення й продуктове видалення — різні операції. Спершу зупиняємо payload, вилучаємо engine object і завершуємо пов’язані задачі; далі прибираємо запис. Окреме підтвердження дозволяє Go FileAccessService працювати з перевіреним переліком фізичних шляхів.
+Library removal and product deletion are different operations. First we stop payload, remove the engine object and finish the associated tasks; then we remove the record. A separate confirmation allows the Go FileAccessService to work with a verified list of physical paths.
 
-Спільні файли, symlink, зовнішні зміни й сторонній вміст не повинні бути видалені через назву папки. Використання macOS Trash перевіряється окремо; частковий результат записується в operation journal. SQLite і filesystem не є однією транзакцією. Crash посеред видалення має показати зрозумілий стан, а не загубити доказ залишених файлів.
+Shared files, symlinks, external changes and third-party content must not be deleted via a folder name. Use of the macOS Trash is verified separately; a partial result is written to the operation journal. SQLite and the filesystem are not one transaction. A crash in the middle of deletion must show an understandable state, not lose evidence of the remaining files.
 
-## 9. Wails і frontend
+## 9. Wails and frontend
 
-Wails v2 надає desktop bindings і runtime; його стабільну гілку обрано для першої версії. Frontend із Vite входить у `.app`, усі system operations лишаються у Go. Встановлення залежностей розробки описане офіційно; точні toolchain/native prerequisites записуємо після власної збірки. [Wails introduction](https://wails.io/docs/introduction/), [Installation](https://wails.io/docs/gettingstarted/installation/).
+Wails v2 provides desktop bindings and a runtime; its stable branch is chosen for the first version. The Vite frontend is included in the `.app`; all system operations remain in Go. Installation of development dependencies is described officially; we record the exact toolchain/native prerequisites after our own build. [Wails introduction](https://wails.io/docs/introduction/), [Installation](https://wails.io/docs/gettingstarted/installation/).
 
-Початковий snapshot потрібен навіть за emit/listener моделі: Go може почати роботу до React mount. Власні revision/operationID запобігають відкату UI старою подією. Browser component tests використовують fake bridge; справжні діалоги, Finder/URL і завершення `.app` перевіряються в Wails на Mac. [Events](https://wails.io/docs/reference/runtime/events/), [Options](https://wails.io/docs/reference/options/).
+An initial snapshot is needed even with the emit/listener model: Go may start working before React mounts. Our own revision/operationID prevents the UI from being rolled back by a stale event. Browser component tests use a fake bridge; real dialogs, Finder/URL and quitting the `.app` are verified in Wails on a Mac. [Events](https://wails.io/docs/reference/runtime/events/), [Options](https://wails.io/docs/reference/options/).
 
-React переносить розміщення й дерево макета. WebView accessibility, фокус після rerender, shortcut-и, теми та непрозорий fallback є частиною реальних критеріїв. Не пов’язуємо business logic із CSS або WebView-подіями доступності мережі.
+React carries over the layout and tree of the mockup. WebView accessibility, focus after rerender, shortcuts, themes and the opaque fallback are part of the real criteria. We do not tie business logic to CSS or to WebView network-availability events.
 
-## 10. План прототипу й контрольні сценарії
+## 10. Prototype plan and control scenarios
 
-| Перевірка | Що довести |
+| Check | What to prove |
 |---|---|
-| Формати | `.torrent`, magnet, v1/v2/hybrid, multi-file, private, pad, zero-length, помилкові метадані. |
-| Імпорт | Metadata-only cancel, два одночасні джерела, пізній дублікат, остаточна папка й storage. |
-| Передавання | Manual pause обох payload-напрямків, resume, глобальна віддача, новий запис під глобальною політикою, seed після completion. |
-| Файли | None/normal, partial folder, collapsed descendants, shared piece, відсутній wanted. |
-| Відновлення | Close/relaunch, crash, completion corruption, modified/missing payload, ручна пауза до transfer. |
-| Файлові помилки | Диск заповнений, permission denied, symlink/collision, Trash failure, перерване bulk delete. |
-| Desktop | Холодний Finder/magnet, повторне відкриття, local assets, системні діалоги, WebKit/VoiceOver, quit. |
-| Конкурентність | Скасування metadata, stale events, goroutine/listener teardown, data races, повільна SQLite-операція. |
+| Formats | `.torrent`, magnet, v1/v2/hybrid, multi-file, private, pad, zero-length, invalid metadata. |
+| Import | Metadata-only cancel, two simultaneous sources, late duplicate, final folder and storage. |
+| Transfer | Manual pause of both payload directions, resume, global upload, new record under the global policy, seeding after completion. |
+| Files | None/normal, partial folder, collapsed descendants, shared piece, no wanted. |
+| Restore | Close/relaunch, crash, completion corruption, modified/missing payload, manual pause before transfer. |
+| File errors | Disk full, permission denied, symlink/collision, Trash failure, interrupted bulk delete. |
+| Desktop | Cold Finder/magnet, repeated open, local assets, system dialogs, WebKit/VoiceOver, quit. |
+| Concurrency | Metadata cancellation, stale events, goroutine/listener teardown, data races, slow SQLite operation. |
 
-Прототип працює з контрольованими тестовими торрентами й записує виміряний результат. Наявність API не позначається як пройдений тест. Після нього фіксуємо SQLite driver, storage/transport choices, dependency versions і точні build/check-команди.
+The prototype works with controlled test torrents and records the measured result. The existence of an API is not marked as a passed test. After it, we pin the SQLite driver, storage/transport choices, dependency versions and the exact build/check commands.
 
-MPL-2.0 ліцензія anacrolix/torrent і ліцензії залежностей залишаються частиною dependency inventory; особистий проєкт не вводить користувацької системи ліцензування. [LICENSE](https://github.com/anacrolix/torrent/blob/master/LICENSE).
+The MPL-2.0 license of anacrolix/torrent and the licenses of dependencies remain part of the dependency inventory; the personal project does not introduce a user licensing system. [LICENSE](https://github.com/anacrolix/torrent/blob/master/LICENSE).

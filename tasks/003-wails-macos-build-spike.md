@@ -1,76 +1,76 @@
-# 003 — Зібрати першу Wails .app на власному Mac
+# 003 — Build the first Wails .app on the owner's Mac
 
-**Статус:** `in_progress`  
-**Фаза:** P1 — Прототипи ризикових контрактів  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Ворота/дослід із зафіксованим результатом  
-**Жорсткі залежності:** [002](002-repository-and-agent-entrypoint.md)  
-**Вимоги:** `REL-01`, `REL-02`, `STACK-05`, `UI-04`, `AI-07`, `QA-01`, `QA-02`, `QA-05`
+**Status:** `in_progress`  
+**Phase:** P1 — Prototypes of risky contracts  
+**Priority:** critical path of the main scenario or completion  
+**Size:** Gate/spike with a recorded result  
+**Hard dependencies:** [002](002-repository-and-agent-entrypoint.md)  
+**Requirements:** `REL-01`, `REL-02`, `STACK-05`, `UI-04`, `AI-07`, `QA-01`, `QA-02`, `QA-05`
 
-## Результат
+## Outcome
 
-Зібрати невеликий справжній macOS-застосунок на Wails v2, React і TypeScript та перевірити, що локальний інтерфейс викликає Go-код у готовому пакеті `.app`.
+Build a small real macOS application with Wails v2, React and TypeScript and verify that the local interface calls Go code in the finished `.app` package.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `REL-01`, `REL-02`, `STACK-05`, `UI-04`, `AI-07`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): task start and completion conditions, statuses and check evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `REL-01`, `REL-02`, `STACK-05`, `UI-04`, `AI-07`, the corresponding criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTO, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Вибрати сумісні версії Wails v2, Go, Node.js, React, Vite й TypeScript. Записати версії, потрібні інструменти macOS та фактичний результат `wails doctor`; обрані залежності зафіксувати у відповідних файлах версій.
-2. Створити мінімальний застосунок за шаблоном React + TypeScript, увімкнути strict mode та використовувати один файл фіксації frontend-залежностей. Додати один Go-метод із простою JSON-відповіддю та виклик із UI через Wails bindings.
-3. Зібрати готовий пакет `.app`, у який включено локальні frontend assets. Не використовувати CDN, віддалені шрифти чи окремий сервер для завантаження інтерфейсу.
-4. Завершити сервер розробки, відкрити пакет із Finder і виконати Go-виклик. Повторити запуск без інтернету, завершити застосунок і відкрити його знову.
-5. Повторити збірку з чистої копії репозиторію. Записати точні команди, архітектуру пакета, стан підпису, системні залежності та перевірену версію macOS; окремо зазначити межі заявленої сумісності.
+1. Choose compatible versions of Wails v2, Go, Node.js, React, Vite and TypeScript. Record the versions, the required macOS tools and the actual result of `wails doctor`; pin the chosen dependencies in the corresponding version files.
+2. Create a minimal application from the React + TypeScript template, enable strict mode and use a single lockfile for frontend dependencies. Add one Go method with a simple JSON response and a call from the UI through Wails bindings.
+3. Build a finished `.app` package that includes the local frontend assets. Do not use a CDN, remote fonts or a separate server to load the interface.
+4. Stop the development server, open the package from Finder and perform the Go call. Repeat the launch without internet, quit the application and open it again.
+5. Repeat the build from a clean copy of the repository. Record the exact commands, package architecture, signing state, system dependencies and the verified macOS version; separately state the limits of the claimed compatibility.
 
-6. До власного startup/React-коду підготувати тести й мінімальну конфігурацію покриття за QA-01/QA-02. Перевірити очікуваний RED, потім першу `.app` і 100% власних джерел; інструментований запуск перевіряє точку входу. Не чекати майбутньої централізації у 004, щоб почати тестування; згенерований scaffold відрізняти від власних обгорток.
+6. Before writing own startup/React code, prepare tests and a minimal coverage configuration per QA-01/QA-02. Verify the expected RED, then the first `.app` and 100% of own sources; an instrumented run checks the entry point. Do not wait for the future centralization in 004 to start testing; distinguish the generated scaffold from own wrappers.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `main.go; wails.json; go.mod; frontend/package.json; docs/verification/first-build.md`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/003-wails-macos-build-spike.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `main.go; wails.json; go.mod; frontend/package.json; docs/verification/first-build.md`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** an entry `docs/verification/003-wails-macos-build-spike.md` or an exact link to a test or build report in the context handoff. One report can be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Зібрана `.app` відкривається з Finder після завершення сервера розробки та показує локальний UI без інтернету.
-- [ ] Натискання у справжньому Wails-вікні викликає Go-метод і відображає очікувану відповідь.
-- [ ] Запуск готового пакета не викликає Go, Node.js або Wails CLI й не потребує їхнього встановлення для користувача.
-- [ ] З чистої копії зафіксованих джерел і залежностей можна повторити збірку за записаними командами.
-- [ ] Звіт містить фактичну конфігурацію Mac, системні залежності, стан підпису та обмеження перевірки сумісності; неперевірені версії macOS не названі підтримуваними.
+- [ ] The built `.app` opens from Finder after the development server is stopped and shows the local UI without internet.
+- [ ] A click in the real Wails window calls the Go method and displays the expected response.
+- [ ] Launching the finished package does not invoke Go, Node.js or Wails CLI and does not require the user to install them.
+- [ ] The build can be repeated from a clean copy of the pinned sources and dependencies using the recorded commands.
+- [ ] The report contains the actual Mac configuration, system dependencies, signing state and the limits of the compatibility check; unverified macOS versions are not called supported.
 
-## Перевірки
+## Checks
 
-- Виконати першу та повторну збірки; зберегти точні команди, робочі каталоги, коди завершення й розташування пакетів.
-- Після зупинки сервера розробки перевірити запуск із Finder, відповідь Go-методу, роботу без інтернету та повторний запуск після завершення програми.
-- Переглянути склад пакета й динамічні залежності; перевірити, що UI не завантажує потрібні ресурси з мережі або каталогу розробника.
+- Perform the first and the repeated builds; keep the exact commands, working directories, exit codes and package locations.
+- After stopping the development server, check the launch from Finder, the Go method response, operation without internet and a repeated launch after quitting the program.
+- Review the package contents and dynamic dependencies; verify that the UI does not load required resources from the network or the developer's directory.
 
-**Як перевіряти:** використовувати команди, підібрані й реально виконані в цій задачі, та перевірку готової `.app`. Не чекати створення скриптів 004 і не підміняти запуск пакета перевіркою frontend у браузері.
+**How to check:** use the commands chosen and actually executed in this task, and a check of the finished `.app`. Do not wait for the scripts of 004 to be created and do not substitute a frontend check in the browser for launching the package.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Для цього прототипу використовувати Wails v2; перехід на v3 не входить до задачі. Сигнатури API перевіряти компіляцією на обраній версії. Успішний запуск на одному Mac доводить роботу на цій конфігурації, а не сумісність з усіма версіями macOS. Наявність Go/Node.js на машині розробника сама по собі не доводить їхню необхідність або відсутність такої потреби для готового пакета: це перевіряється способом запуску й залежностями пакета.
+Use Wails v2 for this prototype; a migration to v3 is not part of the task. Verify API signatures by compiling against the chosen version. A successful launch on one Mac proves operation on that configuration, not compatibility with all macOS versions. The presence of Go/Node.js on the developer machine by itself does not prove that they are needed or not needed for the finished package: this is checked through the way the package is launched and its dependencies.
 
-**Підстава для технічних рішень:** [Wails installation](https://wails.io/docs/gettingstarted/installation/), [Wails: будова застосунку](https://wails.io/docs/howdoesitwork/). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [Wails installation](https://wails.io/docs/gettingstarted/installation/), [Wails: how an application is structured](https://wails.io/docs/howdoesitwork/). Cross-check signatures and limitations against the pinned version; reading the API is not a passed integration check.
 
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of each session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** under the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architecture decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are performed; absence of executable code is not called 100%. In the task report, record the architecture conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and verification evidence.
+- Record a short result: what was changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.

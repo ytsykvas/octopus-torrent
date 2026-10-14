@@ -1,74 +1,74 @@
-# 066 — Зібрати й встановити особистий реліз
+# 066 — Build and install the personal release
 
-**Статус:** `planned`  
-**Фаза:** P7 — Надійність, особиста збірка й передача  
-**Пріоритет:** критичний шлях основного сценарію або завершення  
-**Розмір:** Ворота/дослід із зафіксованим результатом  
-**Жорсткі залежності:** [063](063-failure-race-fuzz-regression.md), [064](064-scale-profiling-lifecycle-soak.md), [065](065-native-accessibility-language-gate.md)  
-**Вимоги:** `REL-01`, `REL-02`, `STACK-05`, `DATA-02`
+**Status:** `planned`  
+**Phase:** P7 — Reliability, personal build and handoff  
+**Priority:** critical path of the main scenario or completion  
+**Size:** Gate/spike with a recorded result  
+**Hard dependencies:** [063](063-failure-race-fuzz-regression.md), [064](064-scale-profiling-lifecycle-soak.md), [065](065-native-accessibility-language-gate.md)  
+**Requirements:** `REL-01`, `REL-02`, `STACK-05`, `DATA-02`
 
-## Результат
+## Outcome
 
-Зібрати й встановити перевірений особистий пакет застосунку.
+Build and install the verified personal application package.
 
-## Що прочитати перед початком
+## Read before starting
 
-- [Правила виконання задач](README.md): умови початку й завершення задачі, статуси та докази перевірок.
-- [Вимоги](../PROJECT_REQUIREMENTS.md): `REL-01`, `REL-02`, `STACK-05`, `DATA-02`, відповідні критерії й наскрізні сценарії.
-- [Архітектура](../APPLICATION_ARCHITECTURE.md): межі модулів, DTO, життєві цикли й дані.
-- [Концепт](../PRODUCT_CONCEPT.md): особисті межі й порядок реалізації.
-- Результати й ADR усіх обов’язкових передумов вище; без потрібного доказу залежну частину не починати.
+- [Task execution rules](README.md): task start and completion conditions, statuses and check evidence.
+- [Requirements](../PROJECT_REQUIREMENTS.md): `REL-01`, `REL-02`, `STACK-05`, `DATA-02`, the relevant criteria and end-to-end scenarios.
+- [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.
+- [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
+- Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
 
-## Порядок роботи
+## Work order
 
-1. Зібрати зафіксованими інструментами й записати hash, версію та архітектуру пакета.
-2. Перевірити підпис, зв’язані бібліотеки, native bundling і фактичне встановлення.
-3. Запускати без dev server/Go/Node/Homebrew runtime.
-4. Підготувати перелік залежностей/ліцензій та доступну перевірку вразливостей.
-5. Пройти packaged Finder/magnet/drop/dialog/clipboard/quit/restart/offline smoke.
-6. Публічне поширення, Developer ID/notarization не блокують personal release; DMG лише за потреби.
+1. Build with the pinned tools and record the hash, version and architecture of the package.
+2. Check the signature, linked libraries, native bundling and the actual installation.
+3. Run without a dev server/Go/Node/Homebrew runtime.
+4. Prepare a list of dependencies/licenses and an available vulnerability check.
+5. Run the packaged Finder/magnet/drop/dialog/clipboard/quit/restart/offline smoke test.
+6. Public distribution and Developer ID/notarization do not block the personal release; DMG only if needed.
 
-## Артефакти та місце змін
+## Artifacts and change locations
 
-**Запропоновані місця:** `build .app; dependency inventory; docs/verification/personal-install.md`. Це карта майбутнього коду; після початкового налаштування перевірити фактичні шляхи й оновити архітектуру за потреби.
-**Доказ виконання:** запис `docs/verification/066-personal-build-install-license-audit.md` або точне посилання на звіт тесту чи збірки в передачі контексту. Один звіт можна повторно використати, якщо він доводить саме ці критерії.
+**Proposed locations:** `build .app; dependency inventory; docs/verification/personal-install.md`. This is a map of future code; after the initial setup, verify the actual paths and update the architecture if needed.
+**Evidence of completion:** the record `docs/verification/066-personal-build-install-license-audit.md` or an exact link to a test or build report in the context handoff. One report may be reused if it proves exactly these criteria.
 
-## Критерії приймання
+## Acceptance criteria
 
-- [ ] Власник встановлює й запускає той самий пакет.
-- [ ] Assets локальні, analytics/cloud access checks немає.
-- [ ] Докази підпису й залежностей записані.
-- [ ] Потрібні перевірки виконані на належній межі; невиконаний або невдалий тест не названо успішним.
+- [ ] The owner installs and launches the same package.
+- [ ] Assets are local; there are no analytics/cloud access checks.
+- [ ] Evidence of the signature and dependencies is recorded.
+- [ ] The required checks are performed at the proper boundary; a test that was not run or failed is not called successful.
 
-- [ ] Звіти 063/064/065 стосуються того самого коду й конфігурації, з яких зібрано пакет; зміни після перевірок мають пояснену цільову повторну перевірку.
+- [ ] Reports 063/064/065 apply to the same code and configuration from which the package was built; changes after the checks have an explained targeted recheck.
 
-## Перевірки
+## Checks
 
-- Перевірити cold/warm native inputs.
-- Перевірити Trash, збереження налаштувань і запуск без інтернету.
+- Check cold/warm native inputs.
+- Check Trash, settings persistence and launch without internet.
 
-**Як запускати:** використати фактичні команди з [004](004-reproducible-check-commands.md) та кореневого README. Записати команду, робочий каталог, конфігурацію, тестові дані, код завершення й спостереження. Перевірки справжнього рушія, тестового UI та системних можливостей у зібраній `.app` ведуться окремо.
+**How to run:** use the actual commands from [004](004-reproducible-check-commands.md) and the root README. Record the command, working directory, configuration, test data, exit code and observations. Checks of the real engine, the test UI and system capabilities in the built `.app` are kept separate.
 
-## Рішення, ризики й межі
+## Decisions, risks and boundaries
 
-Технічний облік ліцензій залежностей не створює продуктової системи ліцензування або входу. Публічне поширення й notarization не блокують особисту збірку.
+Technical tracking of dependency licenses does not create a product licensing or sign-in system. Public distribution and notarization do not block the personal build.
 
-**Підстава для технічних рішень:** [Wails build](https://wails.io/docs/gettingstarted/building/), [anacrolix LICENSE](https://github.com/anacrolix/torrent/blob/master/LICENSE), [Go security practices](https://go.dev/doc/security/best-practices). Звірити сигнатури й обмеження із зафіксованою версією; читання API не є пройденою інтеграційною перевіркою.
+**Basis for technical decisions:** [Wails build](https://wails.io/docs/gettingstarted/building/), [anacrolix LICENSE](https://github.com/anacrolix/torrent/blob/master/LICENSE), [Go security practices](https://go.dev/doc/security/best-practices). Check signatures and constraints against the pinned version; reading the API is not a passed integration check.
 
-## Обов’язковий цикл TDD і архітектурний перегляд
+## Mandatory TDD cycle and architecture review
 
-На початку кожної сесії виконати [правила агента](../AGENTS.md): прочитати актуальну архітектуру й документацію фічі, знайти код для повторного використання, записати план зміни та потрібного рефакторингу. Це стосується й продовження цієї задачі.
+At the start of every session, follow the [agent rules](../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.
 
-1. **RED:** до нової реалізації запустити тест/перевірку очікуваного результату й зафіксувати належну причину невдачі. Для чистого рефакторингу спочатку підтвердити гарантії наявної поведінки.
-2. **GREEN:** мінімальна коректна реалізація, тести й потрібна регресія; **100% усього власного виконуваного коду** за [точними метриками](../docs/engineering/TDD_AND_QUALITY.md), без звуження інвентарю чи ignore-обходів.
-3. **REFACTOR:** одразу прибрати дублювання й неправильні межі в зачепленому сценарії, перевикористати спільні модулі; повторити зелені перевірки й 100% покриття.
-4. Оновити документ фічі та [індекс docs/](../docs/README.md) у тій самій зміні; значущі архітектурні рішення записати в ADR.
+1. **RED:** before the new implementation, run the test/check of the expected result and record the proper reason for failure. For pure refactoring, first confirm the guarantees of the existing behavior.
+2. **GREEN:** minimal correct implementation, tests and the required regression; **100% of all own executable code** by the [exact metrics](../docs/engineering/TDD_AND_QUALITY.md), without narrowing the inventory or ignore workarounds.
+3. **REFACTOR:** immediately remove duplication and wrong boundaries in the affected scenario, reuse shared modules; repeat the green checks and 100% coverage.
+4. Update the feature document and the [docs/ index](../docs/README.md) in the same change; record significant architectural decisions in an ADR.
 
-**Завершення заблоковане**, якщо немає потрібних тестів/покриття/документації або залишився технічний борг. Для документації й декларативних файлів виконуються їхні структурні/контрактні перевірки; відсутність виконуваного коду не називається 100%. У звіті задачі записати архітектурний висновок, RED/GREEN, виконаний рефакторинг, інвентар/профіль та перевірку відсутності боргу. Правила поширюються й на прототипи.
+**Completion is blocked** if the required tests/coverage/documentation are missing or technical debt remains. For documentation and declarative files, their structural/contract checks are run; the absence of executable code is not called 100%. In the task report, record the architectural conclusion, RED/GREEN, the refactoring performed, the inventory/profile and the check for absence of debt. The rules also apply to prototypes.
 
-## Передача наступному виконавцю
+## Handoff to the next executor
 
-- Оновити статус у цьому файлі й навігаційній таблиці README одночасно; `done` лише після критеріїв і доказів перевірки.
-- Записати короткий результат: що змінено, точні перевірки з pass/fail/not_run, ADR, фактичні шляхи коду й відомі обмеження.
-- Для `blocked` назвати конкретну причину, відсутній доказ/рішення, спосіб розблокування й незалежні задачі, які можна продовжувати.
-- Оновити документацію, контракт і README, якщо змінилися API, структура або команди збірки; не залишати необхідний контекст тільки в чаті.
+- Update the status in this file and in the README navigation table at the same time; `done` only after the criteria and check evidence.
+- Write a short result: what changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
+- For `blocked`, name the specific reason, the missing evidence/decision, how to unblock it and the independent tasks that can continue.
+- Update the documentation, contract and README if the API, structure or build commands changed; do not leave necessary context only in the chat.
