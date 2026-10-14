@@ -78,8 +78,12 @@ PreToolUse on Bash, Edit, MultiEdit and Write (Codex: Bash). Three outcomes:
   not this parser — approves any change to one.
 - **Allow** everything else.
 
-Commands are parsed the way the shell reads them — single and double quotes, backslash escapes,
-here-documents (not `<<<`, not quoted `<<`, not arithmetic) — and wrappers (`env`, `sudo`, `time`, `nice`, `command`, `exec`,
+Commands are parsed the way the shell reads them — single and double quotes, backslash escapes — and
+where the parser is unsure it fails closed: a here-document body is skipped as data only when every
+here-document in the command goes to `cat`, `git`, `gh` or `tee`, its delimiter is fully parsed and its
+terminator line exists; otherwise the body is decided as commands (so a here-document for another
+program, such as `python3 - <<EOF`, can be refused — use the Write tool for such files). `$((…))` is
+searched for substitutions like any other text. Wrappers (`env`, `sudo`, `time`, `nice`, `command`, `exec`,
 `xargs`), `sh|bash|zsh|dash|ksh -c` (also inside combined flags such as `-lc`), `eval`, `$(…)` and
 backtick substitutions (also inside double quotes), subshells, `cd`/`pushd` and absolute program paths
 are followed. Here-document bodies are data and are skipped, and only real npm flags and real
@@ -116,7 +120,8 @@ policy, including the ones npm suggests in its own error message. It does not se
 
 The parser is hand-written and small, so some shell constructions will always read differently from
 the real shell; two automated reviews each found a handful. Replacing it with a full shell parser
-(for example `mvdan.cc/sh/v3/syntax`, used by `shfmt`) would close that class of gaps, at the cost of a
+(for example `mvdan.cc/sh/v3/syntax`, used by `shfmt`) would close that class of gaps — three
+automated reviews in a row each found more — at the cost of a
 new third-party dependency — the owner's decision under the dependency policy.
 
 The guarantee therefore comes from checking results: **task 004** adds a release-age check of every

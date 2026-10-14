@@ -132,14 +132,15 @@ var cooldownKeys = map[string]bool{"min-release-age": true, "before": true, "min
 var otherManagers = map[string]bool{"pnpm": true, "yarn": true, "bun": true, "bunx": true}
 
 func decideCommand(command, cwd string, readFile func(string) ([]byte, error)) Decision {
-	command = stripHeredocBodies(command)
+	command, bodies := stripHeredocBodies(command)
 	for _, inner := range substitutions(command) {
 		if d := decideCommand(inner, cwd, readFile); d.Deny {
 			return d
 		}
 	}
+	segments := shellSegments(command)
 	dir := cwd
-	for _, words := range shellSegments(command) {
+	for _, words := range segments {
 		if redirectsIntoProtected(words) {
 			return denyProtectedShellWrite()
 		}
@@ -178,6 +179,13 @@ func decideCommand(command, cwd string, readFile func(string) ([]byte, error)) D
 		}
 		if d.Deny {
 			return d
+		}
+	}
+	if len(bodies) > 0 && !heredocsGoToDataSinks(segments, len(bodies)) {
+		for _, body := range bodies {
+			if d := decideCommand(body, cwd, readFile); d.Deny {
+				return d
+			}
 		}
 	}
 	return Decision{}
@@ -349,13 +357,13 @@ var redirectionWord = regexp.MustCompile(`^[0-9]*[<>]`)
 // the guard unless it is stdin in disguise. A shell with no operand reads its commands from stdin — a
 // pipe or a here-document the guard cannot see — and is refused.
 func decideShell(args []string, dir string, readFile func(string) ([]byte, error)) Decision {
-	withCommand := false
+	withCommand, fromStdin := false, false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "--":
 			if i+1 < len(args) {
-				return decideShellOperand(args[i+1], withCommand, dir, readFile)
+				return decideShellOperand(args[i+1], withCommand, fromStdin, dir, readFile)
 			}
 			i = len(args)
 		case shellValueOptions[arg]:
@@ -363,8 +371,9 @@ func decideShell(args []string, dir string, readFile func(string) ([]byte, error
 		case strings.HasPrefix(arg, "--") || redirectionWord.MatchString(arg):
 		case len(arg) > 1 && (arg[0] == '-' || arg[0] == '+'):
 			withCommand = withCommand || (arg[0] == '-' && strings.Contains(arg, "c"))
+			fromStdin = fromStdin || (arg[0] == '-' && strings.ContainsAny(arg, "si")) // -s, -i: commands from stdin
 		default:
-			return decideShellOperand(arg, withCommand, dir, readFile)
+			return decideShellOperand(arg, withCommand, fromStdin, dir, readFile)
 		}
 	}
 	if withCommand {
@@ -373,11 +382,11 @@ func decideShell(args []string, dir string, readFile func(string) ([]byte, error
 	return denyStdinShell()
 }
 
-func decideShellOperand(operand string, withCommand bool, dir string, readFile func(string) ([]byte, error)) Decision {
-	if withCommand {
+func decideShellOperand(operand string, withCommand, fromStdin bool, dir string, readFile func(string) ([]byte, error)) Decision {
+	switch {
+	case withCommand:
 		return decideCommand(operand, dir, readFile)
-	}
-	if readsStdin(operand) {
+	case fromStdin || readsStdin(operand):
 		return denyStdinShell()
 	}
 	return Decision{}
@@ -407,20 +416,30 @@ func joinArgv(argv []string) string {
 	return strings.Join(quoted, " ")
 }
 
-var heredocOperator = regexp.MustCompile(`^<<(-?)[ \t]*(?:'([A-Za-z_]\w*)'|"([A-Za-z_]\w*)"|([A-Za-z_]\w*))`)
+var (
+	heredocOperator = regexp.MustCompile(`^<<(-?)[ \t]*(?:'([A-Za-z_]\w*)'|"([A-Za-z_]\w*)"|([A-Za-z_]\w*))`)
+	// heredocEnd is what may follow the delimiter word; anything else means a word this parser does
+	// not fully understand (E"O"F, \EOF), which is then not treated as a here-document at all.
+	heredocEnd = regexp.MustCompile(`^($|[ \t\n;&|<>()])`)
+)
 
-// stripHeredocBodies removes the text of here-documents, which is data for the receiving program
-// (a commit message, a file), not commands. Only an unquoted, unescaped << outside arithmetic counts
-// (not <<<, not "<<" in quotes); a here-document fed to a shell or to source is refused separately.
-func stripHeredocBodies(command string) string {
+// dataSinks receive a here-document as data, never as commands.
+var dataSinks = map[string]bool{"cat": true, "git": true, "gh": true, "tee": true}
+
+// stripHeredocBodies separates the text of here-documents from the command line. Only an unquoted,
+// unescaped << whose delimiter word is fully understood, and whose terminator line exists, counts;
+// anything else stays in the command line and is decided as commands (fail closed). The bodies are
+// returned so the caller can decide them unless every here-document goes to a data sink.
+func stripHeredocBodies(command string) (string, []string) {
 	var out strings.Builder
+	var bodies []string
 	type heredoc struct {
 		word string
 		tabs bool
 	}
 	var pending []heredoc
 	var quote byte
-	escaped, arithmetic := false, 0
+	escaped := false
 	for i := 0; i < len(command); i++ {
 		c := command[i]
 		switch {
@@ -436,45 +455,72 @@ func stripHeredocBodies(command string) string {
 			escaped = true
 		case c == '\'' || c == '"':
 			quote = c
-		case strings.HasPrefix(command[i:], "$(("):
-			arithmetic++
-		case arithmetic > 0 && strings.HasPrefix(command[i:], "))"):
-			arithmetic--
 		case strings.HasPrefix(command[i:], "<<<"):
 			out.WriteString("<<<")
 			i += 2
 			continue
-		case arithmetic == 0 && heredocOperator.MatchString(command[i:]):
+		case heredocOperator.MatchString(command[i:]):
 			m := heredocOperator.FindStringSubmatch(command[i:])
-			pending = append(pending, heredoc{word: m[2] + m[3] + m[4], tabs: m[1] == "-"})
+			if heredocEnd.MatchString(command[i+len(m[0]):]) {
+				pending = append(pending, heredoc{word: m[2] + m[3] + m[4], tabs: m[1] == "-"})
+			}
 			out.WriteString(m[0])
 			i += len(m[0]) - 1
 			continue
 		case c == '\n' && len(pending) > 0:
-			out.WriteByte('\n')
 			pos := i + 1
+			var found []string
 			for _, h := range pending {
-				for pos < len(command) {
+				start, closed := pos, false
+				for pos < len(command) && !closed {
 					line, next := command[pos:], len(command)
 					if end := strings.IndexByte(line, '\n'); end >= 0 {
 						line, next = line[:end], pos+end+1
 					}
+					body := command[start:pos]
 					pos = next
 					if h.tabs {
 						line = strings.TrimLeft(line, "\t")
 					}
 					if line == h.word {
-						break
+						found, closed = append(found, body), true
 					}
 				}
+				if !closed {
+					out.WriteString(command[i:]) // no terminator: not a here-document after all
+					return out.String(), bodies
+				}
 			}
+			bodies = append(bodies, found...)
 			pending = nil
+			out.WriteByte('\n')
 			i = pos - 1
 			continue
 		}
 		out.WriteByte(c)
 	}
-	return out.String()
+	return out.String(), bodies
+}
+
+// heredocsGoToDataSinks reports whether each of the n here-documents feeds a data sink: as many
+// segments carry a << word as there are bodies, and each of those runs cat, git, gh or tee.
+func heredocsGoToDataSinks(segments [][]string, n int) bool {
+	count := 0
+	for _, words := range segments {
+		has := false
+		for _, w := range words {
+			has = has || (strings.HasPrefix(w, "<<") && !strings.HasPrefix(w, "<<<"))
+		}
+		if !has {
+			continue
+		}
+		count++
+		program, _ := unwrap(words)
+		if len(program) == 0 || !dataSinks[filepath.Base(program[0])] {
+			return false
+		}
+	}
+	return count == n
 }
 
 // quoteActive reports, for each byte, whether the shell would expand $(...) and `...` there: outside
@@ -519,10 +565,6 @@ func substitutions(command string) []string {
 			continue
 		}
 		switch c := command[i]; {
-		case strings.HasPrefix(command[i:], "$(("):
-			if end := strings.Index(command[i:], "))"); end >= 0 {
-				i += end + 1
-			}
 		case c == '`':
 			if end := strings.IndexByte(command[i+1:], '`'); end >= 0 {
 				found = append(found, command[i+1:i+1+end])
