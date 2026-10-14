@@ -118,6 +118,12 @@ policy, including the ones npm suggests in its own error message. It does not se
   writes to protected files by programs it does not know (an interpreter such as `python3` writing a
   file), or a dependency added by hand to `package.json` / `go.mod` and resolved later.
 - A Go version that is explicit and full but younger than 14 days.
+- **Open gap, found after the push (15 October 2026):** a here-document with an *unquoted* delimiter
+  (`cat <<EOF`) is expanded by the shell, so `$(…)` inside its body runs; the guard skips such a body
+  when it goes to a data sink. Fix: for unquoted delimiters always check the body's substitutions, and
+  skip a body only for a quoted delimiter (`'EOF'`, `"EOF"`). It needs a change to `internal/devtool`,
+  which the hook blocks in the `auto` mode — to be done with the owner in the `default` mode, at the
+  latest in task 004.
 - Its own source when changed outside the Edit tools (see above); Edit/Write changes ask the owner. If
   devtool fails to compile, the hook exits 1 and agents continue (fail-open, so a broken hook cannot
   lock an agent out of the tools it needs to fix it).
