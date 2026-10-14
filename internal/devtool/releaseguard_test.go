@@ -291,6 +291,30 @@ func TestDecideChecksTheResultOfWritingAnNpmrc(t *testing.T) {
 	}
 }
 
+// In a permission mode that settles "ask" without the owner, an ask would approve itself; the change
+// is blocked instead and the owner makes it in the default mode.
+func TestDecideBlocksOwnerChangesInModesThatApproveOnTheirOwn(t *testing.T) {
+	write := func(mode, path string) HookEvent {
+		return HookEvent{PermissionMode: mode, ToolName: "Write", ToolInput: ToolInput{FilePath: path, Content: "min-release-age=21\n"}}
+	}
+	for _, mode := range []string{"auto", "acceptEdits", "bypassPermissions", "dontAsk"} {
+		for _, path := range []string{repo + "/.claude/settings.json", repo + "/frontend/.npmrc", repo + "/internal/devtool/devtool.go"} {
+			got := Decide(write(mode, path), guardedRepo.read)
+			if !got.Deny || got.Ask || !strings.Contains(got.Reason, "permission mode") || !strings.Contains(got.Reason, mode) {
+				t.Errorf("%s %s = %+v, want deny naming the permission mode", mode, path, got)
+			}
+		}
+	}
+	for _, mode := range []string{"default", "plan", ""} {
+		if got := Decide(write(mode, repo+"/.claude/settings.json"), guardedRepo.read); got.Deny || !got.Ask {
+			t.Errorf("%q = %+v, want ask", mode, got)
+		}
+	}
+	if got := Decide(write("auto", repo+"/README.md"), guardedRepo.read); got.Deny || got.Ask {
+		t.Errorf("auto README.md = %+v, want allow", got)
+	}
+}
+
 func TestDecideAsksTheOwnerBeforeChangingHookConfigs(t *testing.T) {
 	for _, path := range []string{repo + "/.claude/settings.json", repo + "/.codex/hooks.json"} {
 		ev := HookEvent{ToolName: "Write", ToolInput: ToolInput{FilePath: path, Content: "{}"}}

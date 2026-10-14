@@ -27,7 +27,9 @@ replace the process).
 - **Hook output:** exit 0 allows; exit 2 with `release-guard: <reason> Policy: …` on stderr blocks;
   exit 0 with `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask",…}}` on
   stdout hands the call to the owner (every `.npmrc` change that does not weaken the cooldown, and
-  every change to the guard's settings, source or module files); input that is not JSON is allowed with
+  every change to the guard's settings, source or module files) — or, when the payload's
+  `permission_mode` would approve that ask on its own (`auto`, `acceptEdits`, `bypassPermissions`),
+  blocks it with exit 2; input that is not JSON is allowed with
   a warning; a guarded tool whose input cannot be read is blocked; an ask that cannot be written
   blocks. A command may arrive as a string or a list of arguments.
 - **Doc checks:** `devtool check-docs` prints `DEAD <file>: <target>` per broken link, anchor or

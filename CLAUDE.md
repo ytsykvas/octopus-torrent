@@ -18,7 +18,8 @@ Everything written into the repository is English; replies to the owner are in U
 ## Workflow
 
 - Start a numbered task with `/task` (or `/task 004`): it reads the required context and plans in plan mode before any edit.
-- `/check` runs every gate; `/branch-review` runs the three review agents; `/qa` drives the real `.app` through the `macos-qa` agent; `/pushit` commits (push and PR only once a remote exists).
+- `/check` runs every gate; `/branch-review` runs the three review agents; `/qa` drives the real `.app` through the `macos-qa` agent; `/pushit` commits, pushes to `origin` (`github.com/ytsykvas/octopus-torrent`) and opens a PR.
+- Changes to the hook's own code, `go.mod`/`go.sum`, an `.npmrc` or agent settings need the owner: in the `auto`, `acceptEdits` or `bypassPermissions` permission modes the hook blocks them, so ask the owner to switch to `default` (Shift+Tab) first — task 004 is such a task.
 - Adding or upgrading a dependency: [.claude/docs/dependencies.md](.claude/docs/dependencies.md). The `release-guard` hook blocks commands that would bypass the 14-day release cooldown; when it refuses, use the form it names — do not work around it.
 
 ## Commands

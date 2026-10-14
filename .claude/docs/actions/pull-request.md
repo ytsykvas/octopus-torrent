@@ -5,11 +5,10 @@ The format for an OctopusTorrent pull request. Single source for `/pushit`, the 
 
 The commit itself: [commit-message.md](commit-message.md).
 
-## When there is no remote
+## Remote
 
-The repository has no GitHub remote yet. If `git remote` is empty, do not create one and do not open
-a PR: say that push and PR were skipped because no remote exists. Creating the GitHub repository is a
-separate decision of the owner.
+`origin` is the owner's GitHub repository `https://github.com/ytsykvas/octopus-torrent`. If `git remote`
+is empty (a copy without it), do not add one and do not open a PR: say that push and PR were skipped.
 
 ## Base branch
 

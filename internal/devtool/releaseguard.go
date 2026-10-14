@@ -16,10 +16,16 @@ const (
 
 // HookEvent is the PreToolUse payload Claude Code and Codex send on stdin.
 type HookEvent struct {
-	Cwd       string    `json:"cwd"`
-	ToolName  string    `json:"tool_name"`
-	ToolInput ToolInput `json:"tool_input"`
+	Cwd            string    `json:"cwd"`
+	PermissionMode string    `json:"permission_mode"`
+	ToolName       string    `json:"tool_name"`
+	ToolInput      ToolInput `json:"tool_input"`
 }
+
+// ownerPromptingModes are the permission modes in which an "ask" reaches the owner. In the others
+// (auto, acceptEdits, bypassPermissions, …) Claude Code settles it without them; an empty mode is an
+// agent that does not report one.
+var ownerPromptingModes = map[string]bool{"default": true, "plan": true, "": true}
 
 // ToolInput carries the fields of the Bash, Edit, MultiEdit and Write tools that the guard inspects.
 type ToolInput struct {
@@ -62,13 +68,18 @@ func ask(reason string) Decision {
 // the ones npm itself suggests; it is not a sandbox. The authoritative check is the age of every
 // locked version (task 004).
 func Decide(ev HookEvent, readFile func(string) ([]byte, error)) Decision {
+	var d Decision
 	switch ev.ToolName {
 	case "Bash":
-		return decideCommand(ev.ToolInput.Command, ev.Cwd, readFile)
+		d = decideCommand(ev.ToolInput.Command, ev.Cwd, readFile)
 	case "Edit", "MultiEdit", "Write":
-		return decideFileChange(ev.ToolInput, readFile)
+		d = decideFileChange(ev.ToolInput, readFile)
 	}
-	return Decision{}
+	if d.Ask && !ownerPromptingModes[ev.PermissionMode] {
+		return Decision{Deny: true, Reason: d.Reason + " The current permission mode (" + ev.PermissionMode +
+			") would approve this without the owner, so it is blocked; the owner switches to the default mode to approve it."}
+	}
+	return d
 }
 
 var (

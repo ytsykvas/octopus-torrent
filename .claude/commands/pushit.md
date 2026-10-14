@@ -32,8 +32,8 @@ Stage deliberately (`git add <paths>`; `git add -A` only after Phase 1 is clean)
 ```bash
 git remote
 ```
-- **No remote:** stop here and say: "Committed locally; push and PR skipped — the repository has no
-  remote yet." Do not create one; that is the owner's decision.
+- **No remote** (a copy without `origin`): stop here and say: "Committed locally; push and PR skipped —
+  there is no remote." Do not add one; the owner's remote is `https://github.com/ytsykvas/octopus-torrent`.
 - **Remote exists:** `git push -u origin HEAD`. Never force-push automatically; on a non-fast-forward
   rejection merge `main` in ([resolve-conflicts.md](../docs/actions/resolve-conflicts.md)) or ask
   about `--force-with-lease`. Then `gh pr view --json number,url,state`; create or update the PR per

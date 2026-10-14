@@ -13,6 +13,11 @@ Create and verify a single set of commands for development, build and local chec
 
 ## Read before starting
 
+**Permission mode (added 2026-10-15):** this task changes `cmd/devtool` / `internal/devtool`, the
+`release-guard` hook's own code. In a permission mode that approves prompts by itself (`auto`,
+`acceptEdits`, `bypassPermissions`) the hook blocks those edits; the owner switches Claude Code to the
+`default` mode (Shift+Tab) before the work and approves each change ([ADR](../../docs/decisions/agent-tooling.md)).
+
 - [Task execution rules](README.md): conditions for starting and completing a task, statuses and evidence of checks.
 - [Requirements](../PROJECT_REQUIREMENTS.md): `AI-07`, `AI-08`, the corresponding criteria and end-to-end scenarios.
 - [Architecture](../APPLICATION_ARCHITECTURE.md): module boundaries, DTOs, lifecycles and data.

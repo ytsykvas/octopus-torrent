@@ -16,6 +16,11 @@ file in full; every document in its "Read before starting" list; the requirement
 `product/PROJECT_REQUIREMENTS.md`; the open decisions it owns in
 `docs/decisions/project-baseline.md`; the feature doc and the actual code it touches; `git log -10`.
 
+If the task changes anything the `release-guard` hook protects — `internal/devtool/`, `cmd/devtool/`,
+`go.mod`, `go.sum`, an `.npmrc`, `.claude/settings*.json`, `.codex/` — and the session is not in the
+`default` permission mode, tell the owner before planning: those edits are blocked until they switch
+to `default` (Shift+Tab) and approve them.
+
 ## Step 3: Plan in plan mode
 
 Enter plan mode and write the plan per [planning.md](../docs/planning.md): boundaries and contracts

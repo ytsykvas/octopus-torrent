@@ -75,7 +75,10 @@ PreToolUse on Bash, Edit, MultiEdit and Write (Codex: Bash). Three outcomes:
   every change to what can define, disable or rewrite the guard — `.claude/settings.json`,
   `.claude/settings.local.json`, `.codex/hooks.json`, `.codex/config.toml`, `internal/devtool/`,
   `cmd/devtool/`, `go.mod`, `go.sum`. npm's own parser decides what an `.npmrc` means, so the owner —
-  not this parser — approves any change to one.
+  not this parser — approves any change to one. An "ask" only reaches the owner in the `default` and
+  `plan` permission modes; in a mode that settles it on its own (`auto`, `acceptEdits`,
+  `bypassPermissions`, …, read from the hook's `permission_mode`) the change is **denied** instead,
+  and the owner makes it after switching to `default`.
 - **Allow** everything else.
 
 Commands are parsed the way the shell reads them — single and double quotes, backslash escapes — and
@@ -100,8 +103,9 @@ directly. No `archive` step: nothing is created outside the worktree.
 
 ### Base branch and remote
 
-PR instructions target `main`; `/pushit` commits locally and reports that push and PR were skipped
-until the owner creates a remote.
+PR instructions target `main`. `origin` is the owner's GitHub repository
+`https://github.com/ytsykvas/octopus-torrent` (added on 15 October 2026); in a copy without a remote,
+`/pushit` commits locally and reports that push and PR were skipped.
 
 ## Limits accepted
 

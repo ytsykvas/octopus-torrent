@@ -54,12 +54,13 @@ Configuration (not executable code): `.claude/settings.json`, `.codex/hooks.json
 | 9 | automated security review of the commit: guard sources and other settings layers not protected, `$(…)`/backticks in double quotes, `eval`, `bash -lc`, `dash`, shells reading stdin, `$VAR` as the program, a command given as an argument list, unreadable input of a guarded tool let through | `go test ./internal/devtool/` | 29 failing cases |
 | 10 | second automated security review: an argument list joined without quoting (a `-c` script split apart), `bash -o pipefail -c`, `+o`, `--rcfile`, `-c -e`, `/dev/stdin` and `/dev/fd/*` scripts, `source /dev/stdin`, `<<<` and `"<<EOF"` taken as here-documents, an apostrophe inside double quotes hiding `$(…)`, backslash escapes | `go test ./internal/devtool/` | 14 failing cases |
 | 11 | third automated security review: arithmetic `$((…))` skipped with commands inside, `((…<<EOF))` and partially parsed delimiters (`E"O"F`) or a missing terminator stripping real commands, here-documents fed to non-shell programs that run commands (`xargs sh -c`), `bash -s` / `-i` with an operand | `go test ./internal/devtool/` | 7 failing cases |
+| 12 | owner's report: in the `auto` permission mode the "ask" for guard changes was approved without them (this session runs in `auto`, confirmed from `~/.claude/settings.json` `defaultMode` and the hook payload's `permission_mode`) | `go test ./internal/devtool/` | `unknown field PermissionMode`; then `want 2 naming the permission mode` |
 
 ## GREEN: actual checks
 
 | # | Check | Command | Result |
 |---|---|---|---|
-| 1 | Unit tests | `go test ./internal/devtool/` | `pass`, 36 tests (67 allowed and 131 denied commands, `.npmrc` write/edit/MultiEdit and guard-file cases) |
+| 1 | Unit tests | `go test ./internal/devtool/` | `pass`, 38 tests (67 allowed and 131 denied commands, `.npmrc` write/edit/MultiEdit and guard-file cases) |
 | 2 | Binary, script, hook-config and Codex-mirror tests | `go test ./cmd/devtool/` | `pass`, 5 tests; the binary is built once per run and removed afterwards |
 | 3 | Full Go suite | `go test ./...` | `pass` |
 | 4 | Merged Go coverage | README procedure: unit + devtool binary + instrumented `.app` | `pass`: 0 blocks with a zero count; every package 100.0% |
@@ -77,7 +78,8 @@ Configuration (not executable code): `.claude/settings.json`, `.codex/hooks.json
 | 16 | Generated bindings unchanged | `go tool wails generate module`; `git -c core.fileMode=false status --short frontend/wailsjs` | `pass`: empty (only a file-mode flip, which Wails itself causes) |
 | 17 | Codex agents and hook in a Codex session | — | `not_run`: no Codex session was used; the payload shape (`tool_name` `"Bash"`) is assumed from Claude Code's |
 | 18 | octopus / Conductor apps importing the configs | — | `not_run`: verified by running the scripts the way the runners do (9–11), not inside the apps |
-| 19 | The `ask` prompt in a live session | — | `not_run`: it would block this session on the owner; the JSON contract is covered by tests 1 and 7 |
+| 19 | The `ask` prompt in a live session | — | `not_run` as a prompt: this session runs in `auto`, where Claude Code settles asks itself — which is exactly why such changes are now denied there |
+| 20 | Guard change in `auto` mode, live | Edit tool on `internal/devtool/system.go` | `pass`: blocked — "The current permission mode (auto) would approve this without the owner, so it is blocked; the owner switches to the default mode to approve it." |
 
 ## Reviews
 

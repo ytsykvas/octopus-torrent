@@ -217,14 +217,15 @@ var guardedTools = map[string]bool{"Bash": true, "Edit": true, "MultiEdit": true
 // string or a list of arguments.
 func decodeHookEvent(r io.Reader) (HookEvent, error) {
 	var raw struct {
-		Cwd       string          `json:"cwd"`
-		ToolName  string          `json:"tool_name"`
-		ToolInput json.RawMessage `json:"tool_input"`
+		Cwd            string          `json:"cwd"`
+		PermissionMode string          `json:"permission_mode"`
+		ToolName       string          `json:"tool_name"`
+		ToolInput      json.RawMessage `json:"tool_input"`
 	}
 	if err := json.NewDecoder(r).Decode(&raw); err != nil {
 		return HookEvent{}, fmt.Errorf("%w: %v", errUnreadableEvent, err)
 	}
-	ev := HookEvent{Cwd: raw.Cwd, ToolName: raw.ToolName}
+	ev := HookEvent{Cwd: raw.Cwd, PermissionMode: raw.PermissionMode, ToolName: raw.ToolName}
 	if !guardedTools[raw.ToolName] {
 		return ev, nil
 	}

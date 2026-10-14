@@ -123,6 +123,14 @@ func TestHookReadsACommandGivenAsAnArgumentList(t *testing.T) {
 	}
 }
 
+func TestHookReadsThePermissionMode(t *testing.T) {
+	input := `{"permission_mode":"auto","tool_name":"Write","tool_input":{"file_path":"/repo/.codex/hooks.json","content":"{}"}}`
+	code, stderr := runMain(t, &fakeSystem{}, env(nil), input, "hook", "release-guard")
+	if code != 2 || !strings.Contains(stderr, "permission mode") {
+		t.Errorf("got code %d stderr %q, want 2 naming the permission mode", code, stderr)
+	}
+}
+
 // Joining an argument list must keep each argument one word, so a -c script stays whole.
 func TestHookKeepsEachArgumentOfAListWhole(t *testing.T) {
 	sys := &fakeSystem{files: guardedRepo}

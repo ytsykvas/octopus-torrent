@@ -30,7 +30,9 @@ you touched, and never stop at the first failure: a later check often explains a
 - **The hook asks the owner** (Claude Code shows a permission prompt) for any change to an `.npmrc`,
   the agent settings that hold hooks (`.claude/settings*.json`, `.codex/hooks.json`,
   `.codex/config.toml`), the guard's source (`internal/devtool/`, `cmd/devtool/`) or `go.mod` /
-  `go.sum`. Wait for the answer; never route the change around the Edit tool.
+  `go.sum`. Wait for the answer; never route the change around the Edit tool. In a permission mode
+  that would approve the prompt by itself (`auto`, `acceptEdits`, `bypassPermissions`) the hook denies
+  these changes instead: say so and ask the owner to switch to the `default` mode.
 - **`go test` fails with "`.codex/agents/<name>.toml` is out of date".** An agent in `.claude/agents/`
   changed: run `go tool devtool codex-agents` and commit the result.
 - **`npm ci` refuses a version.** `min-release-age=14` holds back a release younger than 14 days. Pick
