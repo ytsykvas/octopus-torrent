@@ -1,0 +1,50 @@
+# OctopusTorrent — правила ігнорування.
+# Не приховувати вихідний код, згенеровані Wails bindings (frontend/wailsjs/),
+# конфігурацію пакета (build/darwin/, build/appicon.png) і штучні тестові дані (testdata/).
+
+# Результати збірки Wails і Vite
+/build/bin/
+/frontend/dist/
+
+# Залежності frontend (відтворюються з lockfile)
+node_modules/
+
+# Робочі бази SQLite: бібліотека застосунку, piece completion рушія, журнали WAL
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+*.sqlite3
+
+# Профілі й звіти покриття (зберігаються як докази лише в docs/verification/ за потреби)
+coverage.out
+*.coverprofile
+cover.html
+coverage/
+
+# Локальні журнали, тимчасові файли
+*.log
+logs/
+tmp/
+*.tmp
+
+# Особисті торренти й завантажені дані не потрапляють у Git.
+*.torrent
+downloads/
+
+# Локальні налаштування середовища й редакторів
+.env
+.env.*
+.vscode/
+.idea/
+
+# Штучні тестові дані (торренти, пошкоджені БД тощо) завжди відстежуються.
+!testdata/**
+!**/testdata/**
+
+# macOS (після винятку testdata, щоб не потрапляти в Git і звідти)
+.DS_Store
