@@ -5,9 +5,9 @@
 ## Mandatory entry points
 
 - [Agent rules](../AGENTS.md).
-- [Requirements](../PROJECT_REQUIREMENTS.md), [concept](../PRODUCT_CONCEPT.md), [architecture](../APPLICATION_ARCHITECTURE.md).
+- [Requirements](../product/PROJECT_REQUIREMENTS.md), [concept](../product/PRODUCT_CONCEPT.md), [architecture](../product/APPLICATION_ARCHITECTURE.md).
 - [TDD, 100% coverage, architecture analysis and no technical debt](engineering/TDD_AND_QUALITY.md).
-- [Task plan](../tasks/README.md).
+- [Task plan](../product/tasks/README.md).
 - [Feature description template](features/_TEMPLATE.md), [ADR template](decisions/_ADR_TEMPLATE.md).
 - [Root README](../README.md): current state, directory map, next task.
 
@@ -24,10 +24,10 @@
 
 | Document | Status |
 |---|---|
-| [Project baseline and open-decision register](decisions/project-baseline.md) | accepted, [001](../tasks/001-scope-and-decision-register.md); [report](verification/001-scope-and-decision-register.md) |
-| Git repository and AI entry point | [002](../tasks/002-repository-and-agent-entrypoint.md); [report](verification/002-repository-and-agent-entrypoint.md) |
-| [Tool and frontend dependency versions](decisions/toolchain-versions.md) (O2) | accepted, [003](../tasks/003-wails-macos-build-spike.md); [report](verification/003-wails-macos-build-spike.md) |
-| [Target macOS and application identity](decisions/macos-target.md) (O1) | accepted, [003](../tasks/003-wails-macos-build-spike.md); review — 066 |
+| [Project baseline and open-decision register](decisions/project-baseline.md) | accepted, [001](../product/tasks/001-scope-and-decision-register.md); [report](verification/001-scope-and-decision-register.md) |
+| Git repository and AI entry point | [002](../product/tasks/002-repository-and-agent-entrypoint.md); [report](verification/002-repository-and-agent-entrypoint.md) |
+| [Tool and frontend dependency versions](decisions/toolchain-versions.md) (O2) | accepted, [003](../product/tasks/003-wails-macos-build-spike.md); [report](verification/003-wails-macos-build-spike.md) |
+| [Target macOS and application identity](decisions/macos-target.md) (O1) | accepted, [003](../product/tasks/003-wails-macos-build-spike.md); review — 066 |
 | [Repository language: English only](decisions/repository-language.md) | accepted, owner's decision of 15 October 2026 |
 
 ## Feature index
@@ -36,7 +36,7 @@ Before implementing a feature, create its document from the template and add a l
 
 | Feature | Status | Tasks |
 |---|---|---|
-| [Desktop shell, `.app` build and the first React → Go connection](features/desktop-shell-build.md) | `implemented` (prototype) | [003](../tasks/003-wails-macos-build-spike.md) |
+| [Desktop shell, `.app` build and the first React → Go connection](features/desktop-shell-build.md) | `implemented` (prototype) | [003](../product/tasks/003-wails-macos-build-spike.md) |
 
 No product capability (import, transfer, library) is implemented yet.
 

@@ -1,10 +1,10 @@
 # OctopusTorrent: mandatory agent rules
 
-A personal local macOS application project: React + TypeScript strict/Vite, Wails v2, Go, anacrolix/torrent, SQLite. Source of behavior: [requirements](PROJECT_REQUIREMENTS.md); work order: [tasks/README.md](tasks/README.md). Do not change the agreed stack or product scope on your own.
+A personal local macOS application project: React + TypeScript strict/Vite, Wails v2, Go, anacrolix/torrent, SQLite. Source of behavior: [requirements](product/PROJECT_REQUIREMENTS.md); work order: [tasks/README.md](product/tasks/README.md). Do not change the agreed stack or product scope on your own.
 
 ## At the start of EVERY session
 
-1. Read the [architecture](APPLICATION_ARCHITECTURE.md), the [engineering rules](docs/engineering/TDD_AND_QUALITY.md), the current task, the feature documentation and the actual code changes.
+1. Read the [architecture](product/APPLICATION_ARCHITECTURE.md), the [engineering rules](docs/engineering/TDD_AND_QUALITY.md), the current task, the feature documentation and the actual code changes.
 2. Analyze boundaries, state, dependencies, side effects, errors and resource cleanup. Find code to reuse.
 3. Before editing, write down a short architecture plan, tests, the required refactoring and documentation. If the design does not need to change, explain why. Repeat this when continuing work in a new session.
 
@@ -23,7 +23,7 @@ The application itself is currently planned; an HTML mockup exists. Do not inven
 
 ## Module boundaries
 
-Dependency direction: React → own bridge → Wails facade (`AppAPI`) → Go services → engine adapter / repository / file service. Details: [architecture §2–§4](APPLICATION_ARCHITECTURE.md#2-components-and-dependency-directions); paths: in the [README](README.md#directory-map) (most do not exist yet).
+Dependency direction: React → own bridge → Wails facade (`AppAPI`) → Go services → engine adapter / repository / file service. Details: [architecture §2–§4](product/APPLICATION_ARCHITECTURE.md#2-components-and-dependency-directions); paths: in the [README](README.md#directory-map) (most do not exist yet).
 
 | Layer | May | May not |
 |---|---|---|
@@ -53,8 +53,8 @@ Policy: [toolchain-versions](docs/decisions/toolchain-versions.md). For npm and 
 
 ## How to find, execute and hand off a task
 
-1. The next task is in the [README](README.md#current-state) and the [plan navigation](tasks/README.md#navigation-of-all-tasks): status `planned`, all dependencies `done`.
-2. Criteria, steps and checks are in the task file; requirement IDs are in the [requirements](PROJECT_REQUIREMENTS.md); open questions are in the [decision register](docs/decisions/project-baseline.md#6-open-decision-register).
+1. The next task is in the [README](README.md#current-state) and the [plan navigation](product/tasks/README.md#navigation-of-all-tasks): status `planned`, all dependencies `done`.
+2. Criteria, steps and checks are in the task file; requirement IDs are in the [requirements](product/PROJECT_REQUIREMENTS.md); open questions are in the [decision register](docs/decisions/project-baseline.md#6-open-decision-register).
 3. Change the status in the task file and in the navigation table at the same time.
 4. Decisions: `docs/decisions/<slug>.md` following the [ADR template](docs/decisions/_ADR_TEMPLATE.md); evidence: `docs/verification/<NNN>-<task-slug>.md` (session plan, RED/GREEN commands and results `pass`/`fail`/`not_run`, refactoring, coverage, debt); features: `docs/features/<feature>.md`.
 5. Handoff: at the end of the task file, an "Execution result" section with the date, status, changes, checks, limitations and the next task. The commit explains the result and how it was verified (AI-09). Context needed by the next agent is stored in the repository, not in the chat.

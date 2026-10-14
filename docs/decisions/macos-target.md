@@ -1,8 +1,8 @@
 # Target macOS and application identity
 
-**Status:** `accepted` (the minimum version is reviewed by [066](../../tasks/066-personal-build-install-license-audit.md))  
+**Status:** `accepted` (the minimum version is reviewed by [066](../../product/tasks/066-personal-build-install-license-audit.md))  
 **Date:** 2026-10-14  
-**Task:** [003](../../tasks/003-wails-macos-build-spike.md)  
+**Task:** [003](../../product/tasks/003-wails-macos-build-spike.md)  
 **Register item:** O1 from the [baseline description](project-baseline.md#6-open-decision-register)  
 **Requirements:** REL-01, REL-02, STACK-05
 
@@ -33,4 +33,4 @@ Which macOS version and Mac architecture the application declares as supported, 
 
 - When installed on a different macOS version, the system will refuse to launch it until 066 verifies and lowers the minimum.
 - Changing the bundle ID after the library exists requires data migration and choosing the default application again, so the ID is considered stable.
-- `CFBundleDocumentTypes` for `.torrent` and the `magnet:` scheme are added to these plists in [036](../../tasks/036-finder-magnet-open-queue.md) (O13).
+- `CFBundleDocumentTypes` for `.torrent` and the `magnet:` scheme are added to these plists in [036](../../product/tasks/036-finder-magnet-open-queue.md) (O13).

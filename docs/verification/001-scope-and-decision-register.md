@@ -1,6 +1,6 @@
 # Report 001: initial scope and open-decision register
 
-**Task:** [001](../../tasks/001-scope-and-decision-register.md)  
+**Task:** [001](../../product/tasks/001-scope-and-decision-register.md)  
 **Date:** 14 October 2026  
 **Change version:** the first repository commit (task 002); before 001, Git did not exist  
 **Result:** [docs/decisions/project-baseline.md](../decisions/project-baseline.md)
@@ -53,4 +53,4 @@ Final run (after 001 and 002): link check `pass`, 1692 relative links in 83 Mark
 
 The 001 criteria are met: 80 IDs and 19 scenarios are listed and reconciled, discrepancies are recorded, every open decision has a task, a criterion, a check and a document, the personal limits are confirmed, the code directory and the next task (002) are defined, facts are separated from assumptions.
 
-Next task: [002](../../tasks/002-repository-and-agent-entrypoint.md). Nothing can be executed independently of 002: 003 requires 002 and installed Go and Wails CLI.
+Next task: [002](../../product/tasks/002-repository-and-agent-entrypoint.md). Nothing can be executed independently of 002: 003 requires 002 and installed Go and Wails CLI.

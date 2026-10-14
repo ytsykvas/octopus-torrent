@@ -1,6 +1,6 @@
 # Project baseline and open-decision register
 
-**Status:** accepted, task [001](../../tasks/001-scope-and-decision-register.md), 14 October 2026.  
+**Status:** accepted, task [001](../../product/tasks/001-scope-and-decision-register.md), 14 October 2026.  
 **Evidence:** [docs/verification/001-scope-and-decision-register.md](../verification/001-scope-and-decision-register.md).  
 **Nature of the document:** organizes the already agreed scope. It does not change the stack, requirements or product boundaries and does not add new capabilities.
 
@@ -12,32 +12,32 @@ Reliability markers in this document:
 
 ## 1. Requirement sources and order of authority
 
-Agreed ([tasks/README.md](../../tasks/README.md), section "Stack, scope and source of truth"):
+Agreed ([tasks/README.md](../../product/tasks/README.md), section "Stack, scope and source of truth"):
 
-1. [PROJECT_REQUIREMENTS.md](../../PROJECT_REQUIREMENTS.md) — behavior, criteria, 80 requirement IDs and 19 end-to-end scenarios.
-2. [PRODUCT_CONCEPT.md](../../PRODUCT_CONCEPT.md) — idea, personal limits, implementation order.
-3. [APPLICATION_ARCHITECTURE.md](../../APPLICATION_ARCHITECTURE.md) — components, DTO, lifecycles, data.
-4. [ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md](../../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md) — engine API and assumptions not yet proven by a prototype.
-5. [MOCKUP.html](../../MOCKUP.html) — reference for styling and interactions; demo toggles are not the product.
+1. [PROJECT_REQUIREMENTS.md](../../product/PROJECT_REQUIREMENTS.md) — behavior, criteria, 80 requirement IDs and 19 end-to-end scenarios.
+2. [PRODUCT_CONCEPT.md](../../product/PRODUCT_CONCEPT.md) — idea, personal limits, implementation order.
+3. [APPLICATION_ARCHITECTURE.md](../../product/APPLICATION_ARCHITECTURE.md) — components, DTO, lifecycles, data.
+4. [ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md](../../product/ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md) — engine API and assumptions not yet proven by a prototype.
+5. [MOCKUP.html](../../product/MOCKUP.html) — reference for styling and interactions; demo toggles are not the product.
 6. [TDD_AND_QUALITY.md](../engineering/TDD_AND_QUALITY.md), [AGENTS.md](../../AGENTS.md), [docs/README.md](../README.md) — mandatory rules for every session.
-7. [tasks/README.md](../../tasks/README.md) and numbered tasks — the way of execution, not a change of requirements.
+7. [tasks/README.md](../../product/tasks/README.md) and numbered tasks — the way of execution, not a change of requirements.
 
-[archive/LIBTORRENT_TECHNICAL_RESEARCH.md](../../archive/LIBTORRENT_TECHNICAL_RESEARCH.md) — only a historical reference about the rejected stack (libtorrent + SwiftUI).
+[archive/LIBTORRENT_TECHNICAL_RESEARCH.md](../../product/archive/LIBTORRENT_TECHNICAL_RESEARCH.md) — only a historical reference about the rejected stack (libtorrent + SwiftUI).
 
 ## 2. Agreed scope and personal limits
 
 Agreed:
 
-- A personal local desktop BitTorrent client for macOS; the first target is the owner's own Apple Silicon Mac ([requirements §1](../../PROJECT_REQUIREMENTS.md#1-goal-and-boundaries-of-the-personal-version)).
-- Stack: React + TypeScript strict / Vite, Wails v2 (stable branch), Go, anacrolix/torrent, SQLite through a repository. Wails v3 is not part of the current decision ([concept](../../PRODUCT_CONCEPT.md), "Chosen stack").
-- **None of:** accounts and sign-in, Free/Pro plans, subscriptions, payments, license server, cloud sync, own server, product analytics, public website ([requirements §1](../../PROJECT_REQUIREMENTS.md#1-goal-and-boundaries-of-the-personal-version), DATA-01, DATA-02; [architecture §1](../../APPLICATION_ARCHITECTURE.md#1-stack-and-system-boundary)).
-- **No built-in AI model.** AI-first means readable code and reproducible context in the repository for developer agents ([requirements §5.2](../../PROJECT_REQUIREMENTS.md#52-ai-first-code-for-further-ai-work), [tasks/README.md](../../tasks/README.md)).
-- Not part of the agreed scope: content catalog, TV streaming, web version, mobile apps, library sharing between Macs, advanced network analytics, releases for other platforms ([requirements §4](../../PROJECT_REQUIREMENTS.md#4-planned-after-mvp), [concept](../../PRODUCT_CONCEPT.md), "Stages").
+- A personal local desktop BitTorrent client for macOS; the first target is the owner's own Apple Silicon Mac ([requirements §1](../../product/PROJECT_REQUIREMENTS.md#1-goal-and-boundaries-of-the-personal-version)).
+- Stack: React + TypeScript strict / Vite, Wails v2 (stable branch), Go, anacrolix/torrent, SQLite through a repository. Wails v3 is not part of the current decision ([concept](../../product/PRODUCT_CONCEPT.md), "Chosen stack").
+- **None of:** accounts and sign-in, Free/Pro plans, subscriptions, payments, license server, cloud sync, own server, product analytics, public website ([requirements §1](../../product/PROJECT_REQUIREMENTS.md#1-goal-and-boundaries-of-the-personal-version), DATA-01, DATA-02; [architecture §1](../../product/APPLICATION_ARCHITECTURE.md#1-stack-and-system-boundary)).
+- **No built-in AI model.** AI-first means readable code and reproducible context in the repository for developer agents ([requirements §5.2](../../product/PROJECT_REQUIREMENTS.md#52-ai-first-code-for-further-ai-work), [tasks/README.md](../../product/tasks/README.md)).
+- Not part of the agreed scope: content catalog, TV streaming, web version, mobile apps, library sharing between Macs, advanced network analytics, releases for other platforms ([requirements §4](../../product/PROJECT_REQUIREMENTS.md#4-planned-after-mvp), [concept](../../product/PRODUCT_CONCEPT.md), "Stages").
 - The network is needed only for BitTorrent; the list and settings are available offline (DATA-01).
 
 ## 3. Requirement inventory
 
-Verified: the tables of `PROJECT_REQUIREMENTS.md` contain **80 unique IDs**; the matrix ["Full coverage of the 80 requirements"](../../tasks/README.md#full-coverage-of-the-80-requirements) has the same set, and each ID has a primary task; each ID is mentioned in at least one task, and tasks do not reference non-existent IDs.
+Verified: the tables of `PROJECT_REQUIREMENTS.md` contain **80 unique IDs**; the matrix ["Full coverage of the 80 requirements"](../../product/tasks/README.md#full-coverage-of-the-80-requirements) has the same set, and each ID has a primary task; each ID is mentioned in at least one task, and tasks do not reference non-existent IDs.
 
 | Requirements section | Prefix | Count | ID |
 |---|---|---|---|
@@ -57,9 +57,9 @@ Verified: the tables of `PROJECT_REQUIREMENTS.md` contain **80 unique IDs**; the
 
 The numbering gaps **ADD-05, UI-05, UI-14** exist in the source; do not fill them or renumber.
 
-**End-to-end scenarios.** Verified: section 6 of the requirements has **19** items; the matrix ["Coverage of the 19 end-to-end scenarios"](../../tasks/README.md#coverage-of-the-19-end-to-end-scenarios) contains AS-01…AS-19 with implementation and acceptance tasks. AS-NN denotes item N of section 6, not new requirement IDs.
+**End-to-end scenarios.** Verified: section 6 of the requirements has **19** items; the matrix ["Coverage of the 19 end-to-end scenarios"](../../product/tasks/README.md#coverage-of-the-19-end-to-end-scenarios) contains AS-01…AS-19 with implementation and acceptance tasks. AS-NN denotes item N of section 6, not new requirement IDs.
 
-The responsible tasks for each ID and scenario are not duplicated here: their source is the matrices in `tasks/README.md`.
+The responsible tasks for each ID and scenario are not duplicated here: their source is the matrices in `product/tasks/README.md`.
 
 ## 4. Discrepancies between documents
 
@@ -67,18 +67,18 @@ Recorded explicitly; none was resolved silently in favor of the more convenient 
 
 | # | Discrepancy | Sources | Resolution |
 |---|---|---|---|
-| R1 | Task 001 requires "all 72 IDs", while the requirements and plan contain 80. | [001](../../tasks/001-scope-and-decision-register.md), "Work order" item 1 and criteria; [tasks/README.md](../../tasks/README.md#check-of-the-plan-itself) | Cause: QA-01–QA-08 were added in revision 3 of the plan (72 + 8 = 80); the text of 001 was not updated. Authoritative requirements (source 1) → the valid number is **80**. A note was added to the context handoff of 001; numbering was not changed. |
-| R2 | The requirements refer to the mockup as `OctopusTorrent-mockup.html`; the actual file is `MOCKUP.html`. | [Requirements](../../PROJECT_REQUIREMENTS.md), line "Related materials" | The actual file name was corrected in the link line (a verifiable link change, not a behavior change). |
-| R3 | The concept lists search and filters among the "Core capabilities", while the requirements assign them to NEXT-01/02 "after MVP". | [Concept](../../PRODUCT_CONCEPT.md), "Core capabilities"; [requirements §4](../../PROJECT_REQUIREMENTS.md#4-planned-after-mvp) | Not a scope contradiction: both sources keep them in the project. The MVP boundary is defined by the requirements — NEXT-01/02 in phase P6 ([055](../../tasks/055-search-status-filters.md)), after [054](../../tasks/054-global-upload-ui-mvp-gate.md). |
-| R4 | Architecture: the `.app` registers `.torrent` **and magnet**; requirements §5 mention only `CFBundleDocumentTypes` for `.torrent`. | [Architecture §9](../../APPLICATION_ARCHITECTURE.md#9-macos-and-frontend); [requirements §5](../../PROJECT_REQUIREMENTS.md#5-technical-and-quality-requirements), ADD-02 | ADD-02 requires system opening of magnet links, so URL scheme registration is also needed. Open for [036](../../tasks/036-finder-magnet-open-queue.md): the `magnet:` registration mechanism is checked in the built `.app`. |
-| R5 | Two different Ukrainian terms, "Bin" (title of 012) and "Trash" (tasks/README, architecture §8), for the macOS Trash. | [012](../../tasks/012-macos-trash-and-path-spike.md); [architecture §8](../../APPLICATION_ARCHITECTURE.md#8-files-and-safe-deletion) | Synonyms for the same system mechanism. The UI term is fixed by localization ([041](../../tasks/041-six-languages-formatters.md)); documents are not renamed in 001. |
+| R1 | Task 001 requires "all 72 IDs", while the requirements and plan contain 80. | [001](../../product/tasks/001-scope-and-decision-register.md), "Work order" item 1 and criteria; [tasks/README.md](../../product/tasks/README.md#check-of-the-plan-itself) | Cause: QA-01–QA-08 were added in revision 3 of the plan (72 + 8 = 80); the text of 001 was not updated. Authoritative requirements (source 1) → the valid number is **80**. A note was added to the context handoff of 001; numbering was not changed. |
+| R2 | The requirements refer to the mockup as `OctopusTorrent-mockup.html`; the actual file is `MOCKUP.html`. | [Requirements](../../product/PROJECT_REQUIREMENTS.md), line "Related materials" | The actual file name was corrected in the link line (a verifiable link change, not a behavior change). |
+| R3 | The concept lists search and filters among the "Core capabilities", while the requirements assign them to NEXT-01/02 "after MVP". | [Concept](../../product/PRODUCT_CONCEPT.md), "Core capabilities"; [requirements §4](../../product/PROJECT_REQUIREMENTS.md#4-planned-after-mvp) | Not a scope contradiction: both sources keep them in the project. The MVP boundary is defined by the requirements — NEXT-01/02 in phase P6 ([055](../../product/tasks/055-search-status-filters.md)), after [054](../../product/tasks/054-global-upload-ui-mvp-gate.md). |
+| R4 | Architecture: the `.app` registers `.torrent` **and magnet**; requirements §5 mention only `CFBundleDocumentTypes` for `.torrent`. | [Architecture §9](../../product/APPLICATION_ARCHITECTURE.md#9-macos-and-frontend); [requirements §5](../../product/PROJECT_REQUIREMENTS.md#5-technical-and-quality-requirements), ADD-02 | ADD-02 requires system opening of magnet links, so URL scheme registration is also needed. Open for [036](../../product/tasks/036-finder-magnet-open-queue.md): the `magnet:` registration mechanism is checked in the built `.app`. |
+| R5 | Two different Ukrainian terms, "Bin" (title of 012) and "Trash" (tasks/README, architecture §8), for the macOS Trash. | [012](../../product/tasks/012-macos-trash-and-path-spike.md); [architecture §8](../../product/APPLICATION_ARCHITECTURE.md#8-files-and-safe-deletion) | Synonyms for the same system mechanism. The UI term is fixed by localization ([041](../../product/tasks/041-six-languages-formatters.md)); documents are not renamed in 001. |
 
-| R6 | The MVP requirements UI-07 ("search does not lead to an action on hidden entries") and UI-16 (switching between "All / Downloading / Completed / Seeding") rely on search and sections that the requirements assign to NEXT-01/02 after MVP. | [Requirements §2.3](../../PROJECT_REQUIREMENTS.md#23-list-and-details) and [§4](../../PROJECT_REQUIREMENTS.md#4-planned-after-mvp) | Interpretation pending the owner's decision: in the MVP the UI-07/UI-16 criteria apply to the sections and search that already exist; full acceptance of these parts happens together with [055](../../tasks/055-search-status-filters.md). Scope unchanged. |
-| R7 | Filter name: the requirements say "active", the mockup and UI-16 say "Downloading"; in the mockup "Completed" contains only the `done` status, so a completed torrent that is seeding does not appear there. | NEXT-02, UI-16; `MOCKUP.html` (sidebar sections, `render`) | Open for [013](../../tasks/013-transfer-policy-state-machine.md)/[055](../../tasks/055-search-status-filters.md) (O11): selection rules and section names. |
+| R6 | The MVP requirements UI-07 ("search does not lead to an action on hidden entries") and UI-16 (switching between "All / Downloading / Completed / Seeding") rely on search and sections that the requirements assign to NEXT-01/02 after MVP. | [Requirements §2.3](../../product/PROJECT_REQUIREMENTS.md#23-list-and-details) and [§4](../../product/PROJECT_REQUIREMENTS.md#4-planned-after-mvp) | Interpretation pending the owner's decision: in the MVP the UI-07/UI-16 criteria apply to the sections and search that already exist; full acceptance of these parts happens together with [055](../../product/tasks/055-search-status-filters.md). Scope unchanged. |
+| R7 | Filter name: the requirements say "active", the mockup and UI-16 say "Downloading"; in the mockup "Completed" contains only the `done` status, so a completed torrent that is seeding does not appear there. | NEXT-02, UI-16; `MOCKUP.html` (sidebar sections, `render`) | Open for [013](../../product/tasks/013-transfer-policy-state-machine.md)/[055](../../product/tasks/055-search-status-filters.md) (O11): selection rules and section names. |
 
 ### Mockup versus specifications
 
-Verified by a full review of `MOCKUP.html` (498 lines) with selective cross-checking of lines. The mockup is not a source of behavior (authority §1): where it diverges from the requirements, the requirements are carried over.
+Verified by a full review of `MOCKUP.html` (498 lines; now `product/MOCKUP.html`) with selective cross-checking of lines. The mockup is not a source of behavior (authority §1): where it diverges from the requirements, the requirements are carried over.
 
 | # | What the mockup does | What the specification requires | Kind | Task that carries over the requirement |
 |---|---|---|---|---|
@@ -121,9 +121,9 @@ Verified on 14 October 2026 (commands are in the 001 verification report):
 
 Consequences:
 
-- Missing Go and Wails CLI are a prerequisite for [003](../../tasks/003-wails-macos-build-spike.md): install them and record the versions before the RED step of 003. Not needed for 001/002.
+- Missing Go and Wails CLI are a prerequisite for [003](../../product/tasks/003-wails-macos-build-spike.md): install them and record the versions before the RED step of 003. Not needed for 001/002.
 - The free ≈ 32 GiB are enough for development and small controlled torrents; large spike payloads in 064 need a separate space check.
-- **Open:** the minimum supported macOS version is not defined. The verified configuration (above) ≠ the minimum supported one; decision — [003](../../tasks/003-wails-macos-build-spike.md)/[066](../../tasks/066-personal-build-install-license-audit.md). Support for other Macs only on separate need (requirements §7 item 1).
+- **Open:** the minimum supported macOS version is not defined. The verified configuration (above) ≠ the minimum supported one; decision — [003](../../product/tasks/003-wails-macos-build-spike.md)/[066](../../product/tasks/066-personal-build-install-license-audit.md). Support for other Macs only on separate need (requirements §7 item 1).
 
 ## 6. Open-decision register
 
@@ -131,30 +131,30 @@ Each decision is recorded as a separate ADR in `docs/decisions/` following the t
 
 | # | Question | Owner task | Selection criterion | Check | Decision document |
 |---|---|---|---|---|---|
-| O1 | Minimum macOS, architecture of the target Mac (requirements §7 item 1, §5 "Compatibility") | [003](../../tasks/003-wails-macos-build-spike.md), [066](../../tasks/066-personal-build-install-license-audit.md) | Real build and launch on the owner's own Mac; no assumptions about other Macs | The `.app` opens on the target system; `LSMinimumSystemVersion` matches the verified one | [macos-target.md](macos-target.md) — **accepted** in 003 (only 27.0.1 arm64 verified) |
-| O2 | Versions of Go, Wails v2 patch, anacrolix/torrent tag, Node.js, frontend dependencies (§7 item 2) | [003](../../tasks/003-wails-macos-build-spike.md), [004](../../tasks/004-reproducible-check-commands.md), [007](../../tasks/007-engine-api-lifecycle-spike.md) | One consistent API set; clean reproducible build from `go.mod`/`go.sum` and lockfile | Build from a clean clone; signatures cross-checked on the pinned tag (the research mentions Wails v2.15.0 — not yet verified) | [toolchain-versions.md](toolchain-versions.md) — **accepted** in 003 for Go/Wails/Node/frontend; anacrolix — 007 |
-| O3 | Test tools and 100% coverage for Go/TS (Vitest, coverage provider, analyzers) | [004](../../tasks/004-reproducible-check-commands.md) | Exact 4 TS metrics and Go statements per file, full source inventory | The local command fails at < 100 % or an incomplete inventory | `docs/decisions/quality-gate.md` |
-| O4 | SQLite driver (CGO / pure Go), bundled SQLite, WAL, durability, pool (§7 item 5) | [008](../../tasks/008-sqlite-driver-durability-spike.md), [014](../../tasks/014-sqlite-schema-migrations.md) | Actual `sqlite_version()`, commit/checkpoint/cancel, build in `.app` without Homebrew | Spike 008 on the owner's own Mac | `docs/decisions/sqlite-driver.md` |
-| O5 | Engine storage backend, payload location, durable piece completion (§7 item 5) | [009](../../tasks/009-storage-and-completion-spike.md) | Physical paths inside the save path; restart/crash/corruption without a hidden memory fallback | Controlled torrents from 006, restart and completion corruption | `docs/decisions/engine-storage.md` |
-| O6 | Global upload disabling without stopping downloads, confirmation boundary and timeout (§7 item 3, TR-08) | [010](../../tasks/010-upload-stop-and-pause-spike.md), [053](../../tasks/053-global-upload-policy-production.md) | Local and remote counters: upload stopped, download continues; residual buffer measured | Controlled swarm on the pinned engine version | `docs/decisions/global-upload-stop.md` |
-| O7 | Temporary magnet storage and transition to the final folder | [011](../../tasks/011-magnet-metadata-storage-spike.md), [022](../../tasks/022-pending-import-coordinator.md) | Payload forbidden until confirmation; a borrowed handle does not Drop; final folder proven | Metadata-only spike with cancellation | `docs/decisions/magnet-pending-storage.md` |
-| O8 | macOS Trash mechanism, path checks, collisions, shared files | [012](../../tasks/012-macos-trash-and-path-spike.md), [020](../../tasks/020-destination-filesystem-service.md), [032](../../tasks/032-safe-payload-trash-journal.md) | Moving specifically to the Trash; re-checking every file; journal of partial results | Spike on artificial files in the built `.app` | `docs/decisions/trash-and-paths.md` |
-| O9 | Moved, changed or partially lost payloads (§7 item 4) | [030](../../tasks/030-relink-missing-payload.md), [029](../../tasks/029-restore-recheck-reconciliation.md) | Explicit re-selection and check, no automatic moving | Restore scenarios on controlled data | `docs/decisions/missing-payload-recovery.md` |
-| O10 | Backup, migrations and DB corruption | [016](../../tasks/016-migration-backup-corruption-recovery.md) | Consistent copy of the active DB, rollback of a failed migration without losing the library | Migration and artificial corruption tests | `docs/decisions/db-backup-recovery.md` |
-| O11 | Status priority, filter intersection, zero wanted | [013](../../tasks/013-transfer-policy-state-machine.md), [027](../../tasks/027-metrics-status-snapshots.md), [055](../../tasks/055-search-status-filters.md) | Explicit table of states and selection rules | Table-driven policy tests | `docs/decisions/transfer-status-model.md` |
-| O12 | Decimal/binary units, small files, rounding (UI-12) | [041](../../tasks/041-six-languages-formatters.md) | MB/GB rule, small files, precision of large numbers | Formatter tests for 6 languages | `docs/decisions/size-units.md` |
-| O13 | Registration of `magnet:` in the bundle (see R4) | [036](../../tasks/036-finder-magnet-open-queue.md) | Cold and repeated launches receive the link | Check of the built `.app` | `docs/decisions/finder-magnet-registration.md` |
-| O14 | Tags: uniqueness, ANY/ALL, deleted references | [056](../../tasks/056-local-tags-crud.md), [057](../../tasks/057-smart-collections.md) | Stable IDs, visible conditions, no file side effects | Repository and UI tests | `docs/decisions/tags-collections.md` |
-| O15 | Rule conflicts, matching, manual selection | [058](../../tasks/058-rules-semantics-preview-evaluator.md), [059](../../tasks/059-rules-crud-import-application.md) | Preview without side effects, visible order, re-check before commit | Evaluator and import tests | `docs/decisions/import-rules.md` |
-| O16 | Watch folder: subfolders, file stability, candidate retries | [060](../../tasks/060-watch-folder-stable-detection.md), [061](../../tasks/061-watch-folder-settings-queue-ui.md) | Parse/restat/reconcile; originals preserved; auto-add in the paused state only explicitly | Tests with controlled file writes | `docs/decisions/watch-folder.md` |
-| O17 | Load, update budgets, list virtualization | [064](../../tasks/064-scale-profiling-lifecycle-soak.md) | Measurements on the owner's own Mac; optimization only of a proven problem | Profiling and soak | `docs/decisions/performance-budgets.md` |
-| O18 | Installation, signing, updating and rollback of the personal build; license audit (§7 item 6, REL-02) | [066](../../tasks/066-personal-build-install-license-audit.md), [067](../../tasks/067-owner-help-upgrade-recovery-runbook.md) | An actual personal build without dependence on Homebrew; compatible data restore | Installation on the owner's own Mac; license inventory (MPL-2.0 anacrolix and others) | `docs/decisions/personal-install-signing.md` |
+| O1 | Minimum macOS, architecture of the target Mac (requirements §7 item 1, §5 "Compatibility") | [003](../../product/tasks/003-wails-macos-build-spike.md), [066](../../product/tasks/066-personal-build-install-license-audit.md) | Real build and launch on the owner's own Mac; no assumptions about other Macs | The `.app` opens on the target system; `LSMinimumSystemVersion` matches the verified one | [macos-target.md](macos-target.md) — **accepted** in 003 (only 27.0.1 arm64 verified) |
+| O2 | Versions of Go, Wails v2 patch, anacrolix/torrent tag, Node.js, frontend dependencies (§7 item 2) | [003](../../product/tasks/003-wails-macos-build-spike.md), [004](../../product/tasks/004-reproducible-check-commands.md), [007](../../product/tasks/007-engine-api-lifecycle-spike.md) | One consistent API set; clean reproducible build from `go.mod`/`go.sum` and lockfile | Build from a clean clone; signatures cross-checked on the pinned tag (the research mentions Wails v2.15.0 — not yet verified) | [toolchain-versions.md](toolchain-versions.md) — **accepted** in 003 for Go/Wails/Node/frontend; anacrolix — 007 |
+| O3 | Test tools and 100% coverage for Go/TS (Vitest, coverage provider, analyzers) | [004](../../product/tasks/004-reproducible-check-commands.md) | Exact 4 TS metrics and Go statements per file, full source inventory | The local command fails at < 100 % or an incomplete inventory | `docs/decisions/quality-gate.md` |
+| O4 | SQLite driver (CGO / pure Go), bundled SQLite, WAL, durability, pool (§7 item 5) | [008](../../product/tasks/008-sqlite-driver-durability-spike.md), [014](../../product/tasks/014-sqlite-schema-migrations.md) | Actual `sqlite_version()`, commit/checkpoint/cancel, build in `.app` without Homebrew | Spike 008 on the owner's own Mac | `docs/decisions/sqlite-driver.md` |
+| O5 | Engine storage backend, payload location, durable piece completion (§7 item 5) | [009](../../product/tasks/009-storage-and-completion-spike.md) | Physical paths inside the save path; restart/crash/corruption without a hidden memory fallback | Controlled torrents from 006, restart and completion corruption | `docs/decisions/engine-storage.md` |
+| O6 | Global upload disabling without stopping downloads, confirmation boundary and timeout (§7 item 3, TR-08) | [010](../../product/tasks/010-upload-stop-and-pause-spike.md), [053](../../product/tasks/053-global-upload-policy-production.md) | Local and remote counters: upload stopped, download continues; residual buffer measured | Controlled swarm on the pinned engine version | `docs/decisions/global-upload-stop.md` |
+| O7 | Temporary magnet storage and transition to the final folder | [011](../../product/tasks/011-magnet-metadata-storage-spike.md), [022](../../product/tasks/022-pending-import-coordinator.md) | Payload forbidden until confirmation; a borrowed handle does not Drop; final folder proven | Metadata-only spike with cancellation | `docs/decisions/magnet-pending-storage.md` |
+| O8 | macOS Trash mechanism, path checks, collisions, shared files | [012](../../product/tasks/012-macos-trash-and-path-spike.md), [020](../../product/tasks/020-destination-filesystem-service.md), [032](../../product/tasks/032-safe-payload-trash-journal.md) | Moving specifically to the Trash; re-checking every file; journal of partial results | Spike on artificial files in the built `.app` | `docs/decisions/trash-and-paths.md` |
+| O9 | Moved, changed or partially lost payloads (§7 item 4) | [030](../../product/tasks/030-relink-missing-payload.md), [029](../../product/tasks/029-restore-recheck-reconciliation.md) | Explicit re-selection and check, no automatic moving | Restore scenarios on controlled data | `docs/decisions/missing-payload-recovery.md` |
+| O10 | Backup, migrations and DB corruption | [016](../../product/tasks/016-migration-backup-corruption-recovery.md) | Consistent copy of the active DB, rollback of a failed migration without losing the library | Migration and artificial corruption tests | `docs/decisions/db-backup-recovery.md` |
+| O11 | Status priority, filter intersection, zero wanted | [013](../../product/tasks/013-transfer-policy-state-machine.md), [027](../../product/tasks/027-metrics-status-snapshots.md), [055](../../product/tasks/055-search-status-filters.md) | Explicit table of states and selection rules | Table-driven policy tests | `docs/decisions/transfer-status-model.md` |
+| O12 | Decimal/binary units, small files, rounding (UI-12) | [041](../../product/tasks/041-six-languages-formatters.md) | MB/GB rule, small files, precision of large numbers | Formatter tests for 6 languages | `docs/decisions/size-units.md` |
+| O13 | Registration of `magnet:` in the bundle (see R4) | [036](../../product/tasks/036-finder-magnet-open-queue.md) | Cold and repeated launches receive the link | Check of the built `.app` | `docs/decisions/finder-magnet-registration.md` |
+| O14 | Tags: uniqueness, ANY/ALL, deleted references | [056](../../product/tasks/056-local-tags-crud.md), [057](../../product/tasks/057-smart-collections.md) | Stable IDs, visible conditions, no file side effects | Repository and UI tests | `docs/decisions/tags-collections.md` |
+| O15 | Rule conflicts, matching, manual selection | [058](../../product/tasks/058-rules-semantics-preview-evaluator.md), [059](../../product/tasks/059-rules-crud-import-application.md) | Preview without side effects, visible order, re-check before commit | Evaluator and import tests | `docs/decisions/import-rules.md` |
+| O16 | Watch folder: subfolders, file stability, candidate retries | [060](../../product/tasks/060-watch-folder-stable-detection.md), [061](../../product/tasks/061-watch-folder-settings-queue-ui.md) | Parse/restat/reconcile; originals preserved; auto-add in the paused state only explicitly | Tests with controlled file writes | `docs/decisions/watch-folder.md` |
+| O17 | Load, update budgets, list virtualization | [064](../../product/tasks/064-scale-profiling-lifecycle-soak.md) | Measurements on the owner's own Mac; optimization only of a proven problem | Profiling and soak | `docs/decisions/performance-budgets.md` |
+| O18 | Installation, signing, updating and rollback of the personal build; license audit (§7 item 6, REL-02) | [066](../../product/tasks/066-personal-build-install-license-audit.md), [067](../../product/tasks/067-owner-help-upgrade-recovery-runbook.md) | An actual personal build without dependence on Homebrew; compatible data restore | Installation on the owner's own Mac; license inventory (MPL-2.0 anacrolix and others) | `docs/decisions/personal-install-signing.md` |
 
-The ["Open decisions"](../../tasks/README.md#open-decisions-and-their-responsible-tasks) table in the plan contains the same questions (O1–O2, O4–O9, O11–O12, O14–O18) in condensed form; this register adds the check and the decision document and the new items O3, O10, O13.
+The ["Open decisions"](../../product/tasks/README.md#open-decisions-and-their-responsible-tasks) table in the plan contains the same questions (O1–O2, O4–O9, O11–O12, O14–O18) in condensed form; this register adds the check and the decision document and the new items O3, O10, O13.
 
 ## 7. Division of work
 
-Agreed ([tasks/README.md](../../tasks/README.md#phases-and-transition-criteria)):
+Agreed ([tasks/README.md](../../product/tasks/README.md#phases-and-transition-criteria)):
 
 | Stage | Tasks | What it proves |
 |---|---|---|
@@ -169,9 +169,9 @@ Agreed ([tasks/README.md](../../tasks/README.md#phases-and-transition-criteria))
 
 - **Root of the project and of the future Git repository:** `/Users/tsykvas/projects/torrent` (verified: at the time of 001 it was not a Git repository and is not located inside another one). Task 002 initializes the single repository here; nested repositories are not created.
 - **Origin:** the documentation was copied on 14 October 2026 from `~/Desktop/OctopusTorrent` (content identical, verified with `diff -rq`). The working copy is only the project root; the Desktop copy is not synchronized and is not a source of truth. On 15 October 2026 the repository copy was translated into English ([repository-language](repository-language.md)); the Desktop copy stays Ukrainian.
-- **Read-only:** `archive/` (history of the rejected stack). There are no synchronized `sources/` in the project. Specifications (requirements, concept, architecture, research) change only deliberately in the task they concern, with the reason recorded.
-- **Mockup:** `MOCKUP.html` — a styling reference; code from it is not considered tested, and porting to React goes through TDD.
-- **Future code:** the structure from [architecture §3](../../APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first) (`main.go`, `internal/…`, `frontend/…`, `scripts/`). None of these paths has been created yet; the actual paths are confirmed by 003.
+- **Read-only:** `product/archive/` (history of the rejected stack). There are no synchronized `sources/` in the project. Specifications (requirements, concept, architecture, research) change only deliberately in the task they concern, with the reason recorded.
+- **Mockup:** `product/MOCKUP.html` — a styling reference; code from it is not considered tested, and porting to React goes through TDD.
+- **Future code:** the structure from [architecture §3](../../product/APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first) (`main.go`, `internal/…`, `frontend/…`, `scripts/`). None of these paths has been created yet; the actual paths are confirmed by 003.
 - **Documentation:** `docs/` per [docs/README.md](../README.md); decisions — `docs/decisions/`, evidence — `docs/verification/`, features — `docs/features/`.
 
 ## 9. Facts, assumptions and future checks

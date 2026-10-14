@@ -1,6 +1,6 @@
 # Report 003: the first Wails `.app` on the owner's own Mac
 
-**Task:** [003](../../tasks/003-wails-macos-build-spike.md)  
+**Task:** [003](../../product/tasks/003-wails-macos-build-spike.md)  
 **Date:** 14–15 October 2026  
 **Change version:** the task 003 commit (parent `248079e`)  
 **Feature:** [desktop-shell-build](../features/desktop-shell-build.md); **ADR:** [toolchain-versions](../decisions/toolchain-versions.md), [macos-target](../decisions/macos-target.md)
@@ -22,7 +22,7 @@
 ## Session architecture plan
 
 - **Actual state before the task:** documentation only; no code, `go.mod` or `frontend/`.
-- **Boundaries:** the facade `internal/app` (the single bind), the own bridge `frontend/src/bridge`, the UI `frontend/src/features/runtime-check`, the entry point `main.go`, following [architecture §2–§3](../../APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first). The architecture does not change; the actual paths match the map.
+- **Boundaries:** the facade `internal/app` (the single bind), the own bridge `frontend/src/bridge`, the UI `frontend/src/features/runtime-check`, the entry point `main.go`, following [architecture §2–§3](../../product/APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first). The architecture does not change; the actual paths match the map.
 - **Reuse:** the Wails `react-ts` template was generated in a temporary directory only as a reference for `Info.plist`, `wails.json` and the icon; its code (`Greet`, CSS, fonts) was not carried over.
 - **Testability:** `main()` without branches; the logic is in `run(start, stderr)` with an explicit dependency; the React component receives the loading function as a prop.
 - **Risks checked first (step 0, outside the repository):** `go tool wails` without a global CLI: `pass`; writing coverage counters when the `.app` exits via an Apple Event: `pass` (the `covcounters.*` counters appear, `main.go` has counter 1); TypeScript 7.0.2 + Vite 8 + Vitest 5: `pass`; a click in WKWebView via System Events: `pass` after Accessibility permission for the terminal (granted by the owner).
@@ -62,7 +62,7 @@
 | 22 | npm install scripts | `npm install-scripts ls` | one package (`fsevents@2.3.3`), forbidden via `allowScripts`; `npm ci` without warnings; `require('fsevents')` loads (prebuilt binary) |
 | 19 | Documentation links | `check_links.py` for the Git Markdown files | see "Summary" |
 
-The session scripts (`click.applescript`, `offline_check.sh`, `check_release_age.py`, the link check) stayed in a temporary directory as one-off manual verification tools. A permanent automated check with tests is created by [004](../../tasks/004-reproducible-check-commands.md).
+The session scripts (`click.applescript`, `offline_check.sh`, `check_release_age.py`, the link check) stayed in a temporary directory as one-off manual verification tools. A permanent automated check with tests is created by [004](../../product/tasks/004-reproducible-check-commands.md).
 
 ## Version review 2026-10-15
 
@@ -73,7 +73,7 @@ The owner asked to keep the stack up to date. I first updated the frontend to th
 - transitive Go modules follow Go MVS (as in Wails), vulnerable ones are forced; `govulncheck` and `npm audit` are clean;
 - after the changes, items 1–7, 9–13, 15, 18 were repeated: `pass`; Go coverage is 100% again (0 of 6 blocks with a zero counter).
 
-Policy: [toolchain-versions](../decisions/toolchain-versions.md); automation of the age/vulnerability/update checks has been added to the scope of [004](../../tasks/004-reproducible-check-commands.md).
+Policy: [toolchain-versions](../decisions/toolchain-versions.md); automation of the age/vulnerability/update checks has been added to the scope of [004](../../product/tasks/004-reproducible-check-commands.md).
 
 ## REFACTOR and debt check
 

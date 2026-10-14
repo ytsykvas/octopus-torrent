@@ -2,8 +2,8 @@
 
 **Status:** `accepted`  
 **Date:** 2026-10-14, policy refined on 2026-10-15 by the owner's decision  
-**Task:** [003](../../tasks/003-wails-macos-build-spike.md)  
-**Register item:** O2 from the [baseline description](project-baseline.md#6-open-decision-register) — partially: Go, Wails, Node.js, frontend. The anacrolix/torrent version is fixed by [007](../../tasks/007-engine-api-lifecycle-spike.md), the SQLite driver by [008](../../tasks/008-sqlite-driver-durability-spike.md); both follow the policy below.  
+**Task:** [003](../../product/tasks/003-wails-macos-build-spike.md)  
+**Register item:** O2 from the [baseline description](project-baseline.md#6-open-decision-register) — partially: Go, Wails, Node.js, frontend. The anacrolix/torrent version is fixed by [007](../../product/tasks/007-engine-api-lifecycle-spike.md), the SQLite driver by [008](../../product/tasks/008-sqlite-driver-durability-spike.md); both follow the policy below.  
 **Requirements:** AI-07, REL-01, STACK-05
 
 ## Question
@@ -21,8 +21,8 @@
 | **Tools** — Go, Node.js from official channels (go.dev / Homebrew) | Patch releases of an already adopted line are installed immediately: they often fix vulnerabilities, and the channels are signed and have checksums. A new minor or major line only after 14 days. |
 | Transitive Go dependencies | The versions Go MVS selects from the requirements of direct dependencies (as the library author releases them). Only a transitive module with a known vulnerability is force-upgraded. |
 | npm install scripts | Forbidden by default: an explicit list in `allowScripts` (`frontend/package.json`). Currently `fsevents: false` — the package ships with a prebuilt binary, the script is not needed. |
-| Currency | During every task that changes dependencies, and by the regular check from [004](../../tasks/004-reproducible-check-commands.md) (`npm outdated`, `go list -m -u all`, release age, `npm audit`, `govulncheck`): a version that has left the 14-day quarantine is updated, not postponed. |
-| Wails v3 | Remains `beta` (`v3.0.0-beta.29` of 2026-10-13). Migration is a separate owner decision after a stable release ([requirements §1](../../PROJECT_REQUIREMENTS.md#chosen-stack)). |
+| Currency | During every task that changes dependencies, and by the regular check from [004](../../product/tasks/004-reproducible-check-commands.md) (`npm outdated`, `go list -m -u all`, release age, `npm audit`, `govulncheck`): a version that has left the 14-day quarantine is updated, not postponed. |
+| Wails v3 | Remains `beta` (`v3.0.0-beta.29` of 2026-10-13). Migration is a separate owner decision after a stable release ([requirements §1](../../product/PROJECT_REQUIREMENTS.md#chosen-stack)). |
 
 **Technical enforcement:** `frontend/.npmrc` → `min-release-age=14`: npm itself will not install a younger version of any package, including transitive ones (npm ≥ 11.20). Go has no equivalent option — module age is checked by publication time in `proxy.golang.org` (see "Verified grounds"); 004 automates this.
 
@@ -73,5 +73,5 @@ Not verified: other Node.js versions within `>=22.12.0`.
 
 - The commands in the [README](../../README.md#build-and-check-commands) use `go tool wails`; a global Wails CLI is not needed.
 - Adding or updating a dependency goes together with updating the "Current set" table and rechecking age, vulnerabilities, tests and the `.app`.
-- [004](../../tasks/004-reproducible-check-commands.md) includes in the single local check: release age, `npm outdated` / `go list -m -u all` (report of available updates), `npm audit`, `govulncheck`.
+- [004](../../product/tasks/004-reproducible-check-commands.md) includes in the single local check: release age, `npm outdated` / `go list -m -u all` (report of available updates), `npm audit`, `govulncheck`.
 - Known linker warning `object file … built for newer 'macOS' version (13.0) than being linked (11.0)` — Wails links with minimum version 11.0, Go 1.27 builds objects for 13.0; it does not affect launch. The target system is in [macos-target.md](macos-target.md).

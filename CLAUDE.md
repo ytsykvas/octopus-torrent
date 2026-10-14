@@ -10,7 +10,7 @@ Everything written into the repository is English; replies to the owner are in U
 
 ## Commands
 
-All commands run from the repository root. The full verified list and prerequisites are in [README → Commands](README.md#build-and-check-commands). There is no single "check everything" command yet; task [004](tasks/004-reproducible-check-commands.md) creates it.
+All commands run from the repository root. The full verified list and prerequisites are in [README → Commands](README.md#build-and-check-commands). There is no single "check everything" command yet; task [004](product/tasks/004-reproducible-check-commands.md) creates it.
 
 ```sh
 npm --prefix frontend ci                      # .npmrc: min-release-age=14 — do not bypass
@@ -45,8 +45,8 @@ For TS, the sources are defined by `vite.config.ts` (`include: src/**/*.{ts,tsx}
 - Currently only the shell from task 003 is implemented: `frontend/src/features/runtime-check` → `frontend/src/bridge/runtimeInfo.ts` → `frontend/wailsjs/go/app/App.js` → `internal/app.App.GetRuntimeInfo`. This same chain is the template for every new UI → Go command.
 - `main.go` keeps `main()` free of branches: `run(start, stderr)` takes the Wails start function, so tests substitute a fake instead of a window. New facade dependencies are passed explicitly through `app.New(...)` and `options.App.Bind`.
 - React components receive their bridge dependencies as props (see `RuntimeCheck`), so they are tested without Wails. `App.tsx` wires them to the real bridge.
-- The target structure (`internal/torrentengine`, `internal/library`, `internal/files`, `internal/platform`, `frontend/src/state`, etc.) is described in [architecture §3](APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first). Most of these directories do not exist yet. They are created by numbered tasks, not invented in advance.
-- The source of behavior is [PROJECT_REQUIREMENTS.md](PROJECT_REQUIREMENTS.md) with requirement IDs. What to do next is in [tasks/README.md](tasks/README.md#navigation-of-all-tasks). Open questions O1–O18 are in the [decision register](docs/decisions/project-baseline.md#6-open-decision-register). `MOCKUP.html` is only a visual reference; its demo logic is not a requirement.
+- The target structure (`internal/torrentengine`, `internal/library`, `internal/files`, `internal/platform`, `frontend/src/state`, etc.) is described in [architecture §3](product/APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first). Most of these directories do not exist yet. They are created by numbered tasks, not invented in advance.
+- The source of behavior is [PROJECT_REQUIREMENTS.md](product/PROJECT_REQUIREMENTS.md) with requirement IDs. What to do next is in [tasks/README.md](product/tasks/README.md#navigation-of-all-tasks). Open questions O1–O18 are in the [decision register](docs/decisions/project-baseline.md#6-open-decision-register). `MOCKUP.html` is only a visual reference; its demo logic is not a requirement.
 
 ## Environment specifics
 

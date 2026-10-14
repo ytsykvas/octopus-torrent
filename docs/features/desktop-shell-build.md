@@ -2,7 +2,7 @@
 
 **Status:** `implemented` (prototype from task 003; the product UI will replace it in 034/035/040)  
 **Requirements:** REL-01, REL-02, STACK-05, UI-04 (partially), AI-07, QA-01, QA-02, QA-05 (partially)  
-**Related tasks:** [003](../../tasks/003-wails-macos-build-spike.md); next — [004](../../tasks/004-reproducible-check-commands.md) (single check command), [034](../../tasks/034-wails-facade-real-bindings.md) (real facade), [035](../../tasks/035-react-bridge-state-resync.md) (bridge and state)  
+**Related tasks:** [003](../../product/tasks/003-wails-macos-build-spike.md); next — [004](../../product/tasks/004-reproducible-check-commands.md) (single check command), [034](../../product/tasks/034-wails-facade-real-bindings.md) (real facade), [035](../../product/tasks/035-react-bridge-state-resync.md) (bridge and state)  
 **Last verified version:** task 003 commit
 
 ## Goal and behavior
@@ -13,7 +13,7 @@ Only this proof of the path is implemented. The torrent list, themes, i18n and t
 
 ## Architecture analysis before the change
 
-- The first code in the repository; nothing to reuse. Boundaries are taken from [architecture §2–§3](../../APPLICATION_ARCHITECTURE.md#2-components-and-dependency-directions): facade in `internal/app`, own bridge in `frontend/src/bridge`, UI in `frontend/src/features`.
+- The first code in the repository; nothing to reuse. Boundaries are taken from [architecture §2–§3](../../product/APPLICATION_ARCHITECTURE.md#2-components-and-dependency-directions): facade in `internal/app`, own bridge in `frontend/src/bridge`, UI in `frontend/src/features`.
 - There is no state or side effects in Go; `GetRuntimeInfo` is a pure function of the embedded runtime. The Wails context (`OnStartup`) is not needed, so it was not added.
 - The `main` entry point is reduced to a single line without branches; all logic is in `run(start, stderr)` with an explicit `start` dependency (`wails.Run` in the product), which makes it testable without a window.
 - The React component receives `loadRuntimeInfo` as a prop; only `App` wires up the real bridge. Tests work with a fake function, without Wails.

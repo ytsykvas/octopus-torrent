@@ -1,12 +1,12 @@
 # Mandatory engineering rules
 
-**Status:** mandatory owner decision, 14 October 2026. Applies from the first change, including to spikes, fixes, refactoring and development tooling. Requirements QA-01–QA-08 are defined in the [specification](../../PROJECT_REQUIREMENTS.md). All planned tasks are subordinate to this document.
+**Status:** mandatory owner decision, 14 October 2026. Applies from the first change, including to spikes, fixes, refactoring and development tooling. Requirements QA-01–QA-08 are defined in the [specification](../../product/PROJECT_REQUIREMENTS.md). All planned tasks are subordinate to this document.
 
 ## 1. Start of every session: architecture and plan
 
 Before making changes, the agent must:
 
-1. Read [AGENTS.md](../../AGENTS.md), the current requirements, the [architecture](../../APPLICATION_ARCHITECTURE.md), the task with its prerequisites, the documentation of the affected feature and the latest changes in the repository. Establish the actual state of the code rather than relying only on the intent stated in documents.
+1. Read [AGENTS.md](../../AGENTS.md), the current requirements, the [architecture](../../product/APPLICATION_ARCHITECTURE.md), the task with its prerequisites, the documentation of the affected feature and the latest changes in the repository. Establish the actual state of the code rather than relying only on the intent stated in documents.
 2. Trace the scenario React → bridge/Wails → Go service → engine/SQLite/files. Identify the owner of the state, side effects, order of operations, errors, cancellation and safe release of resources.
 3. Look for implementations that can be reused. Check for duplicated rules, wrong dependency direction, mixed responsibilities, hidden effects and unjustified complexity.
 4. Write a short plan in the task report: which boundaries and contracts will change; what is reused; what must be refactored; which tests come first; how 100% coverage will be proven; which documentation will be updated. If no architecture change is needed, explain why in concrete terms.

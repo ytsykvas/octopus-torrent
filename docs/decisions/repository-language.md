@@ -37,15 +37,15 @@ English (AI-02). In which language is text written into the repository?
   every relative link and anchor resolves.
 - **Meaning:** nine independent reviewers compared every sentence, list item and table row of every
   translated file against `git show 0f3d8ef:<path>`, without sampling. Each requirement row was
-  included (80 IDs in `PROJECT_REQUIREMENTS.md`, every acceptance criterion of the 68 tasks, every
+  included (80 IDs in `product/PROJECT_REQUIREMENTS.md`, every acceptance criterion of the 68 tasks, every
   cell of the plan's matrices). About 40 places were corrected, either for changed meaning or for
   ambiguity the original did not have. The most important was DEL-01, whose file-deleting option had
   become "Remove torrent and files" instead of "Delete torrent and files". Several others also restored
   the distinction between removing an **entry** ("Remove") and deleting **files** ("Delete"), and
   between the operation **journal** and diagnostic **logs**.
-- **Mockup:** `MOCKUP.html` shows English UI copy by default (`lang="en"`); its script parses
+- **Mockup:** `product/MOCKUP.html` shows English UI copy by default (`lang="en"`); its script parses
   (`node --check`).
-- **Leftover Cyrillic:** only the Ukrainian language name in the language picker of `MOCKUP.html`.
+- **Leftover Cyrillic:** only the Ukrainian language name in the language picker of `product/MOCKUP.html`.
 
 ## Consequences
 
