@@ -1,0 +1,38 @@
+{
+  "id": "3f2a7c1e-5b4d-4e8f-9a6b-1c2d3e4f5a6b",
+  "infohashV1": "0123456789abcdef0123456789abcdef01234567",
+  "infohashV2": null,
+  "name": "Ubuntu 26.04 desktop",
+  "status": "downloading",
+  "manualPaused": false,
+  "uploadAllowed": true,
+  "totalBytes": "18446744073709551616",
+  "wantedBytes": "9007199254740993",
+  "completedBytes": "9007199254740991",
+  "downloadBytesPerSecond": "1048576",
+  "uploadBytesPerSecond": "0",
+  "peerCount": 12,
+  "etaSeconds": "0",
+  "savePath": "/Users/owner/Downloads/Torrents",
+  "source": "file",
+  "addedAt": "2026-10-15T12:00:00Z",
+  "fileCount": 2,
+  "selectedFileCount": 1,
+  "files": [
+    {
+      "index": 0,
+      "path": "ubuntu.iso",
+      "sizeBytes": "9007199254740993",
+      "completedBytes": "9007199254740991",
+      "wanted": true
+    },
+    {
+      "index": 1,
+      "path": "docs/Читай мене.txt",
+      "sizeBytes": "0",
+      "completedBytes": "0",
+      "wanted": false
+    }
+  ],
+  "errors": []
+}

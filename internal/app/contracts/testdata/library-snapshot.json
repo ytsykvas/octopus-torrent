@@ -1,0 +1,76 @@
+{
+  "runtimeID": "8b1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
+  "revision": "9007199254740992",
+  "torrents": [
+    {
+      "id": "3f2a7c1e-5b4d-4e8f-9a6b-1c2d3e4f5a6b",
+      "infohashV1": "0123456789abcdef0123456789abcdef01234567",
+      "infohashV2": null,
+      "name": "Ubuntu 26.04 desktop",
+      "status": "downloading",
+      "manualPaused": false,
+      "uploadAllowed": true,
+      "totalBytes": "18446744073709551615",
+      "wantedBytes": "9007199254740993",
+      "completedBytes": "9007199254740991",
+      "downloadBytesPerSecond": "1048576",
+      "uploadBytesPerSecond": "0",
+      "peerCount": 12,
+      "etaSeconds": "0",
+      "savePath": "/Users/owner/Downloads/Torrents",
+      "source": "file",
+      "addedAt": "2026-10-15T12:00:00Z",
+      "fileCount": 2,
+      "selectedFileCount": 1,
+      "files": [
+        {
+          "index": 0,
+          "path": "ubuntu.iso",
+          "sizeBytes": "9007199254740993",
+          "completedBytes": "9007199254740991",
+          "wanted": true
+        },
+        {
+          "index": 1,
+          "path": "docs/Читай мене.txt",
+          "sizeBytes": "0",
+          "completedBytes": "0",
+          "wanted": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "id": "7d4e5f6a-1b2c-4d3e-8f4a-5b6c7d8e9f0a",
+      "infohashV1": null,
+      "infohashV2": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+      "name": "Debian netinst",
+      "status": "waitingForMetadata",
+      "manualPaused": true,
+      "uploadAllowed": false,
+      "totalBytes": null,
+      "wantedBytes": null,
+      "completedBytes": "0",
+      "downloadBytesPerSecond": "0",
+      "uploadBytesPerSecond": "0",
+      "peerCount": 0,
+      "etaSeconds": null,
+      "savePath": "/Users/owner/Downloads",
+      "source": "magnet",
+      "addedAt": "2026-10-14T08:30:00Z",
+      "fileCount": null,
+      "selectedFileCount": null,
+      "files": [],
+      "errors": [
+        {
+          "code": "torrent.metadataTimeout",
+          "operationID": null,
+          "torrentID": "7d4e5f6a-1b2c-4d3e-8f4a-5b6c7d8e9f0a",
+          "params": {
+            "seconds": "120"
+          }
+        }
+      ]
+    }
+  ]
+}

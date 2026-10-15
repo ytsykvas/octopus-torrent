@@ -1,0 +1,58 @@
+# Report 005: our own Go–TS contract and errors
+
+**Task:** [005](../../product/tasks/005-domain-dto-and-bridge-contract.md)  
+**Date:** 15 October 2026  
+**Change version:** stage commits after `ae04509`  
+**Feature:** bridge-contract (stage E); **ADR:** api-contract (stage E)
+
+## Session architecture plan
+
+Approved by the owner on 15 October 2026 after two self-review passes.
+
+- **Goal:** fix the Go–TypeScript contract: identifiers, units, 64-bit numbers as decimal strings,
+  DTOs for the library, torrent, files, import preview and settings, `AppError` and its transport
+  through Wails, accepted-versus-completed operations with an idempotent `operationID`, and the
+  `runtimeID` + revision rules. Real services stay with 013/018/022–027/034/035.
+- **Boundaries:** new Go package `internal/app/contracts` (DTOs, validation, strict request
+  decoding) and `internal/app/operations` (the ledger, sole owner of operation goroutines); the
+  facade gains `GetLibrarySnapshot`, `GetOperation` and `FormatError`; `main.go` wires
+  `ErrorFormatter` and `OnShutdown`. TS: `frontend/src/bridge/contract/*` (decoders, errors, pure
+  ordering rules) and own wrappers `bridge/library.ts`, `bridge/operations.ts`. Shared examples in
+  `internal/app/contracts/testdata`, read by Go and TS tests.
+- **Key findings before coding:** the Wails v2.16 JS runtime rejects with `new Error(message.error)`
+  (`internal/frontend/runtime/desktop/calls.js:181`), so `ErrorFormatter` returns the AppError's JSON
+  text; `encoding/json` fills missing request fields with zero values, so requests record missing,
+  null and unknown keys themselves.
+- **Stages:** A — Go contracts; B — ledger, facade, `main.go`, bindings, real round-trip through
+  `wails dev`; C — TS decoders, errors, wrappers; D — TS ordering rules; E — documents, review,
+  `done`.
+- **Tests first:** see each stage below; RED is recorded before the implementation.
+- **Coverage:** `go tool devtool check` (Go unit + `.app` profiles, TS four metrics by the
+  independent inventory).
+
+## Stage log
+
+| Stage | State |
+|---|---|
+| A — Go contracts | done |
+| B — ledger, facade, bindings | planned |
+| C — TS decoders and wrappers | planned |
+| D — TS ordering rules | planned |
+| E — documents and acceptance | planned |
+
+## Stage A — Go contracts
+
+- RED: `go test -race ./internal/app/contracts` with only the tests and `testdata/` written →
+  `fail` (build failure: undefined `Request`, `Fingerprint`, `NewUUID`, the DTO types and the
+  `outgoing`/`incoming` registries' targets). Expected: the package API did not exist.
+- GREEN: the same command → `pass`; `go test -race -coverprofile` → 100.0% of statements, no zero
+  block. `gofmt -l internal` empty, `go vet ./internal/app/...` clean.
+- Shared examples: 51 JSON files in `internal/app/contracts/testdata` listed in `manifest.json`
+  (valid and invalid, both directions); Go checks every `toFrontend` valid example by exact
+  round-trip and every `toGo` example by `Validate` (field and reason).
+- Refactoring: one strict decoder (`decodeFields`) for every request and `Settings`; one
+  `marshalDecimal`/`unmarshalDecimal` pair for the four 64-bit types; validation helpers
+  (`checkUUID`, `checkTorrentIDs`, `checkFileIndexes`, `checkPositive`, `checkAbsolute`) shared by
+  all requests. Uncovered branches found at 95.6% were covered by new examples (empty and bad
+  torrent IDs, preview version 0, relative destination, record-only with a list version, unknown
+  theme, zero download limit) and an `OperationState.Finished` test, not by removing checks.

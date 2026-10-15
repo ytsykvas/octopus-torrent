@@ -1,0 +1,24 @@
+{
+  "pendingImportID": "5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9",
+  "previewVersion": 3,
+  "source": "drop",
+  "state": "ready",
+  "name": "Ubuntu 26.04 desktop",
+  "files": [
+    {
+      "index": 0,
+      "path": "ubuntu.iso",
+      "sizeBytes": "6442450944",
+      "selected": true
+    },
+    {
+      "index": 1,
+      "path": "SHA256SUMS",
+      "sizeBytes": "0",
+      "selected": false
+    }
+  ],
+  "totalBytes": "6442450944",
+  "destination": "/Users/owner/Downloads",
+  "existingTorrentID": null
+}
