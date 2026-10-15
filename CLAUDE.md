@@ -36,6 +36,8 @@ gofmt -l . && go vet ./... && go test ./...
 go tool wails generate module                 # after changing internal/app methods; frontend/wailsjs is committed
 go tool wails build -clean -trimpath          # → build/bin/OctopusTorrent.app
 go tool wails dev
+go tool devtool check                         # the single gate: every check below, never stops early
+go tool devtool check fast                    # TDD loop: no .app run, no network; prints GATE INCOMPLETE
 go tool devtool check-docs                    # every relative link, anchor and .claude pointer resolves
 go tool devtool check-plan                    # task plan: links, acyclic graph, statuses, coverage, navigation
 go tool devtool plan-nav                      # regenerate the navigation table after changing a task file

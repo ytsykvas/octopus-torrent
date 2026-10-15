@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeSystem records every process it is asked to start and answers from canned values.
@@ -18,6 +19,29 @@ type fakeSystem struct {
 	writeErr  error
 	written   map[string]string
 	calls     []string
+	// results answers Output and Capture per joined command line, in order; the last answer repeats.
+	// Output falls back to output/outputErr, Capture to an empty success.
+	results   map[string][]fakeResult
+	dirs      map[string][]string
+	dirErr    error
+	mkdirErr  error
+	removeErr map[string]error
+}
+
+type fakeResult struct {
+	out string
+	err error
+}
+
+func (s *fakeSystem) answer(call string) (fakeResult, bool) {
+	queue := s.results[call]
+	if len(queue) == 0 {
+		return fakeResult{}, false
+	}
+	if len(queue) > 1 {
+		s.results[call] = queue[1:]
+	}
+	return queue[0], true
 }
 
 func (s *fakeSystem) WriteFile(name string, data []byte) error {
@@ -40,9 +64,40 @@ func (s *fakeSystem) Run(name string, args ...string) error {
 }
 
 func (s *fakeSystem) Output(name string, args ...string) (string, error) {
-	s.calls = append(s.calls, "output "+strings.Join(append([]string{name}, args...), " "))
+	call := strings.Join(append([]string{name}, args...), " ")
+	s.calls = append(s.calls, "output "+call)
+	if r, ok := s.answer(call); ok {
+		return r.out, r.err
+	}
 	return s.output, s.outputErr
 }
+
+func (s *fakeSystem) Capture(name string, args ...string) (string, error) {
+	call := strings.Join(append([]string{name}, args...), " ")
+	s.calls = append(s.calls, "capture "+call)
+	r, _ := s.answer(call)
+	return r.out, r.err
+}
+
+func (s *fakeSystem) RemoveAll(path string) error {
+	s.calls = append(s.calls, "remove "+path)
+	return s.removeErr[path]
+}
+
+func (s *fakeSystem) MkdirAll(path string) error {
+	s.calls = append(s.calls, "mkdir "+path)
+	return s.mkdirErr
+}
+
+func (s *fakeSystem) ReadDir(path string) ([]string, error) {
+	s.calls = append(s.calls, "readdir "+path)
+	if s.dirErr != nil {
+		return nil, s.dirErr
+	}
+	return s.dirs[path], nil
+}
+
+func (s *fakeSystem) Sleep(d time.Duration) { s.calls = append(s.calls, "sleep "+d.String()) }
 
 func (s *fakeSystem) Exec(path string, argv []string) error {
 	s.calls = append(s.calls, "exec "+path+" "+strings.Join(argv, " "))

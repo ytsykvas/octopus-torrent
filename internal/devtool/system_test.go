@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOSSystemReadsFiles(t *testing.T) {
@@ -50,5 +51,40 @@ func TestOSSystemExecFailsForAMissingProgram(t *testing.T) {
 	err := OSSystem{}.Exec(filepath.Join(t.TempDir(), "missing"), []string{"missing"})
 	if err == nil || !strings.Contains(err.Error(), "no such file") {
 		t.Errorf("Exec(missing) = %v, want a no-such-file error", err)
+	}
+}
+
+func TestOSSystemCaptureCombinesBothStreams(t *testing.T) {
+	got, err := OSSystem{}.Capture("sh", "-c", "echo out; echo err >&2; exit 3")
+	if err == nil || !strings.Contains(got, "out\n") || !strings.Contains(got, "err\n") {
+		t.Errorf("Capture = %q, %v; want both streams and the exit error", got, err)
+	}
+}
+
+func TestOSSystemManagesDirectories(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "coverage", "unit")
+	sys := OSSystem{}
+	if err := sys.MkdirAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "covmeta.1"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if names, err := sys.ReadDir(dir); err != nil || strings.Join(names, " ") != "covmeta.1" {
+		t.Errorf("ReadDir = %q, %v", names, err)
+	}
+	if err := sys.RemoveAll(filepath.Dir(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sys.ReadDir(dir); err == nil {
+		t.Error("ReadDir after RemoveAll succeeded")
+	}
+}
+
+func TestOSSystemSleeps(t *testing.T) {
+	start := time.Now()
+	OSSystem{}.Sleep(time.Millisecond)
+	if time.Since(start) < time.Millisecond {
+		t.Error("Sleep returned early")
 	}
 }

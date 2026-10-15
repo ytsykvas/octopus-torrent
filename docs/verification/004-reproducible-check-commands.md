@@ -95,6 +95,35 @@ import of `@testing-library/jest-dom/vitest` in the test setup is allowed by nam
 fixed (typed `vi.fn`, `Object.assign` / `Reflect.deleteProperty` instead of type assertions on
 `window`, a captured resolver instead of a placeholder function).
 
+## Stage C — the check command and coverage inventories
+
+New code in `internal/devtool`: `check.go` (modes `check`, `check offline`, `check fast`; the step
+runner; `CheckNpmCooldown`), `frontendcov.go` (`FrontendInventory`, `CheckFrontendCoverage`,
+`EscapeHatches`), `gocov.go` (`GoModulePath`, `CheckGoCoverage`), `appcov.go` (the instrumented
+`.app` run). `System` gained `Capture`, `RemoveAll`, `MkdirAll`, `ReadDir`, `Sleep`; `fakeSystem`
+answers per command line, in order.
+
+| Step | Test | Command | Result |
+|---|---|---|---|
+| RED | `frontendcov_test.go`: inventory from the listing; uncovered file, unimported or excluded file, 9999/10000 rounded to 100%, skipped lines, missing / empty / invalid report, missing metric, report keys that are not absolute; ignore directives, lint disables, `it.skip` / `describe.only` / `test.todo`, Go `t.Skip` | `go test ./internal/devtool` | `fail`: `undefined: FrontendInventory`, `CheckFrontendCoverage`, `EscapeHatches` |
+| RED | `gocov_test.go`: unit + .app merge; only `main()` deferred without the .app; uncovered main, uncovered block, missing / empty unit or .app profile, .app profile without `main.go`, different blocks for one file, different coverage modes, a file with functions missing from the profile, an unparsable file, a malformed line | same | `fail`: `undefined: CheckGoCoverage`, `GoModulePath` |
+| RED | `system_test.go`: `Capture` combines both streams, directories, `Sleep` | same | `fail`: `OSSystem has no field or method Capture` (and the others) |
+| RED | `appcov_test.go`: launch and Apple Event quit; already running, failed build, no directory, failed `open`, never starts, Automation refused (-1743), never quits (then killed), no counters, unreadable directory | same | `fail`: `undefined: appCoverageRun` |
+| RED | `check_test.go`: a healthy fake repository passes every step in order; `check fast` and `check offline`; a failure never stops later steps; a mandatory `not_run` fails the full gate; 18 single failures each fail their own step; outside the repository root; `CheckNpmCooldown` | same | `fail`: `undefined: CheckNpmCooldown` |
+| GREEN | all of the above | `go test ./internal/devtool` | `pass` |
+| First real run | the repository | `go tool devtool check offline` | `GATE FAILED`: the gate found 5 uncovered blocks in its own new code (report tail truncation, a failed re-listing in `bindings` and at the end, a removed binding, a file only in the .app profile); tests added |
+| GREEN | the repository | `go tool devtool check offline` | `GATE PASSED` in 23 s: every step `pass`, the .app launched and quit, merged Go profile with no zero block, engine integration and test-bridge UI tests `not_run (not implemented yet)` |
+
+Controls with `go tool devtool check fast` (each change reverted afterwards):
+
+| Control | Result |
+|---|---|
+| `export const broken: number = "text"` in `App.tsx` | exit 1: `FAIL typecheck`, `frontend build`, `release build` |
+| `func broken() int { return "text" }` in `internal/app/app.go` | exit 1: `FAIL go vet`, `bindings`, `go tests`, `go coverage`, `release build` |
+| an untested `frontend/src/untested.ts` | exit 1: `FAIL frontend tests` (Vitest thresholds) |
+| the same file excluded in `vite.config.ts` | exit 1: Vitest passes, the independent inventory reports `frontend/src/untested.ts: not in the coverage report` |
+| an untested exported Go function | exit 1: `FAIL go coverage` |
+
 ## Stage log
 
 | Stage | State |
@@ -102,6 +131,6 @@ fixed (typed `vi.fn`, `Object.assign` / `Reflect.deleteProperty` instead of type
 | A — release-guard here-document gap | done |
 | B — plan check | done |
 | C0 — lint spike | done |
-| C — check command and coverage inventories | not started |
+| C — check command and coverage inventories | done |
 | D — dependency checks | not started |
 | E — documents and acceptance | not started |

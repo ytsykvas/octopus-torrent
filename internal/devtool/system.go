@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 )
 
 // OSSystem is the real System.
@@ -27,3 +28,23 @@ func (OSSystem) Output(name string, args ...string) (string, error) {
 func (OSSystem) Exec(path string, argv []string) error {
 	return syscall.Exec(path, argv, os.Environ())
 }
+
+func (OSSystem) Capture(name string, args ...string) (string, error) {
+	out, err := exec.Command(name, args...).CombinedOutput()
+	return string(out), err
+}
+
+func (OSSystem) RemoveAll(path string) error { return os.RemoveAll(path) }
+
+func (OSSystem) MkdirAll(path string) error { return os.MkdirAll(path, 0o755) }
+
+func (OSSystem) ReadDir(path string) ([]string, error) {
+	entries, err := os.ReadDir(path)
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.Name()
+	}
+	return names, err
+}
+
+func (OSSystem) Sleep(d time.Duration) { time.Sleep(d) }

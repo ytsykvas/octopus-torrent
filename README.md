@@ -99,6 +99,11 @@ go tool wails dev
 go tool devtool check-docs
 go tool devtool codex-agents
 
+# The single gate (task 004): every check below in one command, one line per step
+go tool devtool check            # full gate; the only one that accepts a change
+go tool devtool check offline    # without network steps (reported not_run)
+go tool devtool check fast       # also without the .app coverage run
+
 # Task plan: verify it, and regenerate the navigation table after changing a task file
 go tool devtool check-plan
 go tool devtool plan-nav

@@ -7,9 +7,10 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
-const usage = `usage: devtool hook release-guard | workspace setup | workspace run | check-docs | codex-agents | check-plan | plan-nav`
+const usage = `usage: devtool hook release-guard | workspace setup | workspace run | check-docs | codex-agents | check-plan | plan-nav | check [offline | fast]`
 
 // System is the boundary to the operating system, replaced by a fake in tests.
 type System interface {
@@ -21,12 +22,23 @@ type System interface {
 	Output(name string, args ...string) (string, error)
 	// Exec replaces the current process with the program at path; it returns only on failure.
 	Exec(path string, argv []string) error
+	// Capture starts a program and returns its standard output and error combined.
+	Capture(name string, args ...string) (string, error)
+	RemoveAll(path string) error
+	MkdirAll(path string) error
+	// ReadDir returns the names of the entries in a directory.
+	ReadDir(path string) ([]string, error)
+	Sleep(d time.Duration)
 }
 
 // Main dispatches a devtool command and returns the process exit code.
 func Main(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string, sys System) int {
+	command := strings.Join(args, " ")
+	if mode, ok := checkModes[command]; ok {
+		return runCheck(command == "check", mode, stdout, sys)
+	}
 	var err error
-	switch strings.Join(args, " ") {
+	switch command {
 	case "hook release-guard":
 		return releaseGuardHook(stdin, stdout, stderr, sys)
 	case "workspace setup":
