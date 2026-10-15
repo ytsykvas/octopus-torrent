@@ -98,6 +98,10 @@ go tool wails dev
 go tool devtool check-docs
 go tool devtool codex-agents
 
+# Task plan: verify it, and regenerate the navigation table after changing a task file
+go tool devtool check-plan
+go tool devtool plan-nav
+
 # Workspace preparation and dev server for octopus / Conductor (logic in cmd/devtool)
 sh .octopus/scripts/setup.sh
 OCTOPUS_PORT=34115 sh .octopus/scripts/run.sh

@@ -31,8 +31,8 @@ pass.
 - Walk the task's **acceptance criteria** one by one: met, with which evidence (test, command, report
   line)? A criterion without evidence is not met.
 - The verification report has the session plan, RED/GREEN commands, raw coverage, refactoring and the
-  debt conclusion; every `not_run` has a reason; status agrees between the task file and the
-  navigation table.
+  debt conclusion; every `not_run` has a reason; `go tool devtool check-plan` passes
+  (status agrees between the task file and the navigation table).
 - The next tasks this unblocks, and anything they will need that is missing.
 
 ## Output

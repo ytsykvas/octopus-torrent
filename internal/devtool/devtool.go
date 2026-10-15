@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const usage = `usage: devtool hook release-guard | workspace setup | workspace run | check-docs | codex-agents`
+const usage = `usage: devtool hook release-guard | workspace setup | workspace run | check-docs | codex-agents | check-plan | plan-nav`
 
 // System is the boundary to the operating system, replaced by a fake in tests.
 type System interface {
@@ -37,6 +37,10 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(
 		err = checkDocs(stdout, sys)
 	case "codex-agents":
 		err = codexAgents(sys)
+	case "check-plan":
+		err = checkPlan(stdout, sys)
+	case "plan-nav":
+		err = planNav(stdout, sys)
 	default:
 		fmt.Fprintln(stderr, usage)
 		return 64
@@ -139,14 +143,7 @@ func checkDocs(stdout io.Writer, sys System) error {
 	if err != nil {
 		return err
 	}
-	exists := func(p string) bool {
-		for _, f := range files {
-			if f == p || strings.HasPrefix(f, p+"/") {
-				return true
-			}
-		}
-		return false
-	}
+	exists := listedPath(files)
 	docs, sources := map[string]string{}, map[string]string{}
 	for _, f := range files {
 		content, err := sys.ReadFile(f)
@@ -168,6 +165,77 @@ func checkDocs(stdout io.Writer, sys System) error {
 		return fmt.Errorf("%d dead links or pointers", len(dead))
 	}
 	fmt.Fprintf(stdout, "pass   every relative link and .claude pointer resolves (%d Markdown files)\n", len(docs))
+	return nil
+}
+
+// listedPath reports whether p is one of the listed files or a directory containing one.
+func listedPath(files []string) func(string) bool {
+	return func(p string) bool {
+		for _, f := range files {
+			if f == p || strings.HasPrefix(f, p+"/") {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// planFiles reads the task files, the plan README and the requirements.
+func planFiles(sys System) (map[string]string, func(string) bool, error) {
+	files, err := repositoryFiles(sys)
+	if err != nil {
+		return nil, nil, err
+	}
+	plan := map[string]string{}
+	for _, f := range files {
+		if strings.HasPrefix(f, tasksDir) || f == requirementsFile {
+			if content, err := sys.ReadFile(f); err == nil {
+				plan[f] = string(content)
+			}
+		}
+	}
+	return plan, listedPath(files), nil
+}
+
+func reportPlanProblems(stdout io.Writer, problems []string) error {
+	for _, p := range problems {
+		fmt.Fprintln(stdout, "PLAN "+p)
+	}
+	return fmt.Errorf("%d plan problems", len(problems))
+}
+
+// checkPlan verifies the task plan and that its navigation table matches the task files.
+func checkPlan(stdout io.Writer, sys System) error {
+	files, exists, err := planFiles(sys)
+	if err != nil {
+		return err
+	}
+	if problems := CheckPlan(files, exists); len(problems) > 0 {
+		return reportPlanProblems(stdout, problems)
+	}
+	summary, _ := PlanSummary(files)
+	fmt.Fprintf(stdout, "pass   plan: %s; navigation up to date\n", summary)
+	return nil
+}
+
+// planNav regenerates the navigation block of the plan README from the task files.
+func planNav(stdout io.Writer, sys System) error {
+	files, _, err := planFiles(sys)
+	if err != nil {
+		return err
+	}
+	readme, problems := RenderNavigation(files)
+	if len(problems) > 0 {
+		return reportPlanProblems(stdout, problems)
+	}
+	if readme == files[tasksReadme] {
+		fmt.Fprintln(stdout, "plan-nav: navigation already up to date")
+		return nil
+	}
+	if err := sys.WriteFile(tasksReadme, []byte(readme)); err != nil {
+		return err
+	}
+	fmt.Fprintln(stdout, "plan-nav: navigation regenerated")
 	return nil
 }
 

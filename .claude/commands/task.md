@@ -30,6 +30,6 @@ only what the documents cannot answer.
 
 ## Step 4: After approval
 
-Set the status to `in_progress` in the task file **and** the navigation table in the same edit, and
-put the approved plan into the "session plan" of `docs/verification/<NNN>-<slug>.md`. Then work
+Set the status to `in_progress` in the task file, run `go tool devtool plan-nav` to regenerate the
+navigation table, and put the approved plan into the "session plan" of `docs/verification/<NNN>-<slug>.md`. Then work
 RED → GREEN → REFACTOR.

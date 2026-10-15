@@ -36,6 +36,8 @@ go tool wails generate module                 # after changing internal/app meth
 go tool wails build -clean -trimpath          # → build/bin/OctopusTorrent.app
 go tool wails dev
 go tool devtool check-docs                    # every relative link, anchor and .claude pointer resolves
+go tool devtool check-plan                    # task plan: links, acyclic graph, statuses, coverage, navigation
+go tool devtool plan-nav                      # regenerate the navigation table after changing a task file
 go tool devtool codex-agents                  # regenerate .codex/agents after changing .claude/agents
 ```
 

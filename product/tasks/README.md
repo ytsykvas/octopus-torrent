@@ -46,7 +46,7 @@ RED records the required failing check before implementation; GREEN restores the
 
 ### Tracking without duplication
 
-Each task file is the source of its title, status, phase and mandatory dependencies. The navigation table below reproduces these fields. Until the local tool from 004 exists, it is updated manually together with the task and checked for consistency; after that, only the marked block is generated. The matrices of primary responsible tasks and acceptance scenarios are maintained separately by content.
+Each task file is the source of its title, status, phase and mandatory dependencies. The navigation table below reproduces these fields and is never edited by hand: after changing a task file, `go tool devtool plan-nav` regenerates only the marked block, and `go tool devtool check-plan` verifies the whole plan (task files, links, an acyclic dependency graph, statuses, requirement and scenario coverage, the navigation block). The matrices of primary responsible tasks and acceptance scenarios are maintained separately by content.
 
 Completing a task does not automatically complete all of its requirement IDs. Accepting a requirement needs all the relevant service, UI and integration evidence. For example, 005 describes the contract, 035 checks it in React, and 034/052 prove the real connection.
 
@@ -368,7 +368,7 @@ Similar clients confirm the principles of separation of responsibilities: Transm
 
 ## Check of the plan itself
 
-Revision 3 is checked against the task files: exactly one README and 68 numbered MD files, unique IDs 001–068, 196 mandatory dependencies, an acyclic graph, all 80 requirements with primary responsible tasks, 19 scenarios, consistent statuses and local links in both copies. QA-01–QA-08 were added following the owner's new mandatory decisions; the original 72 requirements are preserved. The numbers stay stable; for a future dependency on a higher number, check for a cycle rather than forbidding it just because of the number.
+Revision 3 is checked against the task files: exactly one README and 68 numbered MD files, unique IDs 001–068, 196 mandatory dependencies, an acyclic graph, all 80 requirements with primary responsible tasks, 19 scenarios, consistent statuses and local links in both copies. QA-01–QA-08 were added following the owner's new mandatory decisions; the original 72 requirements are preserved. The numbers stay stable; for a future dependency on a higher number, check for a cycle rather than forbidding it just because of the number. Since task 004 these invariants are checked by `go tool devtool check-plan`, which also runs in `go test`.
 
 ### What was fixed during the review
 

@@ -61,12 +61,30 @@ before every dependency change). The file is deleted when the task is finished.
 The ADR [agent-tooling](../decisions/agent-tooling.md) no longer lists the gap; its parsing section
 describes the rule.
 
+## Stage B — plan check and navigation
+
+New code: `internal/devtool/plan.go` (pure `CheckPlan`, `RenderNavigation`, `PlanSummary` over a
+path → content map), commands `check-plan` and `plan-nav` in `devtool.go` (`planFiles`,
+`listedPath` shared with `check-docs`), `sortedKeys` made generic.
+
+| Step | Test | Command | Result |
+|---|---|---|---|
+| RED | `plan_test.go`: a consistent 3-task fixture passes; 30 single mutations each produce their problem (broken link in a task and in the README, cycle, unknown or mislabelled dependency, unparsed dependency line, unknown, missing or uncovered requirement, duplicate requirement, missing or unknown matrix row, primary task not listing its ID or missing, missing matrix / scenario sections, scenario count and numbering, stale navigation, missing markers, unknown status, `in_progress` with a `planned` dependency, missing / repeated / malformed header lines, wrong title, duplicate task ID, empty requirements); navigation regeneration keeps everything outside the markers and is idempotent | `go test ./internal/devtool -run Plan` | `fail` as expected: `undefined: CheckPlan`, `PlanSummary`, `RenderNavigation` (the API did not exist) |
+| RED | `devtool_test.go`: `check-plan` pass line and `PLAN` lines with exit 1; `plan-nav` writes only a stale block, reports an up-to-date one, refuses an unreadable plan, reports a failed write; a failing file listing | `go test ./internal/devtool` | `fail` as expected: exit 64 (unknown command) |
+| GREEN | both | `go test ./internal/devtool` | `pass` |
+| Real plan | `cmd/devtool` test `TestThePlanOfThisRepositoryIsConsistent` runs the built binary on this repository | `go tool devtool check-plan`; `go tool devtool plan-nav` | `pass   plan: 68 tasks, 196 dependencies, 80 requirements, 19 scenarios; navigation up to date`; `plan-nav: navigation already up to date` (no diff) |
+| Control | status of 005 set to `done` in the navigation table only | `go test ./cmd/devtool -run Plan` | `fail` with `PLAN product/tasks/README.md: navigation table is out of date…`; file restored |
+| Coverage | raw counters, unit run | as in stage A | `pass`: only `main.go:26` |
+
+Instructions now say to change the status in the task file and run `plan-nav` (AGENTS.md,
+`/task`, planning.md, tech-lead agent and its Codex mirror, the plan README).
+
 ## Stage log
 
 | Stage | State |
 |---|---|
 | A — release-guard here-document gap | done |
-| B — plan check | not started |
+| B — plan check | done |
 | C0 — lint spike | not started |
 | C — check command and coverage inventories | not started |
 | D — dependency checks | not started |

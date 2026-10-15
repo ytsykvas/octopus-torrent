@@ -268,7 +268,7 @@ func TestCheckDocsFailsAndListsEveryDeadReference(t *testing.T) {
 }
 
 func TestDocToolsReportAFailingFileListing(t *testing.T) {
-	for _, command := range []string{"check-docs", "codex-agents"} {
+	for _, command := range []string{"check-docs", "codex-agents", "check-plan", "plan-nav"} {
 		code, _, stderr := runMainWithOutput(&fakeSystem{outputErr: errors.New("not a git repository")}, command)
 		if code != 1 || !strings.Contains(stderr, "not a git repository") {
 			t.Errorf("%s: got code %d stderr %q", command, code, stderr)
@@ -303,5 +303,53 @@ func TestCodexAgentsReportsTheAgentItCannotMirror(t *testing.T) {
 		if code != 1 || !strings.Contains(stderr, "broken") {
 			t.Errorf("%s: got code %d stderr %q, want 1 naming the agent", name, code, stderr)
 		}
+	}
+}
+
+// planSystem serves a plan fixture as the repository.
+func planSystem(files map[string]string) *fakeSystem {
+	return &fakeSystem{output: strings.Join(sortedKeys(files), "\n") + "\n", files: fakeFiles(files)}
+}
+
+func TestCheckPlanPassesOnAConsistentPlan(t *testing.T) {
+	code, stdout, stderr := runMainWithOutput(planSystem(planFixture()), "check-plan")
+	want := "pass   plan: 3 tasks, 3 dependencies, 3 requirements, 2 scenarios; navigation up to date\n"
+	if code != 0 || stdout != want || stderr != "" {
+		t.Errorf("got code %d stdout %q stderr %q, want 0 and %q", code, stdout, stderr, want)
+	}
+}
+
+func TestCheckPlanListsEveryProblem(t *testing.T) {
+	files := edit(t, "product/tasks/003-check.md", "`planned`", "`started`")
+	code, stdout, stderr := runMainWithOutput(planSystem(files), "check-plan")
+	if code != 1 || !strings.Contains(stdout, "PLAN 003-check.md: unknown status started\n") || !strings.Contains(stderr, "plan problems") {
+		t.Errorf("got code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
+
+func TestPlanNavRewritesOnlyAStaleBlock(t *testing.T) {
+	stale := edit(t, "product/tasks/003-check.md", "Check everything", "Check every gate")
+	sys := planSystem(stale)
+	code, stdout, stderr := runMainWithOutput(sys, "plan-nav")
+	if code != 0 || stdout != "plan-nav: navigation regenerated\n" || stderr != "" || !strings.Contains(sys.written["product/tasks/README.md"], "| Check every gate |") {
+		t.Errorf("got code %d stdout %q stderr %q written %q", code, stdout, stderr, sys.written)
+	}
+	sys = planSystem(planFixture())
+	code, stdout, _ = runMainWithOutput(sys, "plan-nav")
+	if code != 0 || stdout != "plan-nav: navigation already up to date\n" || len(sys.written) != 0 {
+		t.Errorf("up to date: got code %d stdout %q written %q", code, stdout, sys.written)
+	}
+}
+
+func TestPlanNavRefusesAnUnreadablePlanOrAFailedWrite(t *testing.T) {
+	broken := planSystem(edit(t, "product/tasks/003-check.md", "**Status:** `planned`  \n", ""))
+	code, stdout, stderr := runMainWithOutput(broken, "plan-nav")
+	if code != 1 || !strings.Contains(stdout, "PLAN 003-check.md") || len(broken.written) != 0 || !strings.Contains(stderr, "plan problems") {
+		t.Errorf("unreadable: got code %d stdout %q stderr %q written %q", code, stdout, stderr, broken.written)
+	}
+	readOnly := planSystem(edit(t, "product/tasks/003-check.md", "Check everything", "Check every gate"))
+	readOnly.writeErr = errors.New("read-only file system")
+	if code, _, stderr := runMainWithOutput(readOnly, "plan-nav"); code != 1 || !strings.Contains(stderr, "read-only") {
+		t.Errorf("unwritable: got code %d stderr %q", code, stderr)
 	}
 }
