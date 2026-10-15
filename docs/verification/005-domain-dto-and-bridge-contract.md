@@ -37,7 +37,7 @@ Approved by the owner on 15 October 2026 after two self-review passes.
 | A — Go contracts | done |
 | B — ledger, facade, bindings | done |
 | C — TS decoders and wrappers | done |
-| D — TS ordering rules | planned |
+| D — TS ordering rules | done |
 | E — documents and acceptance | planned |
 
 ## Stage A — Go contracts
@@ -113,3 +113,20 @@ Approved by the owner on 15 October 2026 after two self-review passes.
   type guards (the type-aware lint forbids unsafe assertions), with one documented `asserts`
   function where TypeScript cannot follow the loop in `struct`; the shared example loader lives in
   `src/test/contractExamples.ts` and validates the manifest instead of casting it.
+
+## Stage D — TypeScript ordering rules
+
+- RED: `npm --prefix frontend test -- src/bridge/contract/ordering.test.ts` → `fail` (cannot resolve
+  `./ordering`). Expected.
+- GREEN: the same → `pass`, 22 tests; `npm --prefix frontend run test:coverage` → `pass`, 122 tests,
+  every own file at 100% on all four metrics; typecheck and type-aware lint → `pass`.
+- Covered decisions: the answer to the latest fetch applies, an older one is discarded; a revision
+  jump in a full snapshot applies without a fetch; an older snapshot of the same runtime is
+  discarded; revision 0 of a new runtime applies and retires the previous one, whose later
+  messages (even with a higher revision) are dropped; a delta applies only on exactly the current
+  revision, an older one is discarded, a gap fetches once and nothing more while that fetch is in
+  flight; a failed fetch allows the next one; operation states only move forward;
+  `operation.notFound` from the accepting runtime means "not accepted" (resend with the same ID is
+  safe), from another runtime "outcome unknown" (read the full state, never resend).
+- These are pure functions; the store that calls them is task 035, so the behavior in the running
+  application is `not_run` until then.
