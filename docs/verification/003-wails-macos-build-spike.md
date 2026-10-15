@@ -3,7 +3,7 @@
 **Task:** [003](../../product/tasks/003-wails-macos-build-spike.md)  
 **Date:** 14–15 October 2026  
 **Change version:** the task 003 commit (parent `248079e`)  
-**Feature:** [desktop-shell-build](../features/desktop-shell-build.md); **ADR:** [toolchain-versions](../decisions/toolchain-versions.md), [macos-target](../decisions/macos-target.md)
+**Feature:** [desktop-shell-build](../app/desktop-shell.md); **ADR:** [toolchain-versions](../decisions/toolchain-versions.md), [macos-target](../decisions/macos-target.md)
 
 ## Environment
 

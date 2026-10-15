@@ -3,7 +3,7 @@
 **Task:** [004](../../product/tasks/004-reproducible-check-commands.md)  
 **Date:** 15 October 2026  
 **Change version:** commits `af0ecdf` … the 004 stage E commit (parent `32392e6`)  
-**Feature:** [quality-gate](../features/quality-gate.md); **ADR:** [quality-gate](../decisions/quality-gate.md) (O3), [agent-tooling](../decisions/agent-tooling.md), [toolchain-versions](../decisions/toolchain-versions.md)
+**Feature:** [quality-gate](../tooling/quality-gate.md); **ADR:** [quality-gate](../decisions/quality-gate.md) (O3), [agent-tooling](../decisions/agent-tooling.md), [toolchain-versions](../decisions/toolchain-versions.md)
 
 ## Session architecture plan
 
@@ -220,7 +220,7 @@ test-bridge UI tests are printed as `not_run (not implemented yet)` instead of b
 
 Documents changed: new ADR [quality-gate](../decisions/quality-gate.md) (O3 accepted in the
 [register](../decisions/project-baseline.md#6-open-decision-register)); new feature doc
-[quality-gate](../features/quality-gate.md) and the [index](../README.md); README commands section
+[quality-gate](../tooling/quality-gate.md) and the [index](../README.md); README commands section
 (the gate, its modes and needs, quick module checks, individual commands); `CLAUDE.md` commands and
 coverage; `/check`, `fix-checks.md`, `dependencies.md`, `review.md`; the TDD policy; the
 agent-tooling and toolchain-versions ADRs.

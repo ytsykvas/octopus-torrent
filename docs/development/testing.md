@@ -1,0 +1,77 @@
+# Testing
+
+> Last updated: 2026-10-15
+
+Every change goes RED → GREEN → REFACTOR, and all own executable code stays at **100%**. The policy
+is in [TDD_AND_QUALITY](../engineering/TDD_AND_QUALITY.md); this page explains how the tests are
+built and run. Only `go tool devtool check` proves coverage ([quality gate](../tooling/quality-gate.md));
+do not reconstruct it by hand.
+
+## Go
+
+- Tests live next to the code (`*_test.go`, same package) and run with `go test -race`.
+- **No windows in unit tests.** `run(start, stderr, ledger)` takes the Wails start function, so
+  `main_test.go` passes a fake and inspects the `options.App`. `internal/devtool` reaches the OS only
+  through `devtool.System` (`fakeSystem` in tests); `cmd/devtool`'s tests build the real binary with
+  `GOCOVERDIR` and run it (including the Codex-mirror and plan checks of this repository).
+- **Concurrency:** ledger tests run 20 concurrent duplicates under `-race`. Goroutine order is set
+  with explicit seams, not sleeps: the ledger's `spawn` delays an operation's start.
+- **Coverage:** the gate collects raw counters from `go test -covermode=atomic` plus an
+  instrumented `.app` run, because `main()` runs only in the real app. Every own file with a
+  function must be measured, and no block may be zero. `check fast` reports `main()` as `not_run`.
+
+## TypeScript
+
+- Vitest with jsdom (`src/test/setup.ts` adds jest-dom matchers and cleans up after each test).
+- **Inventory:** every `frontend/src/**/*.ts(x)` except tests, `src/test/` and `.d.ts`. The gate
+  derives it from the repository listing, not from `vite.config.ts`, and requires
+  covered == total on lines, statements, functions and branches for every file.
+- **Components:** Testing Library, queries by role and label; the bridge function comes in as a
+  prop (`vi.fn`).
+- **Bridge wrappers:** stub `window.go.app.App.<Method>` and assert the `Result`
+  ([calling Go](../bridge/calling-go.md#testing-a-wrapper)).
+
+## Shared contract examples
+
+`internal/app/contracts/testdata/*.json` and `manifest.json` are one contract for both languages:
+
+| Direction | Go checks | TypeScript checks |
+|---|---|---|
+| `toFrontend`, valid | decode → encode gives the same JSON exactly | the decoder accepts it; 64-bit values are exact `bigint`s |
+| `toFrontend`, invalid | — | the decoder rejects it at `path` |
+| `toGo`, valid | `Validate()` accepts it | the cases listed in `commands.test.ts` produce their examples exactly |
+| `toGo`, invalid | `Validate()` → `request.invalid` with `field` and `reason` | — |
+
+`vocabulary.json` lists every enumeration and error code. Both suites compare their lists with it.
+TypeScript reads the files through `src/test/contractExamples.ts` (`example`, `record`,
+`decodedExample`, `manifest`).
+
+## Commands
+
+```sh
+go test -race ./internal/app/... -run TestName -v
+npm --prefix frontend test -- src/bridge/contract/errors.test.ts -t 'unknown code'
+npm --prefix frontend run test:coverage     # all files, per-file thresholds
+go tool devtool check fast                  # everything except the .app run and the network
+```
+
+## Lint
+
+- Oxlint, type-aware (`npm --prefix frontend run lint`): correctness and suspicious categories as
+  errors, plus `no-explicit-any`, `no-non-null-assertion`, `ban-ts-comment`, `no-unsafe-type-assertion`,
+  `consistent-function-scoping` (the last two through the `suspicious` category) and the React hooks
+  rules. `perf` is `warn`, and `--deny-warnings` turns warnings into failures.
+- Use type guards instead of `as`. Where TypeScript cannot follow a proven fact, use one documented
+  `asserts` function (see `struct` in `decode.ts`).
+- Go: `gofmt` and `go vet`.
+
+## Forbidden
+
+The gate fails on any of these:
+
+- lowering thresholds or narrowing the inventory;
+- coverage ignore comments (`v8|c8|istanbul ignore`), lint disables, `@ts-ignore` / `@ts-expect-error` / `@ts-nocheck`, `//nolint`;
+- skipped or conditional tests (`.skip`, `.only`, `.todo`, `skipIf`, `runIf`, `fails`, `xit`, `t.Skip`).
+
+Tests use only synthetic data in temporary directories or `testdata/`, never the owner's
+torrents or downloads.

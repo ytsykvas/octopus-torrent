@@ -8,15 +8,20 @@
 - [Requirements](../product/PROJECT_REQUIREMENTS.md), [concept](../product/PRODUCT_CONCEPT.md), [architecture](../product/APPLICATION_ARCHITECTURE.md).
 - [TDD, 100% coverage, architecture analysis and no technical debt](engineering/TDD_AND_QUALITY.md).
 - [Task plan](../product/tasks/README.md).
-- [Feature description template](features/_TEMPLATE.md), [ADR template](decisions/_ADR_TEMPLATE.md).
+- [Feature description template](_FEATURE_TEMPLATE.md), [ADR template](decisions/_ADR_TEMPLATE.md).
 - [Root README](../README.md): current state, directory map, next task.
+- New here: [getting started](development/getting-started.md), then [workflow](development/workflow.md).
 
 ## Structure
 
 | Location | Purpose |
 |---|---|
-| `engineering/` | Mandatory engineering rules; the command that enforces them is described in [the quality gate](features/quality-gate.md). |
-| `features/` | One current description of each feature: behavior, modules, contracts, tests, commands, state. |
+| `engineering/` | Mandatory engineering rules; the command that enforces them is described in [the quality gate](tooling/quality-gate.md). |
+| `app/` | The Go application: desktop shell, Wails facade, operation ledger; later services, engine, library, files. |
+| `bridge/` | The Go–TypeScript contract and how React calls Go. |
+| `frontend/` | React structure; later state, i18n, styles and screens. |
+| `tooling/` | Developer tooling: quality gate, `devtool`, task plan, agent tooling. |
+| `development/` | Getting started, testing, the task-to-commit workflow. |
 | `decisions/` | Significant decisions, alternatives and reasons following the [ADR template](decisions/_ADR_TEMPLATE.md); not a log of every cosmetic edit. |
 | `verification/` | Evidence of TDD, checks, coverage and architecture conclusions; a specific task's verification report can be reused. |
 
@@ -33,16 +38,49 @@
 | [Local quality gate](decisions/quality-gate.md) (O3) | accepted, [004](../product/tasks/004-reproducible-check-commands.md); [report](verification/004-reproducible-check-commands.md) |
 | [Go–TypeScript contract: DTOs, numbers, errors, operations, ordering](decisions/api-contract.md) | accepted, [005](../product/tasks/005-domain-dto-and-bridge-contract.md); [report](verification/005-domain-dto-and-bridge-contract.md) |
 
-## Feature index
+## Documentation index
 
-Before implementing a feature, create its document from the template and add a link with its status here. Change the same document throughout all related tasks.
+A feature document (from the [template](_FEATURE_TEMPLATE.md)) records one feature's behavior, design, tests and evidence and carries a status. A guide or reference explains how something works or how to do something. Before implementing a feature, create its document in its domain and add it here; change the same document throughout all related tasks.
 
-| Feature | Status | Tasks |
+### `app/` — the Go application
+
+| Document | Kind | Status | Tasks |
+|---|---|---|---|
+| [Desktop shell, `.app` build, startup and quit](app/desktop-shell.md) | feature | `implemented` (prototype) | [003](../product/tasks/003-wails-macos-build-spike.md), [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
+| [Wails facade](app/facade.md) | reference | current | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
+| [Operation ledger](app/operations.md) | reference | current | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
+
+### `bridge/` — Go ↔ TypeScript
+
+| Document | Kind | Status | Tasks |
+|---|---|---|---|
+| [Go–TypeScript bridge contract](bridge/contract.md) | feature | `implemented` (contract, ledger, pure rules) | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
+| [Calling Go from React](bridge/calling-go.md) | guide | current | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
+| [Snapshot, delta and operation ordering](bridge/ordering.md) | reference | current (used by 035) | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
+| [Adding a UI → Go command](bridge/adding-a-command.md) | guide | current | 024/025 first |
+
+### `frontend/` — React
+
+| Document | Kind | Status | Tasks |
+|---|---|---|---|
+| [Frontend structure](frontend/structure.md) | reference | current | [003](../product/tasks/003-wails-macos-build-spike.md) |
+
+### `tooling/` — developer tooling
+
+| Document | Kind | Status | Tasks |
+|---|---|---|---|
+| [Local quality gate](tooling/quality-gate.md) | feature | `implemented` | [004](../product/tasks/004-reproducible-check-commands.md) |
+| [devtool command reference](tooling/devtool.md) | reference | current | [004](../product/tasks/004-reproducible-check-commands.md) |
+| [Task plan](tooling/task-plan.md) | guide | current | [004](../product/tasks/004-reproducible-check-commands.md) |
+| [Agent tooling](tooling/agent-tooling.md) | feature | `implemented` | — |
+
+### `development/` — working on the project
+
+| Document | Kind | Status |
 |---|---|---|
-| [Desktop shell, `.app` build and the first React → Go connection](features/desktop-shell-build.md) | `implemented` (prototype) | [003](../product/tasks/003-wails-macos-build-spike.md) |
-| [Agent tooling](features/agent-tooling.md) (developer tooling) | `implemented` | — |
-| [Local quality gate](features/quality-gate.md) (developer tooling) | `implemented` | [004](../product/tasks/004-reproducible-check-commands.md) |
-| [Go–TypeScript bridge contract](features/bridge-contract.md) | `implemented` (contract, ledger, pure rules) | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
+| [Getting started](development/getting-started.md) | guide | current |
+| [Testing](development/testing.md) | guide | current |
+| [Workflow: from a task to a commit](development/workflow.md) | guide | current |
 
 No product capability (import, transfer, library) is implemented yet.
 

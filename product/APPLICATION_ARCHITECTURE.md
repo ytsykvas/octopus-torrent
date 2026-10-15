@@ -74,7 +74,7 @@ frontend/package.json / lockfile
 scripts/                        reproducible build/check commands
 docs/README.md                  index of current documentation
 docs/engineering/               TDD, 100% coverage, working rules
-docs/features/                  behavior and implementation of each feature
+docs/<domain>/                  behavior and implementation by domain (app, bridge, frontend, tooling, development)
 docs/decisions/                 important choices and their reasons
 docs/verification/              evidence of tests, coverage and analysis
 README.md / AGENTS.md            project map and agent instructions
@@ -174,4 +174,4 @@ All modules and prototypes are developed through RED → GREEN → REFACTOR. Our
 
 Shared UI components/hooks, Go policies, repositories and adapters are reused according to responsibility. A business rule is not implemented separately in React and Go. Refactoring of the affected scenario is done on green tests within the current task; an unfinished workaround or technical debt blocks its completion.
 
-Feature behavior and actual modules are maintained in `docs/features/`, decisions in `docs/decisions/`, checks in `docs/verification/`. Requirements [QA-01–QA-08](PROJECT_REQUIREMENTS.md) and [TDD_AND_QUALITY.md](../docs/engineering/TDD_AND_QUALITY.md) define the mandatory conditions; [AGENTS.md](../AGENTS.md) applies them in every session.
+Feature behavior and actual modules are maintained in `docs/<domain>/`, decisions in `docs/decisions/`, checks in `docs/verification/`. Requirements [QA-01–QA-08](PROJECT_REQUIREMENTS.md) and [TDD_AND_QUALITY.md](../docs/engineering/TDD_AND_QUALITY.md) define the mandatory conditions; [AGENTS.md](../AGENTS.md) applies them in every session.

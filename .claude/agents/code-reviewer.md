@@ -33,7 +33,7 @@ half.
 1. `git diff <base>...HEAD --stat`, then the per-file diffs (`<base>` is `main` unless told
    otherwise; include uncommitted work with `git diff` when asked).
 2. Read the files given; open the matching task in `product/tasks/`, its feature doc in
-   `docs/features/` and its verification report in `docs/verification/` — missing RED evidence, raw
+   its feature document in `docs/<domain>/` and its verification report in `docs/verification/` — missing RED evidence, raw
    coverage or doc updates are findings.
 3. You may run read-only checks: `go vet ./...`, `gofmt -l .`, `go test ./...`,
    `npm --prefix frontend run typecheck`, `npm --prefix frontend run test:coverage`. Never install,

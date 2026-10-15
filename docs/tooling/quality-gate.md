@@ -3,7 +3,9 @@
 **Status:** `implemented`  
 **Requirements:** `AI-07`, `AI-08`, `QA-01`, `QA-02`, `QA-05`  
 **Related tasks:** [004](../../product/tasks/004-reproducible-check-commands.md)  
-**Last verified version:** task 004 commits (October 2026)
+**Last verified version:** task 004 commits; last full run in [report 005](../verification/005-domain-dto-and-bridge-contract.md)  
+**Last updated:** 2026-10-15 (moved from `docs/features/quality-gate.md`)  
+**See also:** [devtool command reference](devtool.md), [testing](../development/testing.md)
 
 ## Goal and behavior
 
