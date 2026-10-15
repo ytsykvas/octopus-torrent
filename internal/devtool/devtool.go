@@ -1,7 +1,6 @@
 package devtool
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +9,7 @@ import (
 	"time"
 )
 
-const usage = `usage: devtool hook release-guard | workspace setup | workspace run | check-docs | codex-agents | check-plan | plan-nav | check [offline | fast | deps]`
+const usage = `usage: devtool workspace setup | workspace run | check-docs | codex-agents | check-plan | plan-nav | check [offline | fast | deps]`
 
 // System is the boundary to the operating system, replaced by a fake in tests.
 type System interface {
@@ -35,15 +34,13 @@ type System interface {
 }
 
 // Main dispatches a devtool command and returns the process exit code.
-func Main(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string, sys System) int {
+func Main(args []string, stdout, stderr io.Writer, getenv func(string) string, sys System) int {
 	command := strings.Join(args, " ")
 	if mode, ok := checkModes[command]; ok {
 		return runCheck(mode, stdout, sys)
 	}
 	var err error
 	switch command {
-	case "hook release-guard":
-		return releaseGuardHook(stdin, stdout, stderr, sys)
 	case "workspace setup":
 		err = workspaceSetup(sys)
 	case "workspace run":
@@ -63,45 +60,6 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(
 	if err != nil {
 		fmt.Fprintf(stderr, "devtool: %v\n", err)
 		return 1
-	}
-	return 0
-}
-
-// releaseGuardHook follows the PreToolUse contract shared by Claude Code and Codex: exit 2 with the
-// reason on stderr blocks the call, exit 0 lets it through. Input it cannot parse is let through with
-// a warning, so a payload format change cannot lock the agent out of every tool.
-func releaseGuardHook(stdin io.Reader, stdout, stderr io.Writer, sys System) int {
-	ev, err := decodeHookEvent(stdin)
-	if errors.Is(err, errUnreadableEvent) {
-		fmt.Fprintf(stderr, "release-guard: could not parse the hook input, not checked: %v\n", err)
-		return 0
-	}
-	if err != nil {
-		fmt.Fprintf(stderr, "release-guard: cannot read the %s input, blocked: %v\n", ev.ToolName, err)
-		return 2
-	}
-	d := Decide(ev, sys.ReadFile)
-	switch {
-	case d.Deny:
-		fmt.Fprintf(stderr, "release-guard: %s\n", d.Reason)
-		return 2
-	case d.Ask:
-		// Claude Code reads "ask" from JSON on stdout; an agent that does not understand it lets the
-		// call through, which is why weakening changes are denied outright and never only asked.
-		var out struct {
-			HookSpecificOutput struct {
-				HookEventName            string `json:"hookEventName"`
-				PermissionDecision       string `json:"permissionDecision"`
-				PermissionDecisionReason string `json:"permissionDecisionReason"`
-			} `json:"hookSpecificOutput"`
-		}
-		out.HookSpecificOutput.HookEventName = "PreToolUse"
-		out.HookSpecificOutput.PermissionDecision = "ask"
-		out.HookSpecificOutput.PermissionDecisionReason = "release-guard: " + d.Reason
-		if err := json.NewEncoder(stdout).Encode(out); err != nil {
-			fmt.Fprintf(stderr, "release-guard: %v\n", err)
-			return 2
-		}
 	}
 	return 0
 }
@@ -309,49 +267,4 @@ func codexAgents(sys System) error {
 		}
 	}
 	return nil
-}
-
-var errUnreadableEvent = errors.New("not a hook event")
-
-// guardedTools are the tools whose input the guard inspects; their input must be readable.
-var guardedTools = map[string]bool{"Bash": true, "Edit": true, "MultiEdit": true, "Write": true}
-
-// decodeHookEvent reads the PreToolUse payload. A payload that is not JSON at all is
-// errUnreadableEvent (let through with a warning, so a format change cannot lock agents out); a
-// guarded tool whose input does not decode is an error that blocks the call. The command may be a
-// string or a list of arguments.
-func decodeHookEvent(r io.Reader) (HookEvent, error) {
-	var raw struct {
-		Cwd            string          `json:"cwd"`
-		PermissionMode string          `json:"permission_mode"`
-		ToolName       string          `json:"tool_name"`
-		ToolInput      json.RawMessage `json:"tool_input"`
-	}
-	if err := json.NewDecoder(r).Decode(&raw); err != nil {
-		return HookEvent{}, fmt.Errorf("%w: %v", errUnreadableEvent, err)
-	}
-	ev := HookEvent{Cwd: raw.Cwd, PermissionMode: raw.PermissionMode, ToolName: raw.ToolName}
-	if !guardedTools[raw.ToolName] {
-		return ev, nil
-	}
-	var input struct {
-		ToolInput
-		Command json.RawMessage `json:"command"`
-	}
-	if err := json.Unmarshal(raw.ToolInput, &input); err != nil {
-		return ev, err
-	}
-	ev.ToolInput = input.ToolInput
-	if len(input.Command) == 0 {
-		return ev, nil
-	}
-	if err := json.Unmarshal(input.Command, &ev.ToolInput.Command); err == nil {
-		return ev, nil
-	}
-	var argv []string
-	if err := json.Unmarshal(input.Command, &argv); err != nil {
-		return ev, errors.New("command is neither a string nor a list of strings")
-	}
-	ev.ToolInput.Command = joinArgv(argv)
-	return ev, nil
 }

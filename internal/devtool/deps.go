@@ -14,10 +14,13 @@ import (
 )
 
 const (
-	npmRegistry  = "https://registry.npmjs.org/"
-	goProxy      = "https://proxy.golang.org/"
-	fetchWorkers = 8
-	day          = 24 * time.Hour
+	// minReleaseAgeDays is the dependency cooldown of the version policy
+	// (docs/decisions/toolchain-versions.md): no npm or Go module version younger than this.
+	minReleaseAgeDays = 14
+	npmRegistry       = "https://registry.npmjs.org/"
+	goProxy           = "https://proxy.golang.org/"
+	fetchWorkers      = 8
+	day               = 24 * time.Hour
 )
 
 // networkError recognizes a missing network in tool output and Go errors, as opposed to a finding.

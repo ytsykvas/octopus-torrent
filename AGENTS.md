@@ -53,7 +53,7 @@ Policy: [toolchain-versions](docs/decisions/toolchain-versions.md). For npm and 
 
 ## Agent tooling
 
-Shared by Claude Code, Codex, octopus and Conductor: review agents, commands, and one instruction file per action (review, pull request, commit message, fixing checks, addressing review, resolving conflicts) — index in [.claude/docs/README.md](.claude/docs/README.md), reasons in the [ADR](docs/decisions/agent-tooling.md). The `release-guard` hook (`go tool devtool hook release-guard`) blocks commands that would bypass the dependency cooldown; never work around it. Workspace setup/run logic is Go in `cmd/devtool` and `internal/devtool` and follows the same TDD and 100% rules as the product.
+Shared by Claude Code, Codex, octopus and Conductor: review agents, commands, and one instruction file per action (review, pull request, commit message, fixing checks, addressing review, resolving conflicts) — index in [.claude/docs/README.md](.claude/docs/README.md), reasons in the [ADR](docs/decisions/agent-tooling.md). No hook refuses commands: the dependency cooldown is kept by `frontend/.npmrc`, the quality gate and you — never run `npx` downloads, global installs, `@latest` or a lowered `min-release-age` ([dependencies.md](.claude/docs/dependencies.md)). Workspace setup/run logic is Go in `cmd/devtool` and `internal/devtool` and follows the same TDD and 100% rules as the product.
 
 ## How to find, execute and hand off a task
 

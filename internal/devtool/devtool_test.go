@@ -2,13 +2,23 @@ package devtool
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
+	"io/fs"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+// fakeFiles serves file contents by path; a missing path is fs.ErrNotExist.
+type fakeFiles map[string]string
+
+func (f fakeFiles) read(name string) ([]byte, error) {
+	if content, ok := f[name]; ok {
+		return []byte(content), nil
+	}
+	return nil, fs.ErrNotExist
+}
 
 // fakeSystem records every process it is asked to start and answers from canned values.
 type fakeSystem struct {
@@ -126,120 +136,19 @@ func env(values map[string]string) func(string) string {
 	return func(key string) string { return values[key] }
 }
 
-func runMain(t *testing.T, sys *fakeSystem, getenv func(string) string, stdin string, args ...string) (int, string) {
+func runMain(t *testing.T, sys *fakeSystem, getenv func(string) string, args ...string) (int, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := Main(args, strings.NewReader(stdin), &stdout, &stderr, getenv, sys)
+	code := Main(args, &stdout, &stderr, getenv, sys)
 	if stdout.Len() != 0 {
 		t.Errorf("unexpected stdout: %q", stdout.String())
 	}
 	return code, stderr.String()
 }
 
-func TestHookAllowsWithExitZeroAndNoOutput(t *testing.T) {
-	sys := &fakeSystem{files: guardedRepo}
-	code, stderr := runMain(t, sys, env(nil), `{"cwd":"/repo","tool_name":"Bash","tool_input":{"command":"npm --prefix frontend ci"}}`, "hook", "release-guard")
-	if code != 0 || stderr != "" {
-		t.Errorf("got code %d stderr %q, want 0 and nothing", code, stderr)
-	}
-}
-
-func TestHookDeniesWithExitTwoAndReason(t *testing.T) {
-	sys := &fakeSystem{files: guardedRepo}
-	code, stderr := runMain(t, sys, env(nil), `{"cwd":"/repo","tool_name":"Bash","tool_input":{"command":"npx cowsay"}}`, "hook", "release-guard")
-	if code != 2 || !strings.Contains(stderr, "npx") || !strings.HasPrefix(stderr, "release-guard: ") {
-		t.Errorf("got code %d stderr %q, want 2 and a release-guard reason", code, stderr)
-	}
-}
-
-// Claude Code reads an "ask" decision from JSON on stdout with exit status 0.
-func TestHookAsksTheOwnerThroughJSONOnStdout(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	input := `{"tool_name":"Write","tool_input":{"file_path":"/repo/.claude/settings.json","content":"{}"}}`
-	code := Main([]string{"hook", "release-guard"}, strings.NewReader(input), &stdout, &stderr, env(nil), &fakeSystem{})
-	var out struct {
-		HookSpecificOutput struct {
-			HookEventName            string `json:"hookEventName"`
-			PermissionDecision       string `json:"permissionDecision"`
-			PermissionDecisionReason string `json:"permissionDecisionReason"`
-		} `json:"hookSpecificOutput"`
-	}
-	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
-		t.Fatalf("stdout %q is not JSON: %v", stdout.String(), err)
-	}
-	h := out.HookSpecificOutput
-	if code != 0 || stderr.Len() != 0 || h.HookEventName != "PreToolUse" || h.PermissionDecision != "ask" ||
-		!strings.HasPrefix(h.PermissionDecisionReason, "release-guard: ") {
-		t.Errorf("got code %d stderr %q output %+v, want 0, nothing, a PreToolUse ask with a release-guard reason", code, stderr.String(), h)
-	}
-}
-
-type failingWriter struct{}
-
-func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken pipe") }
-
-// If the ask cannot be delivered, the call is blocked rather than silently allowed.
-func TestHookBlocksWhenTheAskCannotBeWritten(t *testing.T) {
-	var stderr bytes.Buffer
-	input := `{"tool_name":"Write","tool_input":{"file_path":"/repo/.codex/hooks.json","content":"{}"}}`
-	code := Main([]string{"hook", "release-guard"}, strings.NewReader(input), failingWriter{}, &stderr, env(nil), &fakeSystem{})
-	if code != 2 || !strings.Contains(stderr.String(), "broken pipe") {
-		t.Errorf("got code %d stderr %q, want 2 naming the write error", code, stderr.String())
-	}
-}
-
-func TestHookReadsACommandGivenAsAnArgumentList(t *testing.T) {
-	sys := &fakeSystem{files: guardedRepo}
-	code, stderr := runMain(t, sys, env(nil), `{"cwd":"/repo","tool_name":"Bash","tool_input":{"command":["npx","cowsay"]}}`, "hook", "release-guard")
-	if code != 2 || !strings.Contains(stderr, "npx") {
-		t.Errorf("got code %d stderr %q, want 2 naming npx", code, stderr)
-	}
-}
-
-func TestHookReadsThePermissionMode(t *testing.T) {
-	input := `{"permission_mode":"auto","tool_name":"Write","tool_input":{"file_path":"/repo/.codex/hooks.json","content":"{}"}}`
-	code, stderr := runMain(t, &fakeSystem{}, env(nil), input, "hook", "release-guard")
-	if code != 2 || !strings.Contains(stderr, "permission mode") {
-		t.Errorf("got code %d stderr %q, want 2 naming the permission mode", code, stderr)
-	}
-}
-
-// Joining an argument list must keep each argument one word, so a -c script stays whole.
-func TestHookKeepsEachArgumentOfAListWhole(t *testing.T) {
-	sys := &fakeSystem{files: guardedRepo}
-	code, stderr := runMain(t, sys, env(nil), `{"cwd":"/repo","tool_name":"Bash","tool_input":{"command":["bash","-c","npm i -g x"]}}`, "hook", "release-guard")
-	if code != 2 || !strings.Contains(stderr, "global") {
-		t.Errorf("got code %d stderr %q, want 2 naming the global install", code, stderr)
-	}
-}
-
-// A tool the guard checks, with input it cannot read, is blocked rather than let through unchecked.
-func TestHookBlocksAKnownToolWithUnreadableInput(t *testing.T) {
-	for _, input := range []string{
-		`{"tool_name":"Bash","tool_input":"npx cowsay"}`,
-		`{"tool_name":"Bash","tool_input":{"command":42}}`,
-	} {
-		code, stderr := runMain(t, &fakeSystem{}, env(nil), input, "hook", "release-guard")
-		if code != 2 || !strings.Contains(stderr, "cannot read") {
-			t.Errorf("%s: got code %d stderr %q, want 2", input, code, stderr)
-		}
-	}
-	code, stderr := runMain(t, &fakeSystem{}, env(nil), `{"tool_name":"Read","tool_input":"anything"}`, "hook", "release-guard")
-	if code != 0 || stderr != "" {
-		t.Errorf("other tool: got code %d stderr %q, want 0", code, stderr)
-	}
-}
-
-func TestHookWithUnreadableInputWarnsButDoesNotBlock(t *testing.T) {
-	code, stderr := runMain(t, &fakeSystem{}, env(nil), "not json", "hook", "release-guard")
-	if code != 0 || !strings.Contains(stderr, "could not parse") {
-		t.Errorf("got code %d stderr %q, want 0 and a parse warning", code, stderr)
-	}
-}
-
 func TestWorkspaceSetupInstallsBuildsAndDownloadsInOrder(t *testing.T) {
 	sys := &fakeSystem{}
-	code, stderr := runMain(t, sys, env(nil), "", "workspace", "setup")
+	code, stderr := runMain(t, sys, env(nil), "workspace", "setup")
 	want := []string{
 		"run npm --prefix frontend ci",
 		"run npm --prefix frontend run build",
@@ -252,7 +161,7 @@ func TestWorkspaceSetupInstallsBuildsAndDownloadsInOrder(t *testing.T) {
 
 func TestWorkspaceSetupStopsAtTheFirstFailure(t *testing.T) {
 	sys := &fakeSystem{runErr: map[string]error{"npm --prefix frontend run build": errors.New("exit status 1")}}
-	code, stderr := runMain(t, sys, env(nil), "", "workspace", "setup")
+	code, stderr := runMain(t, sys, env(nil), "workspace", "setup")
 	if code != 1 || len(sys.calls) != 2 || !strings.Contains(stderr, "npm --prefix frontend run build: exit status 1") {
 		t.Errorf("got code %d calls %q stderr %q, want 1 after two calls with the failing step named", code, sys.calls, stderr)
 	}
@@ -264,7 +173,7 @@ func TestWorkspaceRunReplacesItselfWithWailsDevOnTheGivenPort(t *testing.T) {
 		"conductor": {"CONDUCTOR_PORT": "41000"},
 	} {
 		sys := &fakeSystem{output: "/cache/wails\n"}
-		code, stderr := runMain(t, sys, env(vars), "", "workspace", "run")
+		code, stderr := runMain(t, sys, env(vars), "workspace", "run")
 		want := []string{"output go tool -n wails", "exec /cache/wails /cache/wails dev -devserver localhost:41000"}
 		if code != 0 || stderr != "" || strings.Join(sys.calls, "\n") != strings.Join(want, "\n") {
 			t.Errorf("%s: got code %d stderr %q calls %q, want %q", name, code, stderr, sys.calls, want)
@@ -275,7 +184,7 @@ func TestWorkspaceRunReplacesItselfWithWailsDevOnTheGivenPort(t *testing.T) {
 func TestWorkspaceRunRejectsAMissingOrInvalidPort(t *testing.T) {
 	for _, port := range []string{"", "http", "0", "65536"} {
 		sys := &fakeSystem{}
-		code, stderr := runMain(t, sys, env(map[string]string{"OCTOPUS_PORT": port}), "", "workspace", "run")
+		code, stderr := runMain(t, sys, env(map[string]string{"OCTOPUS_PORT": port}), "workspace", "run")
 		if code != 1 || len(sys.calls) != 0 || !strings.Contains(stderr, "port") {
 			t.Errorf("port %q: got code %d calls %q stderr %q, want 1, no calls, a port error", port, code, sys.calls, stderr)
 		}
@@ -285,18 +194,18 @@ func TestWorkspaceRunRejectsAMissingOrInvalidPort(t *testing.T) {
 func TestWorkspaceRunReportsWhyWailsCouldNotStart(t *testing.T) {
 	ports := env(map[string]string{"OCTOPUS_PORT": "41000"})
 	sys := &fakeSystem{outputErr: errors.New("no tool")}
-	if code, stderr := runMain(t, sys, ports, "", "workspace", "run"); code != 1 || !strings.Contains(stderr, "no tool") {
+	if code, stderr := runMain(t, sys, ports, "workspace", "run"); code != 1 || !strings.Contains(stderr, "no tool") {
 		t.Errorf("tool lookup failure: got code %d stderr %q", code, stderr)
 	}
 	sys = &fakeSystem{output: "/cache/wails", execErr: errors.New("exec format error")}
-	if code, stderr := runMain(t, sys, ports, "", "workspace", "run"); code != 1 || !strings.Contains(stderr, "exec format error") {
+	if code, stderr := runMain(t, sys, ports, "workspace", "run"); code != 1 || !strings.Contains(stderr, "exec format error") {
 		t.Errorf("exec failure: got code %d stderr %q", code, stderr)
 	}
 }
 
 func TestMainExplainsUsageForUnknownCommands(t *testing.T) {
 	for _, args := range [][]string{nil, {"hook"}, {"workspace", "archive"}} {
-		code, stderr := runMain(t, &fakeSystem{}, env(nil), "", args...)
+		code, stderr := runMain(t, &fakeSystem{}, env(nil), args...)
 		if code != 64 || !strings.Contains(stderr, "usage: devtool") {
 			t.Errorf("args %q: got code %d stderr %q, want 64 and usage", args, code, stderr)
 		}
@@ -305,7 +214,7 @@ func TestMainExplainsUsageForUnknownCommands(t *testing.T) {
 
 func runMainWithOutput(sys *fakeSystem, args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
-	code := Main(args, strings.NewReader(""), &stdout, &stderr, env(nil), sys)
+	code := Main(args, &stdout, &stderr, env(nil), sys)
 	return code, stdout.String(), stderr.String()
 }
 

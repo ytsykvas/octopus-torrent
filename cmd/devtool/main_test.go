@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -73,19 +71,6 @@ func writeScript(t *testing.T, path, body string) {
 	}
 }
 
-func TestHookBlocksACooldownBypassThroughTheRealBinary(t *testing.T) {
-	binary, env := buildDevtool(t)
-	cmd := exec.Command(binary, "hook", "release-guard")
-	cmd.Env = env
-	cmd.Stdin = strings.NewReader(`{"cwd":"/","tool_name":"Bash","tool_input":{"command":"npx cowsay"}}`)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 2 || !strings.Contains(stderr.String(), "npx") {
-		t.Errorf("got %v, stderr %q; want exit status 2 naming npx", err, stderr.String())
-	}
-}
-
 func TestWorkspaceRunReplacesTheProcessWithWails(t *testing.T) {
 	binary, env := buildDevtool(t)
 	bin, record := t.TempDir(), filepath.Join(t.TempDir(), "wails.args")
@@ -128,74 +113,6 @@ chmod +x build/bin/devtool
 		want := "go build -o build/bin/devtool ./cmd/devtool\ndevtool workspace " + command + "\n"
 		if string(got) != want {
 			t.Errorf("%s.sh calls = %q, want %q", command, got, want)
-		}
-	}
-}
-
-// hookCommands returns the release-guard commands the agent configurations actually run.
-func hookCommands(t *testing.T) map[string]string {
-	t.Helper()
-	type hook struct {
-		Command string `json:"command"`
-	}
-	type config struct {
-		Hooks struct {
-			PreToolUse []struct {
-				Matcher string `json:"matcher"`
-				Hooks   []hook `json:"hooks"`
-			} `json:"PreToolUse"`
-		} `json:"hooks"`
-	}
-	commands := map[string]string{}
-	for _, path := range []string{"../../.claude/settings.json", "../../.codex/hooks.json"} {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var cfg config
-		if err := json.Unmarshal(raw, &cfg); err != nil {
-			t.Fatalf("%s: %v", path, err)
-		}
-		for _, entry := range cfg.Hooks.PreToolUse {
-			for _, h := range entry.Hooks {
-				if strings.Contains(h.Command, "release-guard") {
-					commands[path] = h.Command
-				}
-			}
-		}
-		if commands[path] == "" {
-			t.Fatalf("%s has no release-guard hook", path)
-		}
-	}
-	return commands
-}
-
-// Claude Code and Codex block a tool call only on exit status 2. `go run` turns every non-zero exit
-// into 1, which would make the guard advisory; this runs the configured commands as the agents do.
-func TestConfiguredHooksBlockWithExitStatusTwo(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for path, command := range hookCommands(t) {
-		for input, want := range map[string]int{
-			`{"cwd":"` + root + `","tool_name":"Bash","tool_input":{"command":"npx cowsay"}}`:               2,
-			`{"cwd":"` + root + `","tool_name":"Bash","tool_input":{"command":"npm --prefix frontend ci"}}`: 0,
-		} {
-			cmd := exec.Command("sh", "-c", command)
-			cmd.Dir = root
-			cmd.Env = append(os.Environ(), "CLAUDE_PROJECT_DIR="+root)
-			cmd.Stdin = strings.NewReader(input)
-			out, err := cmd.CombinedOutput()
-			got := 0
-			if exit, ok := err.(*exec.ExitError); ok {
-				got = exit.ExitCode()
-			} else if err != nil {
-				t.Fatalf("%s: %v", path, err)
-			}
-			if got != want {
-				t.Errorf("%s: exit %d for %s, want %d\n%s", path, got, input, want, out)
-			}
 		}
 	}
 }

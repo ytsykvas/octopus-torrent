@@ -57,7 +57,7 @@ silently bypasses), there was no linter, and dependency age was checked by a one
   of the compiler's `noImplicitReturns`.
 - **Generated bindings** are regenerated with `go tool wails generate module` before any build and
   compared by content (Wails flips file modes, which do not matter).
-- **Dependencies** (network): release age ≥ `minReleaseAgeDays` (the hook's constant) of every locked
+- **Dependencies** (network): release age ≥ `minReleaseAgeDays` (the one constant of the policy) of every locked
   npm version and every Go module in the build list by registry time; `npm audit`; `govulncheck`
   pinned as a `go.mod` tool; a report of updates of direct dependencies and tools that have been out
   of quarantine for 14 days; a query the report could not make is `not_run`, never an empty report.

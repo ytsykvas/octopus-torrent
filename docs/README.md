@@ -39,7 +39,7 @@ Before implementing a feature, create its document from the template and add a l
 | Feature | Status | Tasks |
 |---|---|---|
 | [Desktop shell, `.app` build and the first React → Go connection](features/desktop-shell-build.md) | `implemented` (prototype) | [003](../product/tasks/003-wails-macos-build-spike.md) |
-| [Agent tooling and the release-guard hook](features/agent-tooling.md) (developer tooling) | `implemented` | — |
+| [Agent tooling](features/agent-tooling.md) (developer tooling) | `implemented` | — |
 | [Local quality gate](features/quality-gate.md) (developer tooling) | `implemented` | [004](../product/tasks/004-reproducible-check-commands.md) |
 
 No product capability (import, transfer, library) is implemented yet.

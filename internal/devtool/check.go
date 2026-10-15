@@ -210,7 +210,7 @@ func (c *checker) own(check func(System) (string, []string, error)) func() stepR
 
 // CheckNpmCooldown verifies npm's effective configuration as printed by `npm config get
 // min-release-age before min-release-age-exclude`: the cooldown is at least minReleaseAgeDays and
-// nothing overrides it. This is the guarantee behind the release-guard hook.
+// nothing overrides it.
 func CheckNpmCooldown(config string) []string {
 	values := map[string]string{}
 	for _, l := range strings.Split(config, "\n") {

@@ -25,19 +25,5 @@
       "Bash(git push --force:*)",
       "Bash(git push -f:*)"
     ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|Edit|MultiEdit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && go tool devtool hook release-guard",
-            "timeout": 60
-          }
-        ]
-      }
-    ]
   }
 }

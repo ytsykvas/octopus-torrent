@@ -49,7 +49,7 @@ main.go, main_test.go         Wails entry point: embedded frontend/dist, run(sta
 go.mod, go.sum                Go 1.27.2, Wails v2.16.0 (library + CLI as go tool)
 wails.json                    Wails configuration (npm ci, npm run build)
 internal/app/                 Wails facade (AppAPI): GetRuntimeInfo
-cmd/devtool/, internal/devtool/   agent hook (release-guard) and workspace setup/run, run as go tool devtool
+cmd/devtool/, internal/devtool/   quality gate, plan and doc checks, workspace setup/run, run as go tool devtool
 .claude/, .codex/             agents, commands, hook and action instructions for Claude Code and Codex
 .octopus/, .conductor/        parallel-workspace runners: setup/run scripts, action prompts
 frontend/src/bridge/          our own wrapper over generated bindings
