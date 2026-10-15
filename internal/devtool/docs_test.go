@@ -56,3 +56,14 @@ func TestCheckPointersFindsDeadClaudePaths(t *testing.T) {
 		t.Errorf("CheckPointers = %q", got)
 	}
 }
+
+// git quotes unusual names in its plain listing; -z lists every name as it is, spaces included.
+func TestRepositoryFilesKeepsEveryNameWhole(t *testing.T) {
+	sys := &fakeSystem{results: map[string][]fakeResult{
+		"git ls-files -z --cached --others --exclude-standard": {{out: "docs/my notes.md\x00docs/нотатки.md\x00README.md\x00"}},
+	}}
+	got, err := repositoryFiles(sys)
+	if err != nil || strings.Join(got, "|") != "docs/my notes.md|docs/нотатки.md|README.md" {
+		t.Errorf("repositoryFiles = %q, %v", got, err)
+	}
+}

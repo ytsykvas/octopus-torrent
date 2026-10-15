@@ -1,12 +1,13 @@
 package devtool
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -62,18 +63,22 @@ type checkStep struct {
 }
 
 type checker struct {
-	sys      System
-	root     string
-	mode     checkMode
-	files    []string
-	appRan   bool
-	npmTimes map[string]map[string]string
+	sys     System
+	root    string
+	mode    checkMode
+	files   []string
+	appRan  bool
+	npmDocs map[string]npmDocument
+}
+
+func newChecker(sys System, mode checkMode) *checker {
+	return &checker{sys: sys, mode: mode, npmDocs: map[string]npmDocument{}}
 }
 
 // runCheck runs every step of the mode in order, never stopping early, prints one line per step and
 // returns the exit code: 1 if a step failed, or if a mandatory step did not run in the full gate.
 func runCheck(mode checkMode, stdout io.Writer, sys System) int {
-	c := &checker{sys: sys, mode: mode}
+	c := newChecker(sys, mode)
 	before, err := c.start()
 	if err != nil {
 		report(stdout, "repository", fail(err.Error(), ""))
@@ -158,6 +163,7 @@ func (c *checker) steps() []checkStep {
 	return append([]checkStep{
 		{"npm ci", c.tool(npmCI...)},
 		{"npm cooldown", c.npmCooldown},
+		{"go env", c.goEnv},
 		{"typecheck", c.tool("npm", "--prefix", "frontend", "run", "typecheck")},
 		{"lint", c.tool("npm", "--prefix", "frontend", "run", "lint")},
 		{"frontend tests", c.frontendTests},
@@ -170,8 +176,8 @@ func (c *checker) steps() []checkStep {
 		{"go coverage", c.goCoverage},
 		{"escape hatches", c.escapeHatches},
 		{"release build", c.tool("go", "tool", "wails", "build", "-clean", "-trimpath")},
-		{"docs", c.captured(checkDocs)},
-		{"plan", c.captured(checkPlan)},
+		{"docs", c.own(docsCheck)},
+		{"plan", c.own(planCheck)},
 	}, append(network,
 		checkStep{"engine integration", func() stepResult { return notBuiltYet("not implemented yet: tasks 007, 018") }},
 		checkStep{"test-bridge UI tests", func() stepResult { return notBuiltYet("not implemented yet: task 035") }},
@@ -188,14 +194,17 @@ func (c *checker) tool(command ...string) func() stepResult {
 	}
 }
 
-// captured runs one of devtool's own checks and keeps its report.
-func (c *checker) captured(check func(io.Writer, System) error) func() stepResult {
+// own runs one of devtool's own checks, which returns its summary or its problems.
+func (c *checker) own(check func(System) (string, []string, error)) func() stepResult {
 	return func() stepResult {
-		var out bytes.Buffer
-		if err := check(&out, c.sys); err != nil {
-			return fail(err.Error(), out.String())
+		summary, problems, err := check(c.sys)
+		switch {
+		case err != nil:
+			return fail(err.Error(), "")
+		case len(problems) > 0:
+			return fail(fmt.Sprintf("%d problems", len(problems)), strings.Join(problems, "\n"))
 		}
-		return pass(strings.TrimSpace(strings.TrimPrefix(out.String(), statusPass)))
+		return pass(summary)
 	}
 }
 
@@ -233,6 +242,43 @@ func (c *checker) npmCooldown() stepResult {
 		return fail(strings.Join(problems, "; "), "")
 	}
 	return pass(fmt.Sprintf("min-release-age ≥ %d days, no override", minReleaseAgeDays))
+}
+
+// goEnvDefaults are the Go settings the dependency checks rely on: modules come from the proxy whose
+// dates the gate checks, every checksum is verified against the checksum database, and nothing is
+// fetched insecurely or exempted. Every other setting named here must be unset.
+var goEnvDefaults = map[string]string{"GOPROXY": "https://proxy.golang.org,direct", "GOSUMDB": "sum.golang.org"}
+
+var goEnvNames = []string{"GOFLAGS", "GOINSECURE", "GONOPROXY", "GONOSUMDB", "GOPRIVATE", "GOPROXY", "GOSUMDB"}
+
+// CheckGoEnv verifies Go's effective configuration as printed by `go env -json` for goEnvNames.
+func CheckGoEnv(env map[string]string) []string {
+	var problems []string
+	for _, name := range goEnvNames {
+		switch want, value := goEnvDefaults[name], env[name]; {
+		case value == want:
+		case want == "":
+			problems = append(problems, name+" is "+value+", want it unset")
+		default:
+			problems = append(problems, name+" is "+value+", want "+want)
+		}
+	}
+	return problems
+}
+
+func (c *checker) goEnv() stepResult {
+	out, err := c.sys.Capture("go", append([]string{"env", "-json"}, goEnvNames...)...)
+	if err != nil {
+		return fail("go env: "+err.Error(), out)
+	}
+	var env map[string]string
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		return fail("go env: "+err.Error(), out)
+	}
+	if problems := CheckGoEnv(env); len(problems) > 0 {
+		return fail(strings.Join(problems, "; "), "")
+	}
+	return pass("default module proxy and checksum database, no exemptions")
 }
 
 func (c *checker) frontendTests() stepResult {
@@ -273,18 +319,7 @@ func (c *checker) bindings() stepResult {
 		return fail(err.Error(), "")
 	}
 	after := c.contents(files, "frontend/wailsjs/")
-	var changed []string
-	for _, name := range sortedKeys(after) {
-		if before[name] != after[name] {
-			changed = append(changed, name)
-		}
-	}
-	for _, name := range sortedKeys(before) {
-		if _, ok := after[name]; !ok {
-			changed = append(changed, name)
-		}
-	}
-	if len(changed) > 0 {
+	if changed := changedNames(before, after); len(changed) > 0 {
 		return fail("the committed bindings differ from the Go facade; commit the regenerated files", strings.Join(changed, "\n"))
 	}
 	return pass(fmt.Sprintf("frontend/wailsjs matches the Go facade (%d files)", len(after)))
@@ -294,7 +329,7 @@ func (c *checker) goTests() stepResult {
 	if err := c.sys.RemoveAll("build/coverage"); err != nil {
 		return fail("remove the previous coverage profiles: "+err.Error(), "")
 	}
-	dir := c.root + "/" + unitCoverDir
+	dir := filepath.Join(c.root, unitCoverDir)
 	if err := c.sys.MkdirAll(dir); err != nil {
 		return fail("create "+dir+": "+err.Error(), "")
 	}
@@ -305,7 +340,7 @@ func (c *checker) appRun() stepResult {
 	if !c.mode.app {
 		return notRun("skipped by check fast")
 	}
-	r := appCoverageRun(c.sys, c.root, c.root+"/"+appCoverDir)
+	r := appCoverageRun(c.sys, c.root, filepath.Join(c.root, appCoverDir))
 	c.appRan = r.status == statusPass
 	return r
 }
@@ -313,7 +348,7 @@ func (c *checker) appRun() stepResult {
 // profile converts raw counters to text; a failed conversion leaves the profile empty, which the
 // coverage check reports.
 func (c *checker) profile(dir string) string {
-	if _, err := c.sys.Capture("go", "tool", "covdata", "textfmt", "-i="+c.root+"/"+dir, "-o", dir+".txt"); err != nil {
+	if _, err := c.sys.Capture("go", "tool", "covdata", "textfmt", "-i="+filepath.Join(c.root, dir), "-o", dir+".txt"); err != nil {
 		return ""
 	}
 	text, _ := c.sys.ReadFile(dir + ".txt")
@@ -350,6 +385,14 @@ func (c *checker) sameSources(before map[string]string) stepResult {
 		return fail(err.Error(), "")
 	}
 	after := c.fingerprints(files)
+	if changed := changedNames(before, after); len(changed) > 0 {
+		return fail("the repository files changed during the check; the results do not describe one version", strings.Join(changed, "\n"))
+	}
+	return pass("the repository files did not change during the check")
+}
+
+// changedNames lists the names added to or changed in after, then the names missing from it.
+func changedNames(before, after map[string]string) []string {
 	var changed []string
 	for _, name := range sortedKeys(after) {
 		if before[name] != after[name] {
@@ -361,10 +404,7 @@ func (c *checker) sameSources(before map[string]string) stepResult {
 			changed = append(changed, name)
 		}
 	}
-	if len(changed) > 0 {
-		return fail("the repository files changed during the check; the results do not describe one version", strings.Join(changed, "\n"))
-	}
-	return pass("the repository files did not change during the check")
+	return changed
 }
 
 // contents reads the listed files under prefix; a listed file deleted from the working tree is skipped.

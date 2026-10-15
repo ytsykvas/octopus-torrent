@@ -59,7 +59,7 @@ func checkPlanFixture(files map[string]string) []string {
 }
 
 func TestCheckPlanAcceptsAConsistentPlan(t *testing.T) {
-	files := planFixture()
+	files := edit(t, "product/tasks/003-check.md", "Text with a [link](README.md).\n", "Text with a [link](README.md).\n\n- [ ] Open while planned.\n")
 	if got := checkPlanFixture(files); len(got) != 0 {
 		t.Errorf("CheckPlan = %q, want no problems", got)
 	}
@@ -124,6 +124,8 @@ func TestCheckPlanReportsEveryKindOfInconsistency(t *testing.T) {
 		"wrong title":          {edit(t, t3, "# 003 — ", "# 004 — "), "first line must be \"# 003 — <title>\""},
 		"duplicate id":         {withFile("product/tasks/003-again.md", fixtureTask("003", "Again", "planned", "P1", "—", "`QA-01`")), "two task files with ID 003"},
 		"no requirements file": {withFile(reqs, ""), "no requirement rows"},
+		"done with an open item": {edit(t, t1, "Text with a [link](README.md).\n", "Text with a [link](README.md).\n\n- [x] Met.\n- [ ] Not met yet.\n"),
+			"001-start.md: is done but has an unchecked item: - [ ] Not met yet."},
 	}
 	for name, c := range cases {
 		got := strings.Join(checkPlanFixture(c.files), "\n")

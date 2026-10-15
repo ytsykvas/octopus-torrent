@@ -8,7 +8,8 @@ days. The `release-guard` hook blocks the usual ways around this; it is a safety
 
 ## 1. Survey
 ```bash
-npm --prefix frontend outdated
+go tool devtool check deps        # "updates" lists versions out of quarantine for 14 days
+npm --prefix frontend outdated    # the raw lists, if needed
 go list -m -u all
 ```
 
@@ -35,10 +36,10 @@ reason. Transitive Go modules stay where Go's MVS puts them unless one has a kno
 
 ## 4. Verify
 ```bash
-npm --prefix frontend audit
-go run golang.org/x/vuln/cmd/govulncheck@<pinned version> ./...
+go tool devtool check deps        # release age of every locked version, npm audit, govulncheck
 ```
-Then the full [`/check`](../commands/check.md), and the `.app` if the change can affect it.
+Then the full [`/check`](../commands/check.md) (`go tool devtool check`), and `/qa` if the change can
+affect the `.app`.
 
 ## 5. Record
 

@@ -5,13 +5,15 @@ expected.
 
 ## The suite
 
-The checks and their order are in [`/check`](../../commands/check.md). Run the ones relevant to what
-you touched, and never stop at the first failure: a later check often explains an earlier one.
+The gate is `go tool devtool check` ([`/check`](../../commands/check.md)); it runs every step and
+never stops at the first failure — a later step often explains an earlier one. While fixing, use
+`go tool devtool check fast` or the single-module commands in the [README](../../../README.md#build-and-check-commands);
+finish with the full `go tool devtool check`.
 
 ## Fixing
 
 - Formatting first: `gofmt -w <files>`.
-- Fix the narrowest set of files and the root cause. Re-run the failing check, then the full suite.
+- Fix the narrowest set of files and the root cause. Re-run the failing step's own command, then the full gate.
 - Never weaken the gate to get a green run: no lowered coverage thresholds, no narrowed `include` in
   `frontend/vite.config.ts`, no ignore directives for own logic, no skipped, disabled or deleted
   tests, no hand edits in `frontend/wailsjs/`. If a test itself is wrong, say so and fix it openly.
@@ -22,8 +24,21 @@ you touched, and never stop at the first failure: a later check often explains a
 
 - **`go test` fails to compile `main` with a missing `frontend/dist`.** `main.go` embeds the built
   frontend: run `npm --prefix frontend run build` first.
-- **Coverage profile shows `main.go` `main()` uncovered.** It runs only inside the real `.app`; the
-  merged-profile procedure in the [README](../../../README.md) launches the instrumented app.
+- **`go coverage` is `not_run` naming `main.go` blocks.** That is `check fast` (no `.app` run); the
+  full `check` covers `main()` by launching the instrumented app.
+- **`.app coverage run` is `not_run`.** Either another OctopusTorrent is running (quit it; one
+  workspace at a time) or macOS refused the terminal's Automation permission (System Settings →
+  Privacy & Security → Automation). Ask the owner; it is not a code problem.
+- **`frontend tests` fails with "not in the coverage report".** A file under `frontend/src` is not
+  measured: it is not imported by any test, or `vite.config.ts` excludes it. Write its test; never
+  narrow the inventory.
+- **`escape hatches` fails.** An ignore directive, a lint disable, a `@ts-` comment, a `//nolint` or a
+  skipped or conditional test; remove it and fix the code or the test.
+- **`npm cooldown` or `go env` fails.** A setting outside the repository (user `.npmrc`, environment,
+  `go env -w`) weakens the cooldown or checksum verification. Name it to the owner; never change the
+  check.
+- **`single code version` fails.** Something edited the listed files during the run (an editor,
+  another agent); run the gate again when nothing else is writing.
 - **The `release-guard` hook refused a command.** It is not a bug to work around: the command would
   weaken the 14-day release cooldown or checksum verification. Use the exact-version, `--prefix
   frontend` or `--no-install` form it names, or ask the owner.

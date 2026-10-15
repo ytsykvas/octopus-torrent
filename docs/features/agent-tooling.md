@@ -2,7 +2,7 @@
 
 **Status:** `implemented`  
 **Requirements:** AI-01, AI-06, AI-07, QA-01, QA-02, QA-05  
-**Related tasks:** none (repository tooling); [004](../../product/tasks/004-reproducible-check-commands.md) will replace the `/check` step list  
+**Related tasks:** none (repository tooling); [004](../../product/tasks/004-reproducible-check-commands.md) added `check-plan`, `plan-nav` and the [quality gate](quality-gate.md)  
 **Last verified version:** see `git log -1 -- internal/devtool`
 
 ## Goal and behavior
@@ -73,7 +73,7 @@ instrumented binary's counters into the unit coverage directory). Results:
 ## Refactoring and debt check
 
 No open debt. The hook's known blind spots are recorded in the ADR as accepted limits of a safety net;
-the guarantee they need (the age of every locked version) is task 004's scope, written into that task.
+the guarantee they need (the age of every locked version) is the `release age` step of the [quality gate](quality-gate.md).
 
 ## Usage and recovery
 

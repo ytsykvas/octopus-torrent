@@ -21,31 +21,52 @@ const (
 )
 
 // networkError recognizes a missing network in tool output and Go errors, as opposed to a finding.
-var networkError = regexp.MustCompile(`ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|no such host|dial tcp|network is unreachable|i/o timeout|connection refused`)
+var networkError = regexp.MustCompile(`ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|no such host|dial tcp|network is unreachable|i/o timeout|connection refused|Client\.Timeout exceeded|context deadline exceeded|TLS handshake timeout`)
 
-// NpmLockPackages returns every installed package version of an npm lockfile (v2/v3 "packages") as
-// name@version, sorted and unique; an aliased package is listed under its real name.
-func NpmLockPackages(lock []byte) ([]string, error) {
+// npmLockEntry is one installed package of an npm lockfile: where it is installed, its real name
+// (an alias is listed under the package it installs), and the artifact npm ci downloads.
+type npmLockEntry struct {
+	path, name, version, resolved, integrity string
+}
+
+// npmLockEntries returns every installed package of an npm lockfile (v2/v3 "packages"), by path.
+func npmLockEntries(lock []byte) ([]npmLockEntry, error) {
 	var file struct {
 		Packages map[string]struct {
-			Name    string `json:"name"`
-			Version string `json:"version"`
-			Link    bool   `json:"link"`
+			Name, Version, Resolved, Integrity string
+			Link                               bool
 		} `json:"packages"`
 	}
 	if err := json.Unmarshal(lock, &file); err != nil {
 		return nil, err
 	}
-	var found []string
-	for path, p := range file.Packages {
+	var entries []npmLockEntry
+	for _, path := range sortedKeys(file.Packages) {
+		p := file.Packages[path]
 		if path == "" || p.Link || p.Version == "" {
 			continue
 		}
 		name := p.Name
-		if name == "" {
-			name = path[strings.LastIndex(path, "node_modules/")+len("node_modules/"):]
+		if i := strings.LastIndex(path, "node_modules/"); name == "" && i >= 0 {
+			name = path[i+len("node_modules/"):]
+		} else if name == "" {
+			name = path
 		}
-		found = append(found, name+"@"+p.Version)
+		entries = append(entries, npmLockEntry{path, name, p.Version, p.Resolved, p.Integrity})
+	}
+	return entries, nil
+}
+
+// NpmLockPackages returns every installed package version of an npm lockfile as name@version,
+// sorted and unique.
+func NpmLockPackages(lock []byte) ([]string, error) {
+	entries, err := npmLockEntries(lock)
+	if err != nil {
+		return nil, err
+	}
+	found := make([]string, len(entries))
+	for i, e := range entries {
+		found[i] = e.name + "@" + e.version
 	}
 	slices.Sort(found)
 	return slices.Compact(found), nil
@@ -73,7 +94,8 @@ func decodeGoModules(list string) ([]goModule, error) {
 }
 
 // GoModuleVersions returns path@version of every module in the build list (`go list -m -json all`)
-// as it is actually downloaded: the main module and local replacements have no published version.
+// as it is actually downloaded. The main module has no published version; a module replaced by a
+// local directory has none either, so its age cannot be checked and it is an error.
 func GoModuleVersions(list string) ([]string, error) {
 	mods, err := decodeGoModules(list)
 	if err != nil {
@@ -85,8 +107,11 @@ func GoModuleVersions(list string) ([]string, error) {
 		if m.Replace != nil {
 			path, version = m.Replace.Path, m.Replace.Version
 		}
-		if m.Main || version == "" {
+		if m.Main {
 			continue
+		}
+		if version == "" {
+			return nil, fmt.Errorf("%s is replaced by the local directory %s, whose age cannot be checked", m.Path, path)
 		}
 		found = append(found, path+"@"+version)
 	}
@@ -172,10 +197,11 @@ func (c *checker) releaseAges() stepResult {
 	if err != nil {
 		return fail("read frontend/package-lock.json: "+err.Error(), "")
 	}
-	npm, err := NpmLockPackages(lock)
+	entries, err := npmLockEntries(lock)
 	if err != nil {
 		return fail("frontend/package-lock.json: "+err.Error(), "")
 	}
+	npm, _ := NpmLockPackages(lock)
 	list, err := c.sys.Output("go", "list", "-m", "-json", "all")
 	if err != nil {
 		return fail("go list -m -json all: "+err.Error(), list)
@@ -214,11 +240,20 @@ func (c *checker) releaseAges() stepResult {
 			}
 		}
 	}
-	c.npmTimes = map[string]map[string]string{}
 	for _, p := range npm {
 		name, version := splitVersion(p)
-		times, err := c.parsePackument(name, answers[npmURL(name)])
-		check(p, times[version], err)
+		doc, err := c.parsePackument(name, answers[npmURL(name)])
+		check(p, doc.Time[version], err)
+	}
+	// The age was checked in the registry, so npm ci must install exactly the registry's artifact.
+	for _, e := range entries {
+		doc := c.npmDocs[e.name]
+		switch want := doc.Versions[e.version].Dist.Integrity; {
+		case !strings.HasPrefix(e.resolved, npmRegistry):
+			problems = append(problems, e.path+": resolved from "+e.resolved+", not from "+npmRegistry)
+		case doc.Versions != nil && e.integrity != want:
+			problems = append(problems, e.path+": integrity "+e.integrity+" differs from the registry's "+want)
+		}
 	}
 	for _, m := range mods {
 		var info struct{ Time string }
@@ -235,49 +270,67 @@ func (c *checker) releaseAges() stepResult {
 	return pass(fmt.Sprintf("%d npm package versions and %d Go modules are at least %d days old", len(npm), len(mods), minReleaseAgeDays))
 }
 
-// parsePackument reads the publication times of an npm package and remembers them for updates.
-func (c *checker) parsePackument(name string, a fetched) (map[string]string, error) {
-	if times, ok := c.npmTimes[name]; ok {
-		return times, nil
+// npmDocument is what the gate reads from an npm registry document: the publication time of every
+// version and the integrity of its artifact.
+type npmDocument struct {
+	Time     map[string]string
+	Versions map[string]struct{ Dist struct{ Integrity string } }
+}
+
+// parsePackument reads an npm registry document and remembers it for the other checks.
+func (c *checker) parsePackument(name string, a fetched) (npmDocument, error) {
+	if doc, ok := c.npmDocs[name]; ok {
+		return doc, nil
 	}
 	if a.err != nil {
-		return nil, a.err
+		return npmDocument{}, a.err
 	}
-	var doc struct{ Time map[string]string }
+	var doc npmDocument
 	if err := json.Unmarshal(a.body, &doc); err != nil {
-		return nil, err
+		return npmDocument{}, err
 	}
-	c.npmTimes[name] = doc.Time
-	return doc.Time, nil
+	c.npmDocs[name] = doc
+	return doc, nil
 }
 
 // updates reports the newer versions of direct dependencies and tools that have been out of
 // quarantine for minReleaseAgeDays: the policy says they are taken, not postponed. Transitive Go
-// modules are left to MVS. It is a report and does not fail the gate.
+// modules are left to MVS. Found updates do not fail the gate; a query that could not be answered
+// does not run, so an empty report always means that nothing is due.
 func (c *checker) updates() stepResult {
 	now := c.sys.Now()
 	settled := func(published string) bool {
 		t, err := time.Parse(time.RFC3339, published)
 		return err == nil && now.Sub(t) >= minReleaseAgeDays*day
 	}
-	// npm outdated exits 1 when something is outdated; its JSON is the answer either way.
+	// npm outdated exits 1 when something is outdated; its JSON is the answer either way, and an
+	// npm error is a JSON object with an error code.
 	out, _ := c.sys.Output("npm", "--prefix", "frontend", "outdated", "--json")
-	var outdated map[string]struct{ Current, Latest string }
+	var outdated map[string]struct{ Current, Latest, Code, Summary string }
 	if err := json.Unmarshal([]byte(out), &outdated); err != nil {
 		return fail("npm outdated --json: "+err.Error(), out)
 	}
-	if c.npmTimes == nil {
-		c.npmTimes = map[string]map[string]string{}
+	if e, ok := outdated["error"]; ok && e.Code != "" {
+		if networkError.MatchString(e.Code + " " + e.Summary) {
+			return notRun("network unavailable: npm outdated: " + e.Summary)
+		}
+		return fail("npm outdated: "+e.Code+" "+e.Summary, out)
 	}
 	var found []string
 	for _, name := range sortedKeys(outdated) {
 		o := outdated[name]
-		times, err := c.parsePackument(name, c.fetch([]string{npmURL(name)})[npmURL(name)])
-		if err == nil && settled(times[o.Latest]) {
+		doc, err := c.parsePackument(name, c.fetch([]string{npmURL(name)})[npmURL(name)])
+		if err != nil {
+			return notRun("cannot read the publication times of " + name + ": " + err.Error())
+		}
+		if settled(doc.Time[o.Latest]) {
 			found = append(found, name+" "+o.Current+" → "+o.Latest)
 		}
 	}
-	list, _ := c.sys.Output("go", "list", "-m", "-u", "-json", "all")
+	list, err := c.sys.Output("go", "list", "-m", "-u", "-json", "all")
+	if err != nil {
+		return notRun("cannot look up Go module updates: go list -m -u -json all: " + err.Error())
+	}
 	mods, err := decodeGoModules(list)
 	if err != nil {
 		return fail("go list -m -u -json all: "+err.Error(), list)
@@ -298,6 +351,10 @@ func (c *checker) updates() stepResult {
 	return pass(fmt.Sprintf("%d updates out of quarantine: %s", len(found), strings.Join(found, ", ")))
 }
 
+// auditFinding is how npm audit and govulncheck report a vulnerability; such output is a finding even
+// if its text mentions a network error.
+var auditFinding = regexp.MustCompile(`\d+ (?:low|moderate|high|critical) severity vulnerabilit|Vulnerability #\d+`)
+
 // audit runs a vulnerability scanner: a finding fails the step, a missing network does not run it.
 func (c *checker) audit(command ...string) func() stepResult {
 	return func() stepResult {
@@ -305,7 +362,7 @@ func (c *checker) audit(command ...string) func() stepResult {
 		switch {
 		case err == nil:
 			return pass(strings.Join(command, " "))
-		case networkError.MatchString(out):
+		case networkError.MatchString(out) && !auditFinding.MatchString(out):
 			return notRun("network unavailable: " + strings.Join(command, " "))
 		}
 		return fail(strings.Join(command, " ")+": "+err.Error(), out)

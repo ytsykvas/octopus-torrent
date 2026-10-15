@@ -57,14 +57,25 @@ func TestAppCoverageRunReportsEveryFailure(t *testing.T) {
 		want   string
 	}{
 		"already running": {func(s *fakeSystem) { s.results[isRunning] = []fakeResult{{out: "true\n"}} }, statusNotRun, "already running"},
+		// Another OctopusTorrent started during the instrumented build: it must not be the one quit.
+		"started during the build": {func(s *fakeSystem) { s.results[isRunning] = []fakeResult{{out: "false\n"}, {out: "true\n"}} },
+			statusNotRun, "already running"},
 		"build fails": {func(s *fakeSystem) { s.results[appBuild] = []fakeResult{{out: "compile error", err: exitStatus1}} },
 			statusFail, "instrumented build failed"},
 		"no coverage dir": {func(s *fakeSystem) { s.mkdirErr = errors.New("read-only") }, statusFail, "read-only"},
 		"open fails": {func(s *fakeSystem) { s.results[appOpen] = []fakeResult{{out: "LSOpenURLs failed", err: exitStatus1}} },
 			statusFail, "cannot open"},
-		"never starts":   {func(s *fakeSystem) { s.results[appPgrep] = []fakeResult{{err: exitStatus1}} }, statusFail, "did not start"},
-		"no automation":  {func(s *fakeSystem) { s.results[appQuit] = []fakeResult{{out: notAllowed, err: exitStatus1}} }, statusNotRun, "Automation"},
-		"never quits":    {func(s *fakeSystem) { s.results[appAlive] = []fakeResult{{out: "4242\n"}} }, statusFail, "did not quit"},
+		"never starts":  {func(s *fakeSystem) { s.results[appPgrep] = []fakeResult{{err: exitStatus1}} }, statusFail, "did not start"},
+		"no automation": {func(s *fakeSystem) { s.results[appQuit] = []fakeResult{{out: notAllowed, err: exitStatus1}} }, statusNotRun, "Automation"},
+		"never quits":   {func(s *fakeSystem) { s.results[appAlive] = []fakeResult{{out: "4242\n"}} }, statusFail, "did not quit within 20 s; pid 4242 was killed"},
+		"cannot be killed": {func(s *fakeSystem) {
+			s.results[appAlive] = []fakeResult{{out: "4242\n"}}
+			s.results["kill 4242"] = []fakeResult{{out: "kill: 4242: Operation not permitted", err: exitStatus1}}
+		}, statusFail, "pid 4242 could not be killed: exit status 1"},
+		"no automation, cannot be killed": {func(s *fakeSystem) {
+			s.results[appQuit] = []fakeResult{{out: notAllowed, err: exitStatus1}}
+			s.results["kill 4242"] = []fakeResult{{out: "kill: 4242: Operation not permitted", err: exitStatus1}}
+		}, statusNotRun, "pid 4242 could not be killed"},
 		"no counters":    {func(s *fakeSystem) { s.dirs[appDir] = []string{"covmeta.abc"} }, statusFail, "no coverage counters"},
 		"unreadable dir": {func(s *fakeSystem) { s.dirErr = errors.New("permission denied") }, statusFail, "no coverage counters"},
 	}

@@ -77,9 +77,12 @@ func TestEscapeHatchesFindsIgnoreDirectivesAndDisabledTests(t *testing.T) {
 		"frontend/src/d.ts":                    "// oxlint-disable-next-line no-console\n",
 		"frontend/src/e.ts":                    "/* eslint-disable */\n",
 		"frontend/src/f.test.ts":               "it.skip('x', () => {})\ndescribe.only('y', () => {})\ntest.todo('z')\n",
+		"frontend/src/g.ts":                    "// @ts-ignore\n// @ts-expect-error\n// @ts-nocheck\n",
+		"frontend/src/h.test.ts":               "it.skipIf(ci)('a')\ndescribe.runIf(mac)('b')\ntest.fails('c')\nxit('d')\nxdescribe('e')\nxtest('f')\nit.concurrent.skip('g')\n",
+		"internal/app/app.go":                  "_ = f() // no" + "lint:errcheck\n",
 		"internal/app/app_test.go":             "func TestX(t *testing.T) { t." + "Skip(\"later\") }\n", // split so this file has no real call
 		"frontend/src/clean.ts":                "export const ignore = 'v8 is fast'; // skipping nothing\n",
-		"internal/app/app.go":                  "// t.Skip is only forbidden in tests\n",
+		"internal/app/clean.go":                "// t.Skip is only forbidden in tests\n",
 		"internal/devtool/frontendcov_test.go": "// fixtures mention v8 ignore on purpose\n",
 	}
 	got := strings.Join(EscapeHatches(sources), "\n")
@@ -87,12 +90,16 @@ func TestEscapeHatchesFindsIgnoreDirectivesAndDisabledTests(t *testing.T) {
 		"frontend/src/App.tsx:1: v8 ignore", "frontend/src/b.ts:1: istanbul ignore", "frontend/src/c.ts:1: c8 ignore",
 		"frontend/src/d.ts:1: oxlint-disable", "frontend/src/e.ts:1: eslint-disable", "frontend/src/f.test.ts:1: it.skip",
 		"frontend/src/f.test.ts:2: describe.only", "frontend/src/f.test.ts:3: test.todo", "internal/app/app_test.go:1: t." + "Skip(",
+		"frontend/src/g.ts:1: @ts-ignore", "frontend/src/g.ts:2: @ts-expect-error", "frontend/src/g.ts:3: @ts-nocheck",
+		"frontend/src/h.test.ts:1: it.skipIf", "frontend/src/h.test.ts:2: describe.runIf", "frontend/src/h.test.ts:3: test.fails",
+		"frontend/src/h.test.ts:4: xit(", "frontend/src/h.test.ts:5: xdescribe(", "frontend/src/h.test.ts:6: xtest(",
+		"frontend/src/h.test.ts:7: it.concurrent.skip", "internal/app/app.go:1: //" + " no" + "lint",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("EscapeHatches missing %q in:\n%s", want, got)
 		}
 	}
-	for _, clean := range []string{"clean.ts", "internal/app/app.go", "frontendcov_test.go"} {
+	for _, clean := range []string{"clean.ts", "internal/app/clean.go", "frontendcov_test.go"} {
 		if strings.Contains(got, clean) {
 			t.Errorf("EscapeHatches reported %s:\n%s", clean, got)
 		}

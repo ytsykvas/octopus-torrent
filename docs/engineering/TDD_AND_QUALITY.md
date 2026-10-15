@@ -39,7 +39,7 @@ The target is strict: **100% of all own executable code**, not only changed line
 
 The standard Go report measures statements; we do not call it measured branch coverage. Condition variants, errors and concurrency are additionally verified by behavioral tests. Profiles from unit and instrumented integration runs may be merged only for identical sources and settings. [Official Go measurement](https://go.dev/doc/build-cover).
 
-For the frontend, task 004 pins the version of Vitest and of the coverage collection tool or a verified equivalent. The configuration must explicitly include the sources and enforce the four metrics for every file and overall; the default settings alone are not considered evidence of full coverage. [Official Vitest configuration](https://vitest.dev/config/coverage.html).
+For the frontend, Vitest and `@vitest/coverage-v8` are pinned (task 004, [quality-gate](../decisions/quality-gate.md)). The configuration explicitly includes the sources and enforces the four metrics for every file and overall; in addition, `go tool devtool check` derives the inventory from the repository listing and checks every file by raw counts, so the tool's settings alone are never the evidence of full coverage. [Official Vitest configuration](https://vitest.dev/config/coverage.html).
 
 ### Fixed measurement boundaries
 
@@ -74,8 +74,8 @@ Do not mark a planned feature as implemented. A change to behavior, tests, schem
 
 ## 7. Blocking completion check
 
-Before integration and the `done` status, the following must pass: behavior tests and the required regression, 100% of the defined metrics, completeness of the file inventory, formatting/types/analyzers, generated contracts, documentation check, review of the architecture change and of the absence of new technical debt. Task 004 automates this locally; a cloud service is not required.
+Before integration and the `done` status, the following must pass: behavior tests and the required regression, 100% of the defined metrics, completeness of the file inventory, formatting/types/analyzers, generated contracts, documentation check, review of the architecture change and of the absence of new technical debt. `go tool devtool check` ([quality gate](../features/quality-gate.md), task 004) automates this locally; a cloud service is not required. Only its `GATE PASSED` accepts a change; `check fast` and `check offline` report an incomplete gate.
 
-The early task 003 and subsequent prototypes also work through TDD and 100% coverage. Until 004 is completed, they create minimal verified commands together with their tests; 004 unifies them. The absence of a not-yet-created centralized command does not cancel the threshold.
+Prototypes also work through TDD and 100% coverage and pass the same gate. A new kind of own code (another language, a new source directory) gets an inventory rule in the gate before it is accepted.
 
 The work summary records: the session architecture plan, the tests and the expected RED reason, the actual GREEN commands, the refactoring performed, the raw coverage report and the source inventory for the same code, the feature documentation and the conclusion about debt. Checks that were not run do not count. A percentage is not reported as measured unless the collection tool was actually run.

@@ -35,6 +35,7 @@ var (
 	matrixRow      = regexp.MustCompile(`(?m)^\| ([A-Z]+-\d{2}) \| .+ \| ([^|]*) \| [^|]* \|$`)
 	scenarioRow    = regexp.MustCompile(`(?m)^\| (AS-\d{2}) \|`)
 	scenarioItem   = regexp.MustCompile(`(?m)^\d+\. \*\*`)
+	openItem       = regexp.MustCompile(`(?m)^[ \t]*- \[ \] .*$`)
 	taskStatuses   = []string{"planned", "in_progress", "blocked", "done"}
 	firstTaskInRow = regexp.MustCompile(`\[(\d{3})[^\]]*\]\(\d{3}-[a-z0-9-]+\.md\)`)
 )
@@ -86,6 +87,11 @@ func parseTask(id, file, content string) (planTask, []string) {
 	task.status = one(taskStatus, "**Status:** `…`")
 	if task.status != "" && !slices.Contains(taskStatuses, task.status) {
 		bad("unknown status %s", task.status)
+	}
+	if task.status == "done" {
+		for _, item := range openItem.FindAllString(content, -1) {
+			bad("is done but has an unchecked item: %s", strings.TrimSpace(item))
+		}
 	}
 	task.phase = one(taskPhase, "**Phase:** P<n> — …")
 	if deps := one(taskDeps, "**Hard dependencies:** …"); deps != "" {

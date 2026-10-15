@@ -311,7 +311,7 @@ func runMainWithOutput(sys *fakeSystem, args ...string) (int, string, string) {
 
 func TestCheckDocsPassesWhenEverythingResolves(t *testing.T) {
 	sys := &fakeSystem{
-		output: "README.md\ndocs/a.md\n.conductor/settings.toml\n.claude/docs/actions/review.md\ndocs/deleted.md\n",
+		output: "README.md\x00docs/a.md\x00.conductor/settings.toml\x00.claude/docs/actions/review.md\x00docs/deleted.md\x00",
 		files: fakeFiles{
 			"README.md":                      "# R\n[a](docs/a.md#a)\n",
 			"docs/a.md":                      "# A\n",
@@ -320,14 +320,14 @@ func TestCheckDocsPassesWhenEverythingResolves(t *testing.T) {
 		},
 	}
 	code, stdout, stderr := runMainWithOutput(sys, "check-docs")
-	if code != 0 || stderr != "" || !strings.HasPrefix(stdout, "pass") || sys.calls[0] != "output git ls-files --cached --others --exclude-standard" {
+	if code != 0 || stderr != "" || !strings.HasPrefix(stdout, "pass") || sys.calls[0] != "output git ls-files -z --cached --others --exclude-standard" {
 		t.Errorf("got code %d stdout %q stderr %q calls %q", code, stdout, stderr, sys.calls)
 	}
 }
 
 func TestCheckDocsFailsAndListsEveryDeadReference(t *testing.T) {
 	sys := &fakeSystem{
-		output: "README.md\n.octopus/instructions/review.md\n",
+		output: "README.md\x00.octopus/instructions/review.md\x00",
 		files: fakeFiles{
 			"README.md":                       "# R\n[gone](docs/gone.md)\n",
 			".octopus/instructions/review.md": "Read .claude/docs/actions/gone.md",
@@ -351,7 +351,7 @@ func TestDocToolsReportAFailingFileListing(t *testing.T) {
 
 func TestCodexAgentsWritesOneMirrorPerClaudeAgent(t *testing.T) {
 	sys := &fakeSystem{
-		output: ".claude/agents/code-reviewer.md\n.claude/docs/README.md\nREADME.md\n",
+		output: ".claude/agents/code-reviewer.md\x00.claude/docs/README.md\x00README.md\x00",
 		files:  fakeFiles{".claude/agents/code-reviewer.md": reviewerAgent},
 	}
 	code, stdout, stderr := runMainWithOutput(sys, "codex-agents")
@@ -365,7 +365,7 @@ func TestCodexAgentsWritesOneMirrorPerClaudeAgent(t *testing.T) {
 }
 
 func TestCodexAgentsReportsTheAgentItCannotMirror(t *testing.T) {
-	listing := ".claude/agents/broken.md\n"
+	listing := ".claude/agents/broken.md\x00"
 	cases := map[string]*fakeSystem{
 		"unreadable": {output: listing},
 		"invalid":    {output: listing, files: fakeFiles{".claude/agents/broken.md": "no front matter"}},
@@ -381,7 +381,7 @@ func TestCodexAgentsReportsTheAgentItCannotMirror(t *testing.T) {
 
 // planSystem serves a plan fixture as the repository.
 func planSystem(files map[string]string) *fakeSystem {
-	return &fakeSystem{output: strings.Join(sortedKeys(files), "\n") + "\n", files: fakeFiles(files)}
+	return &fakeSystem{output: strings.Join(sortedKeys(files), "\x00") + "\x00", files: fakeFiles(files)}
 }
 
 func TestCheckPlanPassesOnAConsistentPlan(t *testing.T) {

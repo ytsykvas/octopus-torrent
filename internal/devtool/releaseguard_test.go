@@ -102,6 +102,12 @@ func TestDecideAllowsCommandsThatKeepTheCooldown(t *testing.T) {
 		"cat <<\"EOF\" > notes.txt\n`npx cowsay`\nEOF",
 		"cat <<EOF > notes.txt\n\\$(npx cowsay) and \\`npx cowsay\\`\nEOF",
 		"cat <<EOF > a.txt && cat <<'END' > b.txt\nsafe\nEOF\n$(npx cowsay)\nEND",
+		"gh pr create --body-file - <<'EOF'\nnpx cowsay is blocked\nEOF",
+		"git -C /repo commit -F - <<'EOF'\nnpx cowsay is blocked\nEOF",
+		"cat <<'EOF' | git commit -F -\nnpx cowsay is blocked\nEOF",
+		"cat <<'EOF' > notes.txt || echo failed\nnpx cowsay is blocked\nEOF",
+		"cat README.md # a comment\necho done",
+		"echo done # a trailing <<EOF",
 	}
 	for _, command := range commands {
 		if got := Decide(bash(command), guardedRepo.read); got.Deny {
@@ -229,24 +235,36 @@ func TestDecideDeniesCommandsThatBypassTheCooldown(t *testing.T) {
 		"cat <<-EOF > notes.txt\n\t`npx cowsay`\n\tEOF":                           "npx",
 		"git commit -F - <<EOF\n'$(npx cowsay)'\nEOF":                             "npx",
 		"cat <<'END' > a.txt && cat <<EOF > b.txt\nsafe\nEND\n$(npx cowsay)\nEOF": "npx",
-		"bash -s scripts/x.sh":                                                    "stdin",
-		"bash -i scripts/x.sh":                                                    "stdin",
-		"bash -x -s":                                                              "stdin",
-		"sed -i '' 's/a/b/' internal/devtool/releaseguard.go":                     ".npmrc",
-		"npx create-react-app demo":                                               "npx",
-		"cd frontend && npx tsc":                                                  "npx",
-		"npm --prefix frontend exec tsc":                                          "npm exec",
-		"go get github.com/anacrolix/torrent":                                     "explicit version",
-		"go get github.com/anacrolix/torrent@latest":                              "@latest",
-		"go get -u ./...":                                                         "-u",
-		"go get -u=patch ./...":                                                   "-u",
-		"go install golang.org/x/vuln/cmd/govulncheck@latest":                     "@latest",
-		"go run example.com/tool@upgrade":                                         "@upgrade",
-		"GOSUMDB=off go mod download":                                             "checksum",
-		"go env -w GONOSUMDB=example.com":                                         "checksum",
-		"GOINSECURE=example.com go get example.com/m@v1.0.0":                      "checksum",
-		"GOFLAGS=-insecure go get example.com/m@v1.0.0":                           "checksum",
-		"GONOSUMCHECK=1 go mod download":                                          "checksum",
+		// The shell, not the parser, decides what is a here-document and what reads it.
+		"cat README.md # <<'EOF'\nnpx cowsay\nEOF":                              "npx",
+		"cat <<'EOF' | xargs -I{} sh -c '{}'\nnpx cowsay\nEOF":                  "npx",
+		"cat <<'EOF' |& sh\nnpx cowsay\nEOF":                                    "stdin",
+		"git -c 'alias.x=!sh' x <<'EOF'\nnpx cowsay\nEOF":                       "npx",
+		"git x <<'EOF'\nnpx cowsay\nEOF":                                        "npx",
+		"cat <<'EOF' | git --no-pager\nnpx cowsay\nEOF":                         "npx",
+		"cat <<'EOF' | env\nnpx cowsay\nEOF":                                    "npx",
+		"gh x <<'EOF'\nnpx cowsay\nEOF":                                         "npx",
+		"cat <<EOF > notes.txt\n$(echo \")\" ; npx cowsay)\nEOF":                "npx",
+		"cat <<EOF > notes.txt\n$(case x in x) true ;; esac ; npx cowsay)\nEOF": "npx",
+		"cat <<EOF > notes.txt\n`echo \\`true\\` ; npx cowsay`\nEOF":            "npx",
+		"bash -s scripts/x.sh":                                                  "stdin",
+		"bash -i scripts/x.sh":                                                  "stdin",
+		"bash -x -s":                                                            "stdin",
+		"sed -i '' 's/a/b/' internal/devtool/releaseguard.go":                   ".npmrc",
+		"npx create-react-app demo":                                             "npx",
+		"cd frontend && npx tsc":                                                "npx",
+		"npm --prefix frontend exec tsc":                                        "npm exec",
+		"go get github.com/anacrolix/torrent":                                   "explicit version",
+		"go get github.com/anacrolix/torrent@latest":                            "@latest",
+		"go get -u ./...":                                                       "-u",
+		"go get -u=patch ./...":                                                 "-u",
+		"go install golang.org/x/vuln/cmd/govulncheck@latest":                   "@latest",
+		"go run example.com/tool@upgrade":                                       "@upgrade",
+		"GOSUMDB=off go mod download":                                           "checksum",
+		"go env -w GONOSUMDB=example.com":                                       "checksum",
+		"GOINSECURE=example.com go get example.com/m@v1.0.0":                    "checksum",
+		"GOFLAGS=-insecure go get example.com/m@v1.0.0":                         "checksum",
+		"GONOSUMCHECK=1 go mod download":                                        "checksum",
 	}
 	for command, want := range cases {
 		got := Decide(bash(command), guardedRepo.read)
@@ -390,5 +408,14 @@ func TestDecideIgnoresOtherTools(t *testing.T) {
 	failing := func(string) ([]byte, error) { return nil, errors.New("must not be called") }
 	if got := Decide(ev, failing); got.Deny {
 		t.Errorf("Read denied: %s", got.Reason)
+	}
+}
+
+// The shell expands a here-document where its command runs, after any earlier cd.
+func TestDecideChecksHeredocSubstitutionsInTheDirectoryTheyRunIn(t *testing.T) {
+	ev := bash("cd /tmp/x && cat <<EOF > notes.txt\n$(npm install left-pad@1.3.0)\nEOF")
+	ev.Cwd = repo + "/frontend"
+	if got := Decide(ev, guardedRepo.read); !got.Deny || !strings.Contains(got.Reason, ".npmrc") {
+		t.Errorf("Decide = %+v, want a deny naming the missing .npmrc", got)
 	}
 }

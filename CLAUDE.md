@@ -18,48 +18,47 @@ Everything written into the repository is English; replies to the owner are in U
 ## Workflow
 
 - Start a numbered task with `/task` (or `/task 004`): it reads the required context and plans in plan mode before any edit.
-- `/check` runs every gate; `/branch-review` runs the three review agents; `/qa` drives the real `.app` through the `macos-qa` agent; `/pushit` commits, pushes to `origin` (`github.com/ytsykvas/octopus-torrent`) and opens a PR.
-- Changes to the hook's own code, `go.mod`/`go.sum`, an `.npmrc` or agent settings need the owner: in the `auto`, `acceptEdits` or `bypassPermissions` permission modes the hook blocks them, so ask the owner to switch to `default` (Shift+Tab) first — task 004 is such a task.
+- `/check` runs `go tool devtool check` (the single gate); `/branch-review` runs the three review agents; `/qa` drives the real `.app` through the `macos-qa` agent; `/pushit` commits, pushes to `origin` (`github.com/ytsykvas/octopus-torrent`) and opens a PR.
+- Changes to the hook's own code, `go.mod`/`go.sum`, an `.npmrc` or agent settings need the owner: in the `auto`, `acceptEdits` or `bypassPermissions` permission modes the hook blocks them, so ask the owner to switch to `default` (Shift+Tab) first.
 - Adding or upgrading a dependency: [.claude/docs/dependencies.md](.claude/docs/dependencies.md). The `release-guard` hook blocks commands that would bypass the 14-day release cooldown; when it refuses, use the form it names — do not work around it.
 
 ## Commands
 
-All commands run from the repository root. The full verified list and prerequisites are in [README → Commands](README.md#build-and-check-commands). There is no single "check everything" command yet; task [004](product/tasks/004-reproducible-check-commands.md) creates it — until then `/check` lists the steps.
+All commands run from the repository root. The full verified list, prerequisites and what the gate needs (network, GUI session, Automation permission) are in [README → Commands](README.md#build-and-check-commands).
 
 ```sh
+go tool devtool check                         # THE gate: every check, never stops early; only it accepts a change
+go tool devtool check fast                    # TDD loop: no .app run, no network → GATE INCOMPLETE at best
+go tool devtool check offline                 # no network steps → GATE INCOMPLETE at best
+go tool devtool check deps                    # release age, npm audit, govulncheck, updates out of quarantine
 npm --prefix frontend ci                      # .npmrc: min-release-age=14 — do not bypass
-npm --prefix frontend run typecheck
-npm --prefix frontend run lint                # Oxlint, type-aware; warnings fail; `-- <file>` for one file
-npm --prefix frontend run test:coverage       # 100% threshold per file, 4 metrics
 npm --prefix frontend run build               # required before go test: main.go embeds frontend/dist
-gofmt -l . && go vet ./... && go test ./...
 go tool wails generate module                 # after changing internal/app methods; frontend/wailsjs is committed
 go tool wails build -clean -trimpath          # → build/bin/OctopusTorrent.app
 go tool wails dev
-go tool devtool check                         # the single gate: every check below, never stops early
-go tool devtool check fast                    # TDD loop: no .app run, no network; prints GATE INCOMPLETE
 go tool devtool check-docs                    # every relative link, anchor and .claude pointer resolves
 go tool devtool check-plan                    # task plan: links, acyclic graph, statuses, coverage, navigation
 go tool devtool plan-nav                      # regenerate the navigation table after changing a task file
 go tool devtool codex-agents                  # regenerate .codex/agents after changing .claude/agents
 ```
 
-A single test:
+A single test (quick module check, never acceptance):
 
 ```sh
-go test ./internal/app -run TestGetRuntimeInfoReportsCompiledGoRuntime -v
+go test -race ./internal/app -run TestGetRuntimeInfoReportsCompiledGoRuntime -v
 npm --prefix frontend test -- src/features/runtime-check/RuntimeCheck.test.tsx -t 'Go'
+npm --prefix frontend run lint -- src/features/runtime-check/RuntimeCheck.tsx
 ```
 
 For a single file use `test`, not `test:coverage`: the `perFile` threshold fails on files that this run did not execute.
 
-The Wails CLI and `devtool` run only through `go tool` (both are `tool` directives in `go.mod`); do not install a global `wails`.
+The Wails CLI, `govulncheck` and `devtool` run only through `go tool` (`tool` directives in `go.mod`); do not install a global `wails`.
 
-## Go coverage
+## Coverage
 
-`main()` runs only in the real application, so 100% for Go is the merged profile of the unit tests and the instrumented `.app` (procedure in the [README](README.md#build-and-check-commands)). The `cmd/devtool` test writes its instrumented binary's counters into the same unit directory. The criterion is empty output from `awk 'NR>1 && $NF==0' build/coverage/go.out`, not the rounded `100.0%` label. After an instrumented build, make a regular release build.
+`go tool devtool check` proves 100% itself; do not reconstruct it by hand. Go: `go test -race -covermode=atomic` writes raw counters, then the gate builds an instrumented `.app`, launches it with `GOCOVERDIR` and quits it with an Apple Event (a normal exit writes the counters; SIGTERM would not), because `main()` runs only in the real application. Both profiles must come from the same sources; every own file with a function must be measured; no block may be zero. `check fast` reports the `main()` blocks as `not_run`, never as covered. The `cmd/devtool` test writes its instrumented binary's counters into the same unit directory.
 
-For TS, the sources are defined by `vite.config.ts` (`include: src/**/*.{ts,tsx}`). `frontend/wailsjs/` lies outside `src/` and is not own code; own wrappers over it live in `frontend/src/bridge` and are measured.
+TS: the gate derives the inventory from the repository listing (`frontend/src/**/*.ts(x)` except tests, `src/test/` and `.d.ts`), not from `vite.config.ts`, and requires covered == total on all four metrics for every file. `frontend/wailsjs/` lies outside `src/` and is not own code (it is checked by regeneration); own wrappers over it live in `frontend/src/bridge` and are measured. Ignore directives, lint disables and skipped tests fail the gate.
 
 ## Big picture
 

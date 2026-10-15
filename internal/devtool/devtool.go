@@ -143,20 +143,37 @@ func workspaceRun(getenv func(string) string, sys System) error {
 }
 
 // repositoryFiles lists tracked and untracked, not ignored, files relative to the repository root.
+// -z keeps every name as it is: the plain listing quotes names with unusual characters.
 func repositoryFiles(sys System) ([]string, error) {
-	out, err := sys.Output("git", "ls-files", "--cached", "--others", "--exclude-standard")
+	out, err := sys.Output("git", "ls-files", "-z", "--cached", "--others", "--exclude-standard")
 	if err != nil {
 		return nil, fmt.Errorf("list repository files: %w", err)
 	}
-	return strings.Fields(out), nil
+	return strings.FieldsFunc(out, func(r rune) bool { return r == 0 }), nil
 }
 
 // checkDocs verifies every relative Markdown link and every .claude/**.md pointer in the agent and
 // runner configuration.
 func checkDocs(stdout io.Writer, sys System) error {
-	files, err := repositoryFiles(sys)
+	summary, dead, err := docsCheck(sys)
 	if err != nil {
 		return err
+	}
+	for _, line := range dead {
+		fmt.Fprintln(stdout, line)
+	}
+	if len(dead) > 0 {
+		return fmt.Errorf("%d dead links or pointers", len(dead))
+	}
+	fmt.Fprintln(stdout, "pass   "+summary)
+	return nil
+}
+
+// docsCheck returns the dead links and pointers, and the summary printed when there are none.
+func docsCheck(sys System) (string, []string, error) {
+	files, err := repositoryFiles(sys)
+	if err != nil {
+		return "", nil, err
 	}
 	exists := listedPath(files)
 	docs, sources := map[string]string{}, map[string]string{}
@@ -173,14 +190,7 @@ func checkDocs(stdout io.Writer, sys System) error {
 		}
 	}
 	dead := append(CheckLinks(docs, exists), CheckPointers(sources, exists)...)
-	for _, line := range dead {
-		fmt.Fprintln(stdout, line)
-	}
-	if len(dead) > 0 {
-		return fmt.Errorf("%d dead links or pointers", len(dead))
-	}
-	fmt.Fprintf(stdout, "pass   every relative link and .claude pointer resolves (%d Markdown files)\n", len(docs))
-	return nil
+	return fmt.Sprintf("every relative link and .claude pointer resolves (%d Markdown files)", len(docs)), dead, nil
 }
 
 // listedPath reports whether p is one of the listed files or a directory containing one.
@@ -221,16 +231,28 @@ func reportPlanProblems(stdout io.Writer, problems []string) error {
 
 // checkPlan verifies the task plan and that its navigation table matches the task files.
 func checkPlan(stdout io.Writer, sys System) error {
-	files, exists, err := planFiles(sys)
-	if err != nil {
+	summary, problems, err := planCheck(sys)
+	switch {
+	case err != nil:
 		return err
-	}
-	if problems := CheckPlan(files, exists); len(problems) > 0 {
+	case len(problems) > 0:
 		return reportPlanProblems(stdout, problems)
 	}
-	summary, _ := PlanSummary(files)
-	fmt.Fprintf(stdout, "pass   plan: %s; navigation up to date\n", summary)
+	fmt.Fprintln(stdout, "pass   "+summary)
 	return nil
+}
+
+// planCheck returns the plan problems, and the summary printed when there are none.
+func planCheck(sys System) (string, []string, error) {
+	files, exists, err := planFiles(sys)
+	if err != nil {
+		return "", nil, err
+	}
+	if problems := CheckPlan(files, exists); len(problems) > 0 {
+		return "", problems, nil
+	}
+	summary, _ := PlanSummary(files)
+	return "plan: " + summary + "; navigation up to date", nil, nil
 }
 
 // planNav regenerates the navigation block of the plan README from the task files.

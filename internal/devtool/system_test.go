@@ -1,6 +1,7 @@
 package devtool
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -111,5 +112,34 @@ func TestOSSystemGetsURLsAndRejectsErrorStatuses(t *testing.T) {
 	}
 	if now := (OSSystem{}).Now(); time.Since(now) > time.Minute {
 		t.Errorf("Now = %v", now)
+	}
+}
+
+// The registry answers stay with the host that was asked and within a size bound.
+func TestOSSystemGetStaysOnTheHostAndBoundsTheAnswer(t *testing.T) {
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "elsewhere") }))
+	defer other.Close()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/away":
+			http.Redirect(w, r, other.URL+"/x", http.StatusFound)
+		case "/here":
+			http.Redirect(w, r, "/big", http.StatusFound)
+		default:
+			fmt.Fprint(w, strings.Repeat("x", 11))
+		}
+	}))
+	defer server.Close()
+	defer func(limit int64) { maxResponseBytes = limit }(maxResponseBytes)
+	maxResponseBytes = 10
+	if _, err := (OSSystem{}).Get(server.URL + "/away"); err == nil || !strings.Contains(err.Error(), "redirect to another host") {
+		t.Errorf("Get(redirect away) = %v, want a refused redirect", err)
+	}
+	if _, err := (OSSystem{}).Get(server.URL + "/here"); err == nil || !strings.Contains(err.Error(), "larger than 10 bytes") {
+		t.Errorf("Get(too large) = %v, want a size error", err)
+	}
+	maxResponseBytes = 11
+	if body, err := (OSSystem{}).Get(server.URL + "/here"); err != nil || len(body) != 11 {
+		t.Errorf("Get(redirect on the same host) = %q, %v", body, err)
 	}
 }

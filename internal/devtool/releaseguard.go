@@ -5,6 +5,7 @@ package devtool
 import (
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -65,8 +66,8 @@ func ask(reason string) Decision {
 // readFile reads the current state of files the call depends on (.npmrc, package.json).
 //
 // The guard is a safety net against the usual and the expedient ways around the policy, including
-// the ones npm itself suggests; it is not a sandbox. The authoritative check is the age of every
-// locked version (task 004).
+// the ones npm itself suggests; it is not a sandbox. The results are checked by the quality gate
+// (task 004): the registry age of every locked version and npm's and Go's effective settings.
 func Decide(ev HookEvent, readFile func(string) ([]byte, error)) Decision {
 	var d Decision
 	switch ev.ToolName {
@@ -192,18 +193,22 @@ func decideCommand(command, cwd string, readFile func(string) ([]byte, error)) D
 			return d
 		}
 	}
-	toSinks := len(bodies) > 0 && heredocsGoToDataSinks(segments, len(bodies))
+	toSinks := len(bodies) > 0 && heredocsGoToDataSinks(command, len(bodies))
+	// A body is expanded where its command runs: in the starting directory or after a cd.
+	dirs := slices.Compact([]string{cwd, dir})
 	for _, body := range bodies {
+		var texts []string
 		if !body.quoted {
-			for _, inner := range bodySubstitutions(body.text) {
-				if d := decideCommand(inner, cwd, readFile); d.Deny {
-					return d
-				}
-			}
+			texts = bodySubstitutions(body.text)
 		}
 		if !toSinks {
-			if d := decideCommand(body.text, cwd, readFile); d.Deny {
-				return d
+			texts = append(texts, body.text)
+		}
+		for _, text := range texts {
+			for _, where := range dirs {
+				if d := decideCommand(text, where, readFile); d.Deny {
+					return d
+				}
 			}
 		}
 	}
@@ -219,10 +224,17 @@ func denyProtectedShellWrite() Decision {
 // parentheses and newlines end a command, except in a redirection such as >| or 2>&1. It is
 // deliberately small: enough to see programs and their arguments, not a shell parser.
 func shellSegments(command string) [][]string {
-	var segments [][]string
+	segments, _ := shellPipeline(command)
+	return segments
+}
+
+// shellPipeline is shellSegments that also reports, for each segment, whether it reads the output of
+// the one before it through a pipe (| or |&).
+func shellPipeline(command string) (segments [][]string, piped []bool) {
 	var words []string
 	var word strings.Builder
 	inWord, quote, escaped := false, rune(0), false
+	pipe, prev := false, rune(0)
 	endWord := func() {
 		if inWord {
 			words = append(words, word.String())
@@ -233,8 +245,8 @@ func shellSegments(command string) [][]string {
 	endSegment := func() {
 		endWord()
 		if len(words) > 0 {
-			segments = append(segments, words)
-			words = nil
+			segments, piped = append(segments, words), append(piped, pipe)
+			words, pipe = nil, false
 		}
 	}
 	for _, r := range command {
@@ -264,15 +276,18 @@ func shellSegments(command string) [][]string {
 			word.WriteRune(r)
 		case strings.ContainsRune(";&|()\n", r):
 			endSegment()
+			// | starts a pipe and |& keeps it; the second | of || ends it.
+			pipe = (r == '|' && prev != '|') || (r == '&' && prev == '|')
 		case r == ' ' || r == '\t':
 			endWord()
 		default:
 			word.WriteRune(r)
 			inWord = true
 		}
+		prev = r
 	}
 	endSegment()
-	return segments
+	return segments, piped
 }
 
 // isProtected reports a file only the owner may change: any .npmrc, and the guard itself.
@@ -442,8 +457,38 @@ var (
 	heredocEnd = regexp.MustCompile(`^($|[ \t\n;&|<>()])`)
 )
 
-// dataSinks receive a here-document as data, never as commands.
-var dataSinks = map[string]bool{"cat": true, "git": true, "gh": true, "tee": true}
+// dataSinks receive a here-document as data, never as commands. git and gh only through these
+// built-in commands, which aliases and extensions cannot shadow, and git without -c, which could
+// define an alias or a hook command.
+var (
+	dataSinks       = map[string]bool{"cat": true, "tee": true}
+	gitDataCommands = map[string]bool{"commit": true, "tag": true, "notes": true, "apply": true, "hash-object": true}
+	ghDataCommands  = map[string]bool{"pr": true, "issue": true, "release": true, "api": true, "gist": true}
+)
+
+// isDataSink reports whether a program reads its standard input as data.
+func isDataSink(program []string) bool {
+	if len(program) == 0 {
+		return false
+	}
+	switch filepath.Base(program[0]) {
+	case "git":
+		for i := 1; i < len(program); i++ {
+			switch w := program[i]; {
+			case w == "-C":
+				i++
+			case w == "-c" || strings.HasPrefix(w, "--config-env") || strings.HasPrefix(w, "--exec-path"):
+				return false
+			case !strings.HasPrefix(w, "-"):
+				return gitDataCommands[w]
+			}
+		}
+		return false
+	case "gh":
+		return len(program) > 1 && ghDataCommands[program[1]]
+	}
+	return dataSinks[filepath.Base(program[0])]
+}
 
 // heredocBody is the text of one here-document. The shell expands $(...) and `...` in the body
 // unless the delimiter was quoted ('EOF' or "EOF"), whatever program reads it.
@@ -483,6 +528,15 @@ func stripHeredocBodies(command string) (string, []heredocBody) {
 			escaped = true
 		case c == '\'' || c == '"':
 			quote = c
+		case c == '#' && (i == 0 || strings.IndexByte(" \t\n;&|()", command[i-1]) >= 0):
+			// A comment: a << in it is not a here-document, so the next lines stay commands.
+			end := strings.IndexByte(command[i:], '\n')
+			if end < 0 {
+				end = len(command) - i
+			}
+			out.WriteString(command[i : i+end])
+			i += end - 1
+			continue
 		case strings.HasPrefix(command[i:], "<<<"):
 			out.WriteString("<<<")
 			i += 2
@@ -530,21 +584,24 @@ func stripHeredocBodies(command string) (string, []heredocBody) {
 	return out.String(), bodies
 }
 
-// heredocsGoToDataSinks reports whether each of the n here-documents feeds a data sink: as many
-// segments carry a << word as there are bodies, and each of those runs cat, git, gh or tee.
-func heredocsGoToDataSinks(segments [][]string, n int) bool {
+// heredocsGoToDataSinks reports whether each of the n here-documents in the command line (bodies
+// removed) feeds a data sink: as many segments carry a << word as there are bodies, each of those is
+// a data sink, and so is every program reading a pipe, which a sink's output could feed.
+func heredocsGoToDataSinks(command string, n int) bool {
+	segments, piped := shellPipeline(command)
 	count := 0
-	for _, words := range segments {
+	for i, words := range segments {
 		has := false
 		for _, w := range words {
 			has = has || (strings.HasPrefix(w, "<<") && !strings.HasPrefix(w, "<<<"))
 		}
-		if !has {
+		if !has && !piped[i] {
 			continue
 		}
-		count++
-		program, _ := unwrap(words)
-		if len(program) == 0 || !dataSinks[filepath.Base(program[0])] {
+		if has {
+			count++
+		}
+		if program, _ := unwrap(words); !isDataSink(program) {
 			return false
 		}
 	}
@@ -602,8 +659,18 @@ func substitutions(command string) []string {
 }
 
 // bodySubstitutions returns the commands the shell runs while expanding an unquoted here-document.
+// expansions counts parentheses and backticks without the shell's grammar (quotes, case patterns,
+// nesting), so everything from the first substitution to the end of the body is returned as well: a
+// body has no command line of its own that would be decided as a whole.
 func bodySubstitutions(body string) []string {
-	return expansions(body, escapeActive(body))
+	active := escapeActive(body)
+	found := expansions(body, active)
+	for i := 0; i < len(body); i++ {
+		if active[i] && (body[i] == '`' || strings.HasPrefix(body[i:], "$(")) {
+			return append(found, strings.TrimLeft(body[i:], "$(`"))
+		}
+	}
+	return found
 }
 
 // expansions returns the commands inside $(...) and `...` that start where active is true.

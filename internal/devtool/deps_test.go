@@ -12,15 +12,14 @@ var checkNow = time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
 const (
 	lockfile = `{"lockfileVersion":3,"packages":{
 		"":{"name":"octopustorrent-frontend","version":"0.0.1"},
-		"node_modules/react":{"version":"19.3.0"},
-		"node_modules/@types/react":{"version":"19.3.0","dev":true},
-		"node_modules/string-width-cjs":{"name":"string-width","version":"4.2.3"},
-		"node_modules/a/node_modules/react":{"version":"18.0.0"},
+		"node_modules/react":{"version":"19.3.0","resolved":"https://registry.npmjs.org/react/-/react-19.3.0.tgz","integrity":"sha512-19.3.0"},
+		"node_modules/@types/react":{"version":"19.3.0","dev":true,"resolved":"https://registry.npmjs.org/@types/react/-/react-19.3.0.tgz","integrity":"sha512-19.3.0"},
+		"node_modules/string-width-cjs":{"name":"string-width","version":"4.2.3","resolved":"https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz","integrity":"sha512-4.2.3"},
+		"node_modules/a/node_modules/react":{"version":"18.0.0","resolved":"https://registry.npmjs.org/react/-/react-18.0.0.tgz","integrity":"sha512-18.0.0"},
 		"node_modules/local":{"link":true,"resolved":"../local"}}}`
 	goModules = `{"Path":"octopustorrent","Main":true,"GoVersion":"1.27.2"}
 {"Path":"github.com/BurntSushi/toml","Version":"v1.4.0","Indirect":true}
 {"Path":"golang.org/x/sys","Version":"v0.48.0","Replace":{"Path":"golang.org/x/sys","Version":"v0.47.0"}}
-{"Path":"example.com/local","Version":"v1.0.0","Replace":{"Path":"../local"}}
 `
 	goListModules = "go list -m -json all"
 	npmOutdated   = "npm --prefix frontend outdated --json"
@@ -29,12 +28,15 @@ const (
 	govulncheck   = "go tool govulncheck ./..."
 )
 
+// packument is a registry document whose versions were published at the given times; each version's
+// integrity is "sha512-<version>", as in the lockfile fixture.
 func packument(times map[string]string) string {
-	var parts []string
+	var parts, versions []string
 	for v, t := range times {
 		parts = append(parts, `"`+v+`":"`+t+`"`)
+		versions = append(versions, `"`+v+`":{"dist":{"integrity":"sha512-`+v+`"}}`)
 	}
-	return `{"name":"x","time":{` + strings.Join(parts, ",") + `}}`
+	return `{"name":"x","time":{` + strings.Join(parts, ",") + `},"versions":{` + strings.Join(versions, ",") + `}}`
 }
 
 // withDependencies adds a healthy dependency state to a fake repository: every locked version is
@@ -65,6 +67,10 @@ func TestNpmLockPackagesListsEveryInstalledVersion(t *testing.T) {
 	if _, err := NpmLockPackages([]byte("{")); err == nil {
 		t.Error("NpmLockPackages accepted invalid JSON")
 	}
+	// A package outside node_modules (a workspace) is named by its path, not cut at a fixed offset.
+	if got, err := NpmLockPackages([]byte(`{"packages":{"x":{"version":"1.0.0"}}}`)); err != nil || strings.Join(got, " ") != "x@1.0.0" {
+		t.Errorf("NpmLockPackages(workspace) = %q, %v", got, err)
+	}
 }
 
 func TestGoModuleVersionsUsesTheSelectedVersions(t *testing.T) {
@@ -75,6 +81,11 @@ func TestGoModuleVersionsUsesTheSelectedVersions(t *testing.T) {
 	}
 	if _, err := GoModuleVersions("{"); err == nil {
 		t.Error("GoModuleVersions accepted invalid JSON")
+	}
+	// A local directory has no publication time: its age cannot be checked.
+	local := goModules + `{"Path":"example.com/local","Version":"v1.0.0","Replace":{"Path":"../local"}}` + "\n"
+	if _, err := GoModuleVersions(local); err == nil || !strings.Contains(err.Error(), "example.com/local is replaced by the local directory ../local") {
+		t.Errorf("GoModuleVersions(local replace) error = %v", err)
 	}
 }
 
@@ -95,7 +106,7 @@ func TestReleaseAgeProblemNeedsFourteenFullDays(t *testing.T) {
 }
 
 func TestReleaseAgeStepChecksEveryLockedVersion(t *testing.T) {
-	c := &checker{sys: healthyRepo(), mode: checkModes["check"]}
+	c := newChecker(healthyRepo(), checkModes["check"])
 	if got := c.releaseAges(); got.status != statusPass || !strings.Contains(got.detail, "4 npm package versions and 2 Go modules") {
 		t.Errorf("releaseAges = %+v", got)
 	}
@@ -121,6 +132,16 @@ func TestReleaseAgeStepChecksEveryLockedVersion(t *testing.T) {
 		"offline": {func(s *fakeSystem) {
 			s.gets["https://registry.npmjs.org/react"] = fakeResult{err: errors.New("dial tcp: no such host")}
 		}, statusNotRun, "network"},
+		"timed out": {func(s *fakeSystem) {
+			s.gets["https://registry.npmjs.org/react"] = fakeResult{err: errors.New(`Get "https://registry.npmjs.org/react": context deadline exceeded (Client.Timeout exceeded while awaiting headers)`)}
+		}, statusNotRun, "network"},
+		// The age is checked in the registry, so the lockfile must install exactly what the registry has.
+		"resolved elsewhere": {func(s *fakeSystem) {
+			s.files["frontend/package-lock.json"] = strings.Replace(lockfile, "https://registry.npmjs.org/react/-/react-19.3.0.tgz", "https://evil.example/react.tgz", 1)
+		}, statusFail, "node_modules/react: resolved from https://evil.example/react.tgz, not from https://registry.npmjs.org/"},
+		"other integrity": {func(s *fakeSystem) {
+			s.files["frontend/package-lock.json"] = strings.Replace(lockfile, `"integrity":"sha512-19.3.0"`, `"integrity":"sha512-evil"`, 1)
+		}, statusFail, "node_modules/react: integrity sha512-evil differs from the registry's sha512-19.3.0"},
 		"no lockfile":     {func(s *fakeSystem) { delete(s.files, "frontend/package-lock.json") }, statusFail, "package-lock.json"},
 		"bad lockfile":    {func(s *fakeSystem) { s.files["frontend/package-lock.json"] = "{" }, statusFail, "package-lock.json"},
 		"go list fails":   {func(s *fakeSystem) { s.results[goListModules] = []fakeResult{{err: exitStatus1}} }, statusFail, "go list -m -json all"},
@@ -129,7 +150,7 @@ func TestReleaseAgeStepChecksEveryLockedVersion(t *testing.T) {
 	for name, tc := range cases {
 		sys := healthyRepo()
 		tc.change(sys)
-		c := &checker{sys: sys, mode: checkModes["check"]}
+		c := newChecker(sys, checkModes["check"])
 		if got := c.releaseAges(); got.status != tc.status || !strings.Contains(got.detail+"\n"+got.output, tc.want) {
 			t.Errorf("%s: releaseAges = %+v, want %s with %q", name, got, tc.status, tc.want)
 		}
@@ -150,25 +171,44 @@ func TestUpdatesReportsOnlyVersionsOutOfQuarantine(t *testing.T) {
 {"Path":"golang.org/x/text","Version":"v0.42.0","Indirect":true,"Update":{"Version":"v0.43.0","Time":"2026-09-20T00:00:00Z"}}
 `}}
 	sys.files["go.mod"] = "module octopustorrent\n\ntool (\n\tgolang.org/x/vuln/cmd/govulncheck\n\toctopustorrent/cmd/devtool\n)\n"
-	c := &checker{sys: sys, mode: checkModes["check"]}
+	c := newChecker(sys, checkModes["check"])
 	c.releaseAges()
 	got := c.updates()
 	want := "3 updates out of quarantine: react 19.3.0 → 19.4.0, github.com/BurntSushi/toml v1.4.0 → v1.5.0, golang.org/x/vuln v1.8.0 → v1.9.0"
 	if got.status != statusPass || got.detail != want {
 		t.Errorf("updates = %+v", got)
 	}
-	c = &checker{sys: healthyRepo(), mode: checkModes["check"]}
+	c = newChecker(healthyRepo(), checkModes["check"])
 	if got := c.updates(); got.status != statusPass || got.detail != "no update has been out of quarantine for 14 days" {
 		t.Errorf("no updates: %+v", got)
 	}
-	for name, change := range map[string]func(*fakeSystem){
-		"npm outdated garbage": func(s *fakeSystem) { s.results[npmOutdated] = []fakeResult{{out: "npm ERR!", err: exitStatus1}} },
-		"go list garbage":      func(s *fakeSystem) { s.results[goListUpdates] = []fakeResult{{out: "{", err: exitStatus1}} },
-	} {
+}
+
+// A query that could not be answered is not_run, never an empty report.
+func TestUpdatesDoesNotRunWhenItCannotAsk(t *testing.T) {
+	const offline = `{"error":{"code":"ENOTFOUND","summary":"request to https://registry.npmjs.org/react failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org"}}`
+	cases := map[string]struct {
+		change func(*fakeSystem)
+		status string
+		want   string
+	}{
+		"npm outdated garbage": {func(s *fakeSystem) { s.results[npmOutdated] = []fakeResult{{out: "npm ERR!", err: exitStatus1}} }, statusFail, "npm outdated --json"},
+		"npm outdated offline": {func(s *fakeSystem) { s.results[npmOutdated] = []fakeResult{{out: offline, err: exitStatus1}} }, statusNotRun, "ENOTFOUND"},
+		"npm outdated error": {func(s *fakeSystem) {
+			s.results[npmOutdated] = []fakeResult{{out: `{"error":{"code":"E403","summary":"Forbidden"}}`, err: exitStatus1}}
+		}, statusFail, "E403 Forbidden"},
+		"publication times unavailable": {func(s *fakeSystem) {
+			s.results[npmOutdated] = []fakeResult{{out: `{"react":{"current":"19.3.0","latest":"19.4.0"}}`, err: exitStatus1}}
+			s.gets["https://registry.npmjs.org/react"] = fakeResult{err: errors.New("dial tcp: no such host")}
+		}, statusNotRun, "react: dial tcp: no such host"},
+		"go list fails":   {func(s *fakeSystem) { s.results[goListUpdates] = []fakeResult{{err: exitStatus1}} }, statusNotRun, "go list -m -u -json all: exit status 1"},
+		"go list garbage": {func(s *fakeSystem) { s.results[goListUpdates] = []fakeResult{{out: "{"}} }, statusFail, "go list -m -u -json all"},
+	}
+	for name, c := range cases {
 		sys := healthyRepo()
-		change(sys)
-		if got := (&checker{sys: sys, mode: checkModes["check"]}).updates(); got.status != statusFail {
-			t.Errorf("%s: updates = %+v, want FAIL", name, got)
+		c.change(sys)
+		if got := newChecker(sys, checkModes["check"]).updates(); got.status != c.status || !strings.Contains(got.detail+"\n"+got.output, c.want) {
+			t.Errorf("%s: updates = %+v, want %s with %q", name, got, c.status, c.want)
 		}
 	}
 }
@@ -182,10 +222,12 @@ func TestAuditsFailOnFindingsAndDoNotRunOffline(t *testing.T) {
 			"clean":         {fakeResult{out: "found 0 vulnerabilities"}, statusPass},
 			"vulnerable":    {fakeResult{out: "1 high severity vulnerability", err: exitStatus1}, statusFail},
 			"network error": {fakeResult{out: "request to https://registry.npmjs.org failed, reason: getaddrinfo ENOTFOUND", err: exitStatus1}, statusNotRun},
+			// A finding whose text mentions a timeout is still a finding.
+			"finding about a timeout": {fakeResult{out: "1 high severity vulnerability: i/o timeout in the parser\nVulnerability #1: GO-2026-0001", err: exitStatus1}, statusFail},
 		} {
 			sys := healthyRepo()
 			sys.results[command] = []fakeResult{tc.answer}
-			c := &checker{sys: sys, mode: checkModes["check"]}
+			c := newChecker(sys, checkModes["check"])
 			step := c.audit(strings.Fields(command)...)
 			if got := step(); got.status != tc.status {
 				t.Errorf("%s %s: %+v, want %s", command, name, got, tc.status)

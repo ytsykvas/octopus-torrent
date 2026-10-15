@@ -1,6 +1,6 @@
 # 004 — Record the build and local check commands
 
-**Status:** `in_progress`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
@@ -49,18 +49,18 @@ test-first in the same session.
 
 ## Acceptance criteria
 
-- [ ] The documented commands run from a clean copy with the stated prerequisites, without hidden manual steps.
-- [ ] A control TypeScript error and a control Go error cause a failed result of the corresponding check and of the shared script.
-- [ ] Wails bindings can be regenerated without manual editing; the result contains no unexplained changes from the same sources.
-- [ ] The README distinguishes existing checks from future engine tests, test bridge tests and checks of the real `.app`.
-- [ ] Unavailable or not yet implemented checks are marked `not_run`, not as success.
+- [x] The documented commands run from a clean copy with the stated prerequisites, without hidden manual steps.
+- [x] A control TypeScript error and a control Go error cause a failed result of the corresponding check and of the shared script.
+- [x] Wails bindings can be regenerated without manual editing; the result contains no unexplained changes from the same sources.
+- [x] The README distinguishes existing checks from future engine tests, test bridge tests and checks of the real `.app`.
+- [x] Unavailable or not yet implemented checks are marked `not_run`, not as success.
 
-- [ ] The plan check detects a broken link, a cycle, an unknown ID, a mismatched status and lost coverage; on the current plan it finishes successfully.
-- [ ] The navigation is regenerated from the task state without overwriting manually maintained matrices, explanations and open decisions.
+- [x] The plan check detects a broken link, a cycle, an unknown ID, a mismatched status and lost coverage; on the current plan it finishes successfully.
+- [x] The navigation is regenerated from the task state without overwriting manually maintained matrices, explanations and open decisions.
 
-- [ ] An uncovered own file and a metric below exactly 100% block the shared command; rounding, changing include/exclude or a missing report do not allow a bypass.
-- [ ] The full list of sources, all defined metrics, profile compatibility and a single code version are verified; the results are reproducible.
-- [ ] The initial commands from 003 are kept or moved without weakening TDD/100%; no successful tests of a feature are invented before the feature exists.
+- [x] An uncovered own file and a metric below exactly 100% block the shared command; rounding, changing include/exclude or a missing report do not allow a bypass.
+- [x] The full list of sources, all defined metrics, profile compatibility and a single code version are verified; the results are reproducible.
+- [x] The initial commands from 003 are kept or moved without weakening TDD/100%; no successful tests of a feature are invented before the feature exists.
 
 ## Checks
 
@@ -95,3 +95,11 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Record a short outcome: what changed, exact checks with pass/fail/not_run, ADR, actual code paths and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+### Execution result (15 October 2026)
+
+- **Status:** `done`. Evidence: [report 004](../../docs/verification/004-reproducible-check-commands.md); feature: [quality-gate](../../docs/features/quality-gate.md); ADR: [quality-gate](../../docs/decisions/quality-gate.md) (O3 accepted), updated [toolchain-versions](../../docs/decisions/toolchain-versions.md) and [agent-tooling](../../docs/decisions/agent-tooling.md).
+- **Created:** `go tool devtool check` (modes `offline`, `fast`, `deps`) in `internal/devtool` (`check.go`, `frontendcov.go`, `gocov.go`, `appcov.go`, `deps.go`); `go tool devtool check-plan` and `plan-nav` (`plan.go`); Oxlint with type-aware rules (`frontend/.oxlintrc.json`, `npm run lint`); `govulncheck` as a `go.mod` tool. The `release-guard` gap with unquoted here-documents is closed. After `/branch-review`: the `go env` step, lockfile `resolved`/`integrity` tied to the registry, wider escape-hatch and lint rules, a `check-plan` rule against unchecked items in `done` tasks, and the here-document forms found by the security review closed in `release-guard`. vite 8.3.2 and vitest / @vitest/coverage-v8 5.0.3 adopted (out of quarantine).
+- **Checks:** RED → GREEN for every check function and every review fix; `internal/devtool` at 100%; with the hook active, on the repository `go tool devtool check` → `GATE PASSED` (21 s), `check offline` and `check fast` → `GATE INCOMPLETE`, exit 0; from a clean copy at another absolute path `setup.sh`, `check` (`GATE PASSED`) and `wails doctor` exit 0; controls (TS type error, Go compile error, untested TS file, the same file excluded in `vite.config.ts`, untested Go function) each exit 1; `check deps`: 186 npm versions and 147 Go modules at least 14 days old, no vulnerabilities.
+- **Limitations:** the full gate needs a GUI session, the network and the terminal's Automation permission, one workspace at a time; the Go release age is the publisher-set commit time; steps have no time limit; the `.app` run must get an isolated data directory before the application has persistence (quality-gate ADR); real-engine integration (007, 018) and test-bridge UI tests (035) are printed as `not_run` until those tasks build them; verified only on Apple M4 / macOS 27.0.1.
+- **Next task:** [005](005-domain-dto-and-bridge-contract.md); also unblocked: [006](006-controlled-torrent-fixtures.md), [008](008-sqlite-driver-durability-spike.md), [017](017-local-diagnostics-privacy.md) after 005, [035](035-react-bridge-state-resync.md) after 005.

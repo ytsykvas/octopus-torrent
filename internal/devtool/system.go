@@ -52,8 +52,19 @@ func (OSSystem) ReadDir(path string) ([]string, error) {
 
 func (OSSystem) Sleep(d time.Duration) { time.Sleep(d) }
 
-// httpClient bounds every registry request.
-var httpClient = &http.Client{Timeout: 20 * time.Second}
+// httpClient bounds every registry request in time and keeps it on the host that was asked.
+var httpClient = &http.Client{
+	Timeout: 20 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if first := via[0].URL; req.URL.Scheme != first.Scheme || req.URL.Host != first.Host {
+			return fmt.Errorf("redirect to another host: %s", req.URL)
+		}
+		return nil
+	},
+}
+
+// maxResponseBytes bounds a registry answer; the largest npm documents are tens of megabytes.
+var maxResponseBytes int64 = 256 << 20
 
 func (OSSystem) Get(url string) ([]byte, error) {
 	resp, err := httpClient.Get(url)
@@ -64,7 +75,11 @@ func (OSSystem) Get(url string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
 	}
-	return io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	if err == nil && int64(len(body)) > maxResponseBytes {
+		err = fmt.Errorf("GET %s: the answer is larger than %d bytes", url, maxResponseBytes)
+	}
+	return body, err
 }
 
 func (OSSystem) Now() time.Time { return time.Now() }
