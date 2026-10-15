@@ -36,7 +36,7 @@ Approved by the owner on 15 October 2026 after two self-review passes.
 |---|---|
 | A — Go contracts | done |
 | B — ledger, facade, bindings | done |
-| C — TS decoders and wrappers | planned |
+| C — TS decoders and wrappers | done |
 | D — TS ordering rules | planned |
 | E — documents and acceptance | planned |
 
@@ -88,3 +88,28 @@ Approved by the owner on 15 October 2026 after two self-review passes.
 - Refactoring: `contracts.CheckUUID` exported and reused by the facade instead of a second UUID
   check; lifecycle (`stopOperations`, 5 s bound) kept in `main.go` because every exported method of
   `App` is bound to JavaScript.
+
+## Stage C — TypeScript decoders, errors, wrappers
+
+- RED: `npm --prefix frontend test -- src/bridge/contract` with only `examples.test.ts` and
+  `decode.test.ts` written → `fail` (both files: the imported modules `./errors`, `./library`,
+  `./decode`, … did not exist). Expected.
+- GREEN: `npm --prefix frontend run test:coverage` → `pass`, 100 tests, 16 own files at 100% of
+  statements, branches, functions and lines; `npm --prefix frontend run typecheck` and
+  `npm --prefix frontend run lint` (type-aware) → `pass`.
+- The manifest test decodes every `toFrontend` example of `internal/app/contracts/testdata` (valid
+  ones decode, invalid ones fail at the manifest's `path`); the command encoders produce exactly
+  the `toGo` examples the Go tests accept. One set of examples for both languages.
+- Real Wails round-trip through the own bridge (`go tool wails dev`, headless Chrome, modules
+  imported by the page from the Vite dev server):
+  - `getLibrarySnapshot()` → `{ok: true, value: {runtimeID: "daf9def6-…", revision: 0n, torrents: []}}`
+    (a `bigint`) — `pass`;
+  - `getOperation(crypto.randomUUID())` → `{ok: false, error: {code: "operation.notFound", …,
+    params: {runtimeID: "daf9def6-…"}}}` — `pass`;
+  - `getOperation('not-a-uuid')` → `request.invalid` with `field` `operationID`, `reason`
+    `format` — `pass`.
+- Refactoring: one `callGo` for every binding (rejection → AppError, answer → decoder); `struct`
+  derives the key set from the decoders, so a field is declared once; type assertions replaced by
+  type guards (the type-aware lint forbids unsafe assertions), with one documented `asserts`
+  function where TypeScript cannot follow the loop in `struct`; the shared example loader lives in
+  `src/test/contractExamples.ts` and validates the manifest instead of casting it.
