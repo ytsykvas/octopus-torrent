@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "import", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/react-in-jsx-scope": "off",
+    "typescript/consistent-return": "off",
+    "import/no-unassigned-import": ["error", { "allow": ["@testing-library/jest-dom/vitest"] }]
+  },
+  "ignorePatterns": ["dist/**", "coverage/**", "wailsjs/**"]
+}

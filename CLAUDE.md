@@ -29,6 +29,7 @@ All commands run from the repository root. The full verified list and prerequisi
 ```sh
 npm --prefix frontend ci                      # .npmrc: min-release-age=14 — do not bypass
 npm --prefix frontend run typecheck
+npm --prefix frontend run lint                # Oxlint, type-aware; warnings fail; `-- <file>` for one file
 npm --prefix frontend run test:coverage       # 100% threshold per file, 4 metrics
 npm --prefix frontend run build               # required before go test: main.go embeds frontend/dist
 gofmt -l . && go vet ./... && go test ./...

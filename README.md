@@ -77,6 +77,7 @@ go tool wails doctor                          # environment check
 # Frontend: dependencies, types, tests with a 100% per-file threshold, build
 npm --prefix frontend ci
 npm --prefix frontend run typecheck
+npm --prefix frontend run lint              # Oxlint with type-aware rules; warnings fail
 npm --prefix frontend run test:coverage
 npm --prefix frontend run build               # required before go test: main embeds frontend/dist
 

@@ -8,6 +8,7 @@ failure. All seven block a commit.
 ```bash
 npm --prefix frontend ci
 npm --prefix frontend run typecheck
+npm --prefix frontend run lint
 ```
 
 ## 2. Frontend tests with 100% coverage per file

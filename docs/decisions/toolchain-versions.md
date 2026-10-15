@@ -40,6 +40,7 @@
 | jsdom | 30.1.1 | 2026-09-22 | same |
 | @testing-library/react, user-event, jest-dom | 16.3.3, 14.6.7, 7.0.1 | 2026-08-27, 2026-09-02, 2026-08-09 | same |
 | @types/react, @types/react-dom | 19.3.0 | 2026-09-09 | same |
+| oxlint / oxlint-tsgolint (task 004) | 1.86.0 / 7.0.2003 | 2026-09-28 / 2026-09-24 | same; native binaries come as optional dependencies, no install scripts. ESLint is not used: every typescript-eslint release (8.71.2 included) requires `typescript <6.1.0` |
 
 Newer versions still in quarantine as of 2026-10-15: react 19.3.1, vite 8.3.4, @vitejs/plugin-react 6.1.2, vitest and @vitest/coverage-v8 5.0.4, jsdom 30.1.2, user-event 14.6.8. Update them once they are 14 days old.
 

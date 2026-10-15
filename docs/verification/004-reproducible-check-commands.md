@@ -79,13 +79,29 @@ path → content map), commands `check-plan` and `plan-nav` in `devtool.go` (`pl
 Instructions now say to change the status in the task file and run `plan-nav` (AGENTS.md,
 `/task`, planning.md, tech-lead agent and its Codex mirror, the plan README).
 
+## Stage C0 — lint spike
+
+| Step | Command | Result |
+|---|---|---|
+| Release dates | `npm view <pkg> time` for every lock entry added by `npm --prefix frontend install --save-dev --save-exact oxlint@1.86.0 oxlint-tsgolint@7.0.2003` | `pass`: 27 entries, the newest 2026-09-28 (limit 2026-10-01); `npm install-scripts ls`: no unreviewed scripts; `npm audit`: 0 vulnerabilities |
+| Type-aware rules on TS 7.0.2 | a temporary `src/zzSpike.ts` with an unawaited promise; `oxlint --type-aware -D typescript/no-floating-promises` | `pass`: `error typescript(no-floating-promises)`, exit 1; the file was deleted |
+| RED | `oxlint --type-aware --deny-warnings` with `frontend/.oxlintrc.json` (categories correctness and suspicious = error, perf = warn, React hooks rules) | `fail`, 25 findings: `react-in-jsx-scope` ×17, `require-mock-type-parameters` ×3, `no-unsafe-type-assertion` ×2, `consistent-return`, `consistent-function-scoping`, `no-unassigned-import` |
+| GREEN | `npm --prefix frontend run lint`; `typecheck`; `test:coverage` | `pass`; 10 tests, 100% on all four metrics |
+
+Resolution of the findings: `react-in-jsx-scope` is off (the project uses the automatic JSX runtime,
+`jsx: react-jsx`); `typescript/consistent-return` is off and replaced by the compiler option
+`noImplicitReturns`, which accepts an exhaustive `switch` that the rule reports; the side-effect
+import of `@testing-library/jest-dom/vitest` in the test setup is allowed by name; the test code was
+fixed (typed `vi.fn`, `Object.assign` / `Reflect.deleteProperty` instead of type assertions on
+`window`, a captured resolver instead of a placeholder function).
+
 ## Stage log
 
 | Stage | State |
 |---|---|
 | A — release-guard here-document gap | done |
 | B — plan check | done |
-| C0 — lint spike | not started |
+| C0 — lint spike | done |
 | C — check command and coverage inventories | not started |
 | D — dependency checks | not started |
 | E — documents and acceptance | not started |
