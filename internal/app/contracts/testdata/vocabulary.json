@@ -1,0 +1,12 @@
+{
+  "torrentStatuses": ["waitingForMetadata", "checking", "downloading", "paused", "completed", "seeding", "noFilesSelected", "error", "deleting", "relinking"],
+  "importSources": ["file", "finder", "drop", "magnet", "url", "watchFolder"],
+  "importStates": ["waitingForMetadata", "ready", "failed", "cancelled", "expired"],
+  "themes": ["system", "light", "dark"],
+  "languages": ["en", "uk", "es", "de", "fr", "pt"],
+  "removeModes": ["recordOnly", "withFiles"],
+  "operationKinds": ["pauseTorrents", "resumeTorrents", "setFilesWanted", "confirmImport", "removeTorrents", "updateSettings"],
+  "operationStates": ["accepted", "running", "succeeded", "failed", "cancelled"],
+  "goErrorCodes": ["request.invalid", "operation.idConflict", "operation.notFound", "operation.cancelled", "internal.unexpected"],
+  "bridgeErrorCodes": ["bridge.callFailed", "contract.invalidDto"]
+}

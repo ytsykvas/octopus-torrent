@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"strings"
 	"testing"
@@ -28,13 +29,10 @@ func TestRunStartsApplicationWithEmbeddedFrontendAndFacade(t *testing.T) {
 	code := run(func(opts *options.App) error {
 		got = opts
 		return nil
-	}, &stderr, runtimeID, ledger)
+	}, &stderr, ledger)
 
 	if code != 0 {
 		t.Fatalf("run() = %d, want 0", code)
-	}
-	if stderr.Len() != 0 {
-		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 	if got.Title != "OctopusTorrent" {
 		t.Fatalf("Title = %q, want OctopusTorrent", got.Title)
@@ -52,9 +50,11 @@ func TestRunStartsApplicationWithEmbeddedFrontendAndFacade(t *testing.T) {
 	if snapshot := facade.GetLibrarySnapshot(); snapshot.RuntimeID != runtimeID {
 		t.Fatalf("the facade reports runtime %s, want %s", snapshot.RuntimeID, runtimeID)
 	}
-	failure := errors.New("x")
-	if got.ErrorFormatter == nil || got.ErrorFormatter(failure) != app.FormatError(failure) {
+	if got.ErrorFormatter == nil || got.ErrorFormatter(errors.New("x")) != app.ErrorFormatter(io.Discard)(errors.New("x")) {
 		t.Fatal("errors do not cross the bridge as AppError JSON")
+	}
+	if !strings.Contains(stderr.String(), `unexpected error: "x"`) {
+		t.Fatalf("the cause of an unexpected error is not in stderr: %q", stderr.String())
 	}
 }
 
@@ -65,7 +65,7 @@ func TestRunStopsOperationsOnShutdown(t *testing.T) {
 	run(func(opts *options.App) error {
 		got = opts
 		return nil
-	}, &bytes.Buffer{}, runtimeID, ledger)
+	}, &bytes.Buffer{}, ledger)
 
 	got.OnShutdown(context.Background())
 
@@ -77,12 +77,14 @@ func TestRunStopsOperationsOnShutdown(t *testing.T) {
 
 func TestStopOperationsReportsMutationsThatDidNotStop(t *testing.T) {
 	ledger := operations.NewLedger(runtimeID)
-	release := make(chan struct{})
+	started, release := make(chan struct{}), make(chan struct{})
 	defer close(release)
 	ledger.Start(opID, contracts.OperationPauseTorrents, "fp", func(context.Context) *contracts.AppError {
+		close(started)
 		<-release
 		return nil
 	})
+	<-started
 	ended, cancel := context.WithCancel(context.Background())
 	cancel()
 	var stderr bytes.Buffer
@@ -97,7 +99,7 @@ func TestStopOperationsReportsMutationsThatDidNotStop(t *testing.T) {
 func TestRunReportsStartFailureWithNonZeroCode(t *testing.T) {
 	var stderr bytes.Buffer
 
-	code := run(func(*options.App) error { return errors.New("webview unavailable") }, &stderr, runtimeID, operations.NewLedger(runtimeID))
+	code := run(func(*options.App) error { return errors.New("webview unavailable") }, &stderr, operations.NewLedger(runtimeID))
 
 	if code != 1 {
 		t.Fatalf("run() = %d, want 1", code)

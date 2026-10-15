@@ -53,6 +53,8 @@ Creating the entry, the storage and the engine object passes through several sep
 
 **Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, check signatures and constraints against the pinned version. Reading API documentation does not replace a completed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): confirming an import is not cancellable once it runs; a partial result is `failed` with a code whose params list what was done.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

@@ -55,6 +55,8 @@ Full snapshots may be aggregated, skipping intermediate revisions. A missed part
 
 **Basis for technical decisions:** [Wails events](https://wails.io/docs/reference/runtime/events/), [Stats](https://pkg.go.dev/github.com/anacrolix/torrent). Check the signatures and constraints against the pinned version; reading the API is not a passed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): after a frontend reload React has lost its operation IDs: add pending operations to the snapshot or a `ListOperations` method (with 035).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

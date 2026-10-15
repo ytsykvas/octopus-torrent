@@ -6,6 +6,7 @@ package operations
 
 import (
 	"context"
+	"maps"
 	"sync"
 
 	"octopustorrent/internal/app/contracts"
@@ -26,6 +27,8 @@ type Ledger struct {
 	root      context.Context
 	stop      context.CancelFunc
 	running   sync.WaitGroup
+	// spawn starts an operation goroutine counted by running; tests delay it to order events.
+	spawn func(func())
 
 	mu      sync.Mutex
 	stopped bool
@@ -41,7 +44,9 @@ type entry struct {
 // NewLedger makes the ledger of the runtime runtimeID.
 func NewLedger(runtimeID contracts.RuntimeID) *Ledger {
 	root, stop := context.WithCancel(context.Background())
-	return &Ledger{runtimeID: runtimeID, root: root, stop: stop, entries: map[contracts.OperationID]*entry{}}
+	l := &Ledger{runtimeID: runtimeID, root: root, stop: stop, entries: map[contracts.OperationID]*entry{}}
+	l.spawn = l.running.Go
+	return l
 }
 
 // RuntimeID is the runtime whose operations this ledger records.
@@ -70,9 +75,11 @@ func (l *Ledger) Start(id contracts.OperationID, kind contracts.OperationKind, f
 		cancel:      cancel,
 	}
 	l.entries[id] = e
-	l.running.Go(func() {
+	l.spawn(func() {
 		defer cancel()
-		l.setState(e, contracts.OperationRunning, nil)
+		if !l.begin(ctx, e) {
+			return
+		}
 		problem := mutation(ctx)
 		switch {
 		case problem == nil:
@@ -97,8 +104,9 @@ func (l *Ledger) Get(id contracts.OperationID) (contracts.OperationStatus, *cont
 	return e.status, nil
 }
 
-// Cancel asks the operation to stop and returns its current status. Whether it ends cancelled is
-// decided by its mutation; a finished operation keeps its final state.
+// Cancel asks the operation to stop and returns its current status. An operation that has not
+// started yet ends cancelled without running; a running one ends as its mutation decides; a
+// finished one keeps its final state.
 func (l *Ledger) Cancel(id contracts.OperationID) (contracts.OperationStatus, *contracts.AppError) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -131,6 +139,20 @@ func (l *Ledger) Shutdown(ctx context.Context) error {
 	}
 }
 
+// begin moves the operation to running, or to cancelled without running its mutation when it was
+// cancelled while still accepted.
+func (l *Ledger) begin(ctx context.Context, e *entry) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if ctx.Err() != nil {
+		e.status.State = contracts.OperationCancelled
+		e.status.Error = contracts.NewAppError(contracts.CodeOperationCancelled, nil).WithOperation(e.status.OperationID)
+		return false
+	}
+	e.status.State = contracts.OperationRunning
+	return true
+}
+
 func (l *Ledger) setState(e *entry, state contracts.OperationState, problem *contracts.AppError) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -145,5 +167,6 @@ func (l *Ledger) notFound(id contracts.OperationID) *contracts.AppError {
 // left as it was.
 func withOperation(problem *contracts.AppError, id contracts.OperationID) *contracts.AppError {
 	named := *problem
+	named.Params = maps.Clone(problem.Params)
 	return named.WithOperation(id)
 }

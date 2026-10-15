@@ -53,6 +53,8 @@ Commands are passed through our own DTOs and applied sequentially by the service
 
 **Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, check signatures and constraints against the pinned version. Reading API documentation does not replace a performed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): pause/resume start through the single acceptance path `accept(kind, request, mutation)` added by the first command (024 or this task, whichever lands first).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

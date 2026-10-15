@@ -24,19 +24,32 @@ func (s shape) problem(prefix string) *AppError {
 	return InvalidRequest(prefix+s[0].field, s[0].reason)
 }
 
+// maxFieldName bounds an unknown key echoed back in params.field: the key comes from the caller.
+const maxFieldName = 64
+
+func shortened(name string) string {
+	runes := []rune(name)
+	if len(runes) <= maxFieldName {
+		return name
+	}
+	return string(runes[:maxFieldName]) + "…"
+}
+
 var errNotObject = errors.New("a request must be a JSON object")
 
-// decodeFields decodes a JSON object into the struct target points to, one field at a time. Every
+// decodeFields resets the struct target points to and decodes a JSON object into it, one field at a
+// time; it never decodes the whole struct, so a type's UnmarshalJSON may call it with itself. Every
 // json-tagged exported field is required; null is allowed only for pointer fields. Missing, null,
 // unknown and badly typed keys become shape problems (in field order, unknown keys last) instead of
 // failing the whole value, so the request is rejected naming its field. Only a payload that is not
 // a JSON object is an error.
 func decodeFields(data []byte, target any) (shape, error) {
+	value := reflect.ValueOf(target).Elem()
+	value.SetZero()
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil || raw == nil {
 		return nil, errNotObject
 	}
-	value := reflect.ValueOf(target).Elem()
 	known := map[string]bool{}
 	var problems shape
 	for i := range value.NumField() {
@@ -60,7 +73,7 @@ func decodeFields(data []byte, target any) (shape, error) {
 	}
 	for _, name := range sortedKeys(raw) {
 		if !known[name] {
-			problems = append(problems, fieldProblem{name, ReasonUnknown})
+			problems = append(problems, fieldProblem{shortened(name), ReasonUnknown})
 		}
 	}
 	return problems, nil

@@ -55,6 +55,8 @@ This is the agreed map of the future code repository, not a description of files
 main.go / wails.json             shell startup and configuration
 go.mod / go.sum                 Go toolchain and dependencies
 internal/app/                   facade, lifecycle, command coordination
+internal/app/contracts/         bridge DTOs, AppError, strict requests, shared examples (exists, 005)
+internal/app/operations/        idempotent operation ledger (exists, 005)
 internal/torrentengine/         interface and anacrolix adapter
 internal/library/               SQLite repositories and migrations
 internal/files/                 access, paths, folders, deletion
@@ -63,6 +65,7 @@ internal/platform/              Wails runtime, Finder, URL, system dialogs
 internal/diagnostics/            local errors and logs
 frontend/src/features/          UI by feature
 frontend/src/bridge/            our own adapter for generated bindings
+frontend/src/bridge/contract/   decoders, encoders, error mapping, ordering rules (exists, 005)
 frontend/src/state/             snapshots and presentation state
 frontend/src/i18n/              dictionaries for six languages
 frontend/src/styles/            colors, spacing, themes and materials
@@ -81,6 +84,8 @@ product/                        requirements, concept, this architecture, resear
 Modules and methods have domain-specific English names. Our own bridge adapter separates React from specific generated paths; generated code is not edited by hand. Services receive dependencies explicitly; their unit tests do not start a Wails window. A new AI agent must be able to trace a scenario from the UI to Go/the engine using only the repository. The mandatory criteria AI-01–AI-10 are in section 5.2 of the requirements.
 
 ## 4. Go–TypeScript contract
+
+The exact formats, DTO fields, error codes and ordering rules are fixed in ADR [api-contract](../docs/decisions/api-contract.md) (task 005); this section keeps the principles.
 
 Facade methods are grouped by task: get the library/settings, prepare an import, confirm/cancel it, start/stop records, change wanted for a file/folder, perform deletion, change settings, collections and rules. This is the product's own API; its names do not have to mirror the library API.
 

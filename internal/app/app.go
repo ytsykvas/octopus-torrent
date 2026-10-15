@@ -6,6 +6,8 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"runtime"
 
 	"octopustorrent/internal/app/contracts"
@@ -23,13 +25,12 @@ type RuntimeInfo struct {
 // App is the facade bound to the frontend through Wails. Every exported method is callable from
 // JavaScript, so lifecycle hooks (shutdown) live outside it.
 type App struct {
-	runtimeID contracts.RuntimeID
-	ledger    *operations.Ledger
+	ledger *operations.Ledger
 }
 
-// New creates the facade of the runtime runtimeID; ledger runs and records its operations.
-func New(runtimeID contracts.RuntimeID, ledger *operations.Ledger) *App {
-	return &App{runtimeID: runtimeID, ledger: ledger}
+// New creates the facade; ledger runs and records its operations and owns the runtime ID.
+func New(ledger *operations.Ledger) *App {
+	return &App{ledger: ledger}
 }
 
 // GetRuntimeInfo reports the Go runtime embedded in the binary. It proves the
@@ -42,7 +43,7 @@ func (a *App) GetRuntimeInfo() RuntimeInfo {
 // library exists before task 034, so it is this runtime at revision 0 with no torrents; 034 changes
 // where the data comes from, not this contract.
 func (a *App) GetLibrarySnapshot() contracts.LibrarySnapshot {
-	return contracts.LibrarySnapshot{RuntimeID: a.runtimeID, Torrents: []contracts.TorrentSnapshot{}}
+	return contracts.LibrarySnapshot{RuntimeID: a.ledger.RuntimeID()}
 }
 
 // GetOperation returns the current status of an operation accepted by this runtime. An unknown ID
@@ -59,14 +60,19 @@ func (a *App) GetOperation(operationID string) (contracts.OperationStatus, error
 	return status, nil
 }
 
-// FormatError is the Wails error formatter. The Wails JavaScript runtime rejects a call with
-// new Error(formatted), which keeps only text, so the AppError crosses as its JSON text and the
-// bridge parses Error.message. An error without a code of its own becomes internal.unexpected.
-func FormatError(err error) any {
-	var problem *contracts.AppError
-	if !errors.As(err, &problem) {
-		problem = contracts.NewAppError(contracts.CodeInternalUnexpected, nil)
+// ErrorFormatter returns the Wails error formatter. The Wails JavaScript runtime rejects a call
+// with new Error(formatted), which keeps only text, so the AppError crosses as its JSON text and the
+// bridge parses Error.message. An error without a code of its own becomes internal.unexpected; its
+// cause is written to diagnostics (stderr until local diagnostics, task 017) and never to the UI.
+func ErrorFormatter(diagnostics io.Writer) func(error) any {
+	return func(err error) any {
+		var problem *contracts.AppError
+		if !errors.As(err, &problem) || problem == nil {
+			// Quoted: a cause may carry torrent-controlled text, and a newline must not forge a line.
+			fmt.Fprintf(diagnostics, "OctopusTorrent: unexpected error: %q\n", fmt.Sprint(err))
+			problem = contracts.NewAppError(contracts.CodeInternalUnexpected, nil)
+		}
+		text, _ := json.Marshal(problem) // strings and a map of strings always encode
+		return string(text)
 	}
-	text, _ := json.Marshal(problem) // strings and a map of strings always encode
-	return string(text)
 }

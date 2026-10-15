@@ -53,6 +53,8 @@ The `wanted` field describes whether a file is selected for download. It is not 
 
 **Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, reconcile signatures and constraints with the pinned version. Reading the API documentation does not replace a performed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): the ledger (`internal/app/operations`) does not order work; this task extends `Ledger.Start` with ordering keys (sorted torrent IDs) so commands for one torrent run in acceptance order (STACK-03).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

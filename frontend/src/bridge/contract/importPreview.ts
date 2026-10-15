@@ -1,11 +1,8 @@
 // The preview shown before an import is confirmed (ADD-02, ADD-03, ADD-07, ADD-09).
 import { array, boolean, integer, nullable, oneOf, string, struct, type Decoder } from './decode'
+import { importSources, importStates, type ImportSource, type ImportState } from './enums'
 import { uuid, type PendingImportID, type TorrentID } from './ids'
-import { importSources, type ImportSource } from './library'
 import { decimal } from './numbers'
-
-export const importStates = ['waitingForMetadata', 'ready', 'failed', 'cancelled', 'expired'] as const
-export type ImportState = (typeof importStates)[number]
 
 export interface PreviewFile {
   index: number

@@ -1,6 +1,6 @@
 # OctopusTorrent documentation
 
-**Current state:** requirements, mockup and plan are prepared; the first minimal `.app` exists (task 003) and one local quality gate checks every change (`go tool devtool check`, task 004); product features are not implemented yet. Documentation evolves together with the code through TDD, without deferred write-ups after implementation.
+**Current state:** requirements, mockup and plan are prepared; the first minimal `.app` exists (task 003), one local quality gate checks every change (`go tool devtool check`, task 004) and the Go–TypeScript contract is fixed and executable in both languages (task 005); product features are not implemented yet. Documentation evolves together with the code through TDD, without deferred write-ups after implementation.
 
 ## Mandatory entry points
 
@@ -31,6 +31,7 @@
 | [Repository language: English only](decisions/repository-language.md) | accepted, owner's decision of 15 October 2026 |
 | [Agent tooling: Claude Code, Codex, octopus and Conductor](decisions/agent-tooling.md) | accepted, owner's decision of 15 October 2026; [report](verification/agent-tooling.md) |
 | [Local quality gate](decisions/quality-gate.md) (O3) | accepted, [004](../product/tasks/004-reproducible-check-commands.md); [report](verification/004-reproducible-check-commands.md) |
+| [Go–TypeScript contract: DTOs, numbers, errors, operations, ordering](decisions/api-contract.md) | accepted, [005](../product/tasks/005-domain-dto-and-bridge-contract.md); [report](verification/005-domain-dto-and-bridge-contract.md) |
 
 ## Feature index
 
@@ -41,6 +42,7 @@ Before implementing a feature, create its document from the template and add a l
 | [Desktop shell, `.app` build and the first React → Go connection](features/desktop-shell-build.md) | `implemented` (prototype) | [003](../product/tasks/003-wails-macos-build-spike.md) |
 | [Agent tooling](features/agent-tooling.md) (developer tooling) | `implemented` | — |
 | [Local quality gate](features/quality-gate.md) (developer tooling) | `implemented` | [004](../product/tasks/004-reproducible-check-commands.md) |
+| [Go–TypeScript bridge contract](features/bridge-contract.md) | `implemented` (contract, ledger, pure rules) | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
 
 No product capability (import, transfer, library) is implemented yet.
 

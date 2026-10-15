@@ -18,6 +18,12 @@ const (
 	CodeInternalUnexpected = "internal.unexpected"
 )
 
+// ErrorCodes lists every code Go sends (testdata/vocabulary.json); the frontend adds its own.
+var ErrorCodes = []string{
+	CodeRequestInvalid, CodeOperationIDConflict, CodeOperationNotFound, CodeOperationCancelled,
+	CodeInternalUnexpected,
+}
+
 // Reasons of CodeRequestInvalid.
 const (
 	ReasonMissing = "missing" // the key is absent

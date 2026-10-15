@@ -26,7 +26,16 @@ export const infohashV1: Decoder<string> = matching(/^[0-9a-f]{40}$/)
 /** A v2 infohash: the full SHA-256 in lower-case hex. */
 export const infohashV2: Decoder<string> = matching(/^[0-9a-f]{64}$/)
 
-/** A new operation ID for one user intention. */
+/**
+ * A new operation ID for one user intention: a version 4 UUID built from crypto.getRandomValues,
+ * like Go's NewUUID. crypto.randomUUID needs a secure context, which the packaged app's wails://
+ * scheme is not declared to be.
+ */
 export function newOperationID(): OperationID {
-  return crypto.randomUUID()
+  const hex = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte, index) => {
+    if (index === 6) byte = (byte & 0x0f) | 0x40 // version 4
+    if (index === 8) byte = (byte & 0x3f) | 0x80 // RFC 4122 variant
+    return byte.toString(16).padStart(2, '0')
+  }).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }

@@ -11,6 +11,8 @@ const decimalText = /^(0|[1-9][0-9]*)$/
 export const decimal: Decoder<bigint> = (value, path) => {
   const text = string(value, path)
   if (!decimalText.test(text)) throw new ContractViolation(path, 'format')
+  // 2^64 − 1 has 20 digits; a longer text is out of range without parsing it.
+  if (text.length > 20) throw new ContractViolation(path, 'range')
   const number = BigInt(text)
   if (number > MAX_UINT64) throw new ContractViolation(path, 'range')
   return number

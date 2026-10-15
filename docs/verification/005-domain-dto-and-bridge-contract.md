@@ -2,8 +2,8 @@
 
 **Task:** [005](../../product/tasks/005-domain-dto-and-bridge-contract.md)  
 **Date:** 15 October 2026  
-**Change version:** stage commits after `ae04509`  
-**Feature:** bridge-contract (stage E); **ADR:** api-contract (stage E)
+**Change version:** commits `44877f2` (A), `b11e3a2` (B), `dfbc15c` (C), `497d6d9` (D) and the stage E commit after `ae04509`  
+**Feature:** [bridge-contract](../features/bridge-contract.md); **ADR:** [api-contract](../decisions/api-contract.md)
 
 ## Session architecture plan
 
@@ -38,7 +38,7 @@ Approved by the owner on 15 October 2026 after two self-review passes.
 | B — ledger, facade, bindings | done |
 | C — TS decoders and wrappers | done |
 | D — TS ordering rules | done |
-| E — documents and acceptance | planned |
+| E — review fixes, documents and acceptance | done |
 
 ## Stage A — Go contracts
 
@@ -130,3 +130,77 @@ Approved by the owner on 15 October 2026 after two self-review passes.
   safe), from another runtime "outcome unknown" (read the full state, never resend).
 - These are pure functions; the store that calls them is task 035, so the behavior in the running
   application is `not_run` until then.
+
+## Stage E — review, fixes, documents, acceptance
+
+`/branch-review` (code-reviewer, security-reviewer, tech-lead) on `ae04509..HEAD` plus the stage E
+documents: no critical finding. Every finding was fixed in code or recorded with its owning task;
+none was dismissed.
+
+Fixed in code (RED first unless noted):
+
+| Finding | Fix | RED |
+|---|---|---|
+| A nil list encodes as `null`, a non-UTC time passes; the TS decoder rejects both | `contracts/marshal.go`: outgoing DTOs encode nil lists as `[]`, nil `params` as `{}`, times in UTC; a year outside 0–9999 becomes the zero time (Wails exits on an unencodable result) | `TestZeroValuesEncodeAsEmptyListsAndUTCTimes`: 8 `null`/zone failures, then `year outside of range` |
+| Go and TS vocabularies kept in sync only by convention | `testdata/vocabulary.json`; Go `TestEnumerationsAndErrorCodesMatchTheSharedVocabulary`, TS `vocabulary.test.ts`; enumeration lists exported in Go, TS lists moved to `bridge/contract/enums.ts` | build failure (lists undefined); TS: `./enums` missing |
+| `describeError` found `Object.prototype` members for codes such as `constructor` | catalogue moved to `errorMessages.ts` as a `Map` | `./errorMessages` missing |
+| `bridge.callFailed` diagnostic text reached the message params | `describeError` drops them for that code | `params` was `{detail}` |
+| The formatter dropped the cause of unexpected errors | `app.ErrorFormatter(stderr)` writes it, quoted (`%q`, no forged lines); a typed-nil `*AppError` is unexpected | undefined `ErrorFormatter`; then unquoted text, a forged line, `null` |
+| Liveness: the awaited fetch answered by a runtime retired meanwhile left nothing applied and nothing fetching | `receiveSnapshot` fetches again; `needsFetch(state)` tells the store to fetch (with back-off, 035) | discard instead of fetch; `needsFetch` missing |
+| An operation cancelled before its goroutine ran still ran its mutation | `Ledger.begin` ends it `cancelled` without running; `spawn` seam orders the test | `l.spawn` undefined; then the mutation ran |
+| Runtime ID had two owners | `app.New(ledger)`, `ledger.RuntimeID()`; `run(start, stderr, ledger)` | compile errors of the changed signatures |
+| Paths checked only with `filepath.IsAbs` | `checkFolderPath`: clean, below `/`, no control characters, ≤ 1024 bytes | 4 new examples accepted |
+| Deletion confirmed by a made-up integer | `deletionPlanID` (Go-issued UUID) replaces `deletionListVersion` | 6 example failures |
+| Unknown key echoed at any length | shortened to 64 characters | example with a 200-character key |
+| `crypto.randomUUID` needs a secure context | `newOperationID` builds the UUID from `crypto.getRandomValues` | `randomUUID` called 200 times |
+| Decimal text parsed at any length | longer than 20 digits → `range` before `BigInt` | none: the existing result was already `range`; the guard bounds work only |
+| `withOperation` shared the mutation's `params` map | `maps.Clone` | written together with the fix (no separate RED) |
+| Seven copies of the same `UnmarshalJSON` body | `decodeFields` resets its target and is called with the request itself | refactoring under the green example suite |
+| `stateRank` repeated the state order | derived from `operationStates` | refactoring under the green ordering suite |
+
+`commands.test.ts` was written together with `commands.ts` in stage C (no separate RED for that
+module).
+
+Recorded for owning tasks (ADR and the tasks' "Decisions, risks and boundaries"): ordering keys in
+`Ledger.Start` for STACK-03 (013); one acceptance path `accept(kind, request, mutation)` as a merge
+condition (024/025); pending operations after a reload (027/035); panic recovery and the ordered quit
+(028); partial results of deletion and import commit (023/031/032); deletion plan in the UI (049);
+destination only from the dialog or the saved default (034); symlinks and a writable directory
+(020); clean torrent paths (019) and bidi-safe names (045); Wails' own logger redaction (017); a cap
+on ledger entries (064).
+
+### Results of the final state
+
+- Go: `go test -race ./internal/app/...` → `pass`; `internal/app`, `contracts`, `operations` at
+  100.0% of statements in unit runs.
+- TS: `npm --prefix frontend run test:coverage` → `pass`, 139 tests, every own file at 100% of
+  statements, branches, functions and lines; `typecheck` and type-aware `lint` → `pass`.
+- Shared examples: 57 entries in `manifest.json` plus `vocabulary.json`.
+- Real Wails round-trip on the final code (`go tool wails dev`, headless Chrome, own bridge
+  modules): `getLibrarySnapshot` → `revision: 0n`; `getOperation` of a random ID and of an ID from
+  `newOperationID` → `operation.notFound` with the runtime ID (the generated ID is accepted by Go's
+  validation); `getOperation('not-a-uuid')` → `request.invalid` — `pass`.
+
+- Full gate, final tree: the first `go tool devtool check` → `GATE FAILED` (`main_test.go` still
+  expected the unquoted cause after the formatter switched to `%q`); test fixed, the second run →
+  `GATE PASSED`: 19 own TS files at 100% on all four metrics, every block of every own Go file
+  covered (unit tests + instrumented `.app` launched and quit), bindings in sync (6 files),
+  type-aware lint, escape hatches, docs, plan, release age, `npm audit`, `govulncheck`, updates —
+  all `pass`; engine integration (007, 018) and test-bridge UI tests (035) `not_run`. Only this
+  report's text changed after that run.
+
+### Contract tests, test bridge and real service (kept separate)
+
+| Level | Result |
+|---|---|
+| Contract tests (Go and TS on the shared examples, ledger, ordering rules) | `pass` |
+| Real Wails runtime through `wails dev` (same `desktop/calls.js` as the `.app`) | `pass` |
+| Packaged `.app` calling the new methods from the UI | `not_run`: no UI calls them before 034/035; the gate launches and quits the `.app` (coverage of `main`) |
+| Test bridge for browser UI tests | `not_run`: built by 035 |
+| Real services behind the methods (library, publisher, store) | `not_run`: 027, 034, 035 |
+
+### Debt check
+
+No stub, no ignore directive, no skipped test. The two facade methods answer truthfully for the
+current application. Open items are additions owned by named tasks (listed above), not cleanup left
+in this change.

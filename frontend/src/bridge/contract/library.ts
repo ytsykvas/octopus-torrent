@@ -14,27 +14,10 @@ import {
   timestamp,
   type Decoder,
 } from './decode'
+import { importSources, torrentStatuses, type ImportSource, type TorrentStatus } from './enums'
 import { appError, type AppError } from './errors'
 import { infohashV1, infohashV2, uuid, type RuntimeID, type TorrentID } from './ids'
 import { decimal } from './numbers'
-
-/** Display status vocabulary; which one wins is the transfer policy's decision (tasks 013, 027). */
-export const torrentStatuses = [
-  'waitingForMetadata',
-  'checking',
-  'downloading',
-  'paused',
-  'completed',
-  'seeding',
-  'noFilesSelected',
-  'error',
-  'deleting',
-  'relinking',
-] as const
-export type TorrentStatus = (typeof torrentStatuses)[number]
-
-export const importSources = ['file', 'finder', 'drop', 'magnet', 'url', 'watchFolder'] as const
-export type ImportSource = (typeof importSources)[number]
 
 export interface TorrentFile {
   /** Engine file index, 0…fileCount − 1. */

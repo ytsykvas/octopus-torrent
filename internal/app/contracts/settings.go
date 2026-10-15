@@ -1,7 +1,5 @@
 package contracts
 
-import "path/filepath"
-
 // Settings are the user's saved preferences (SET-01, SET-04, SET-06, SET-08, TR-04). The frontend
 // keeps its own draft and shows these only once Go saved them.
 type Settings struct {
@@ -20,12 +18,8 @@ type Settings struct {
 }
 
 // UnmarshalJSON decodes field by field; see decodeFields.
-func (s *Settings) UnmarshalJSON(data []byte) error {
-	type fields Settings
-	var f fields
-	problems, err := decodeFields(data, &f)
-	*s = Settings(f)
-	s.shape = problems
+func (s *Settings) UnmarshalJSON(data []byte) (err error) {
+	s.shape, err = decodeFields(data, s)
 	return err
 }
 
@@ -34,9 +28,12 @@ func (s *Settings) validate(prefix string) *AppError {
 	if p := s.shape.problem(prefix); p != nil {
 		return p
 	}
+	if s.DefaultSavePath != nil {
+		if p := checkFolderPath(prefix+"defaultSavePath", *s.DefaultSavePath); p != nil {
+			return p
+		}
+	}
 	switch {
-	case s.DefaultSavePath != nil && !filepath.IsAbs(*s.DefaultSavePath):
-		return InvalidRequest(prefix+"defaultSavePath", ReasonFormat)
 	case !s.Theme.Valid():
 		return InvalidRequest(prefix+"theme", ReasonValue)
 	case !s.Language.Valid():

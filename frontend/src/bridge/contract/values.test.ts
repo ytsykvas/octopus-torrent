@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ContractViolation, type Decoder } from './decode'
 import { decodeDto } from './errors'
 import { infohashV1, infohashV2, newOperationID, uuid } from './ids'
@@ -29,6 +29,7 @@ describe('decimal strings', () => {
     ['1e3', ' format'],
     [' 1', ' format'],
     ['', ' format'],
+    ['1'.repeat(10_000), ' range'],
   ])('%s → %s', (text, expected) => {
     expect(reason(decimal, text)).toBe(expected)
   })
@@ -42,11 +43,13 @@ describe('decimal strings', () => {
 })
 
 describe('identifiers', () => {
-  it('makes operation IDs the Go side accepts', () => {
-    const id = newOperationID()
+  it('makes operation IDs the Go side accepts, without needing a secure context', () => {
+    const randomUUID = vi.spyOn(crypto, 'randomUUID')
+    const ids = Array.from({ length: 200 }, () => newOperationID())
 
-    expect(reason(uuid, id)).toBe('accepted')
-    expect(newOperationID()).not.toBe(id)
+    expect(ids.every((id) => reason(uuid, id) === 'accepted')).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(randomUUID).not.toHaveBeenCalled()
   })
 
   it.each([

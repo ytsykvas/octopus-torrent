@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
+	"unicode"
 )
 
 // Request is a command DTO the frontend sends. The facade calls Validate before anything else, even
@@ -71,13 +73,15 @@ type CancelImportRequest struct {
 	shape shape
 }
 
-// RemoveTorrentsRequest removes records (DEL-01, DEL-02). With files, DeletionListVersion is the
-// version of the file list the user confirmed; for a record-only removal it is null.
+// RemoveTorrentsRequest removes records (DEL-01, DEL-02). With files, DeletionPlanID names the
+// deletion plan Go issued when it built the file list the user confirmed: a UUID bound to exactly
+// these torrents and files, usable once, valid only in the runtime that issued it (031/032). A
+// number the frontend could make up would prove nothing. For a record-only removal it is null.
 type RemoveTorrentsRequest struct {
-	OperationID         OperationID `json:"operationID"`
-	TorrentIDs          []TorrentID `json:"torrentIDs"`
-	Mode                RemoveMode  `json:"mode"`
-	DeletionListVersion *int        `json:"deletionListVersion"`
+	OperationID    OperationID `json:"operationID"`
+	TorrentIDs     []TorrentID `json:"torrentIDs"`
+	Mode           RemoveMode  `json:"mode"`
+	DeletionPlanID *string     `json:"deletionPlanID"`
 
 	shape shape
 }
@@ -90,57 +94,33 @@ type UpdateSettingsRequest struct {
 	shape shape
 }
 
-func (r *TorrentSelectionRequest) UnmarshalJSON(data []byte) error {
-	type fields TorrentSelectionRequest
-	var f fields
-	problems, err := decodeFields(data, &f)
-	*r = TorrentSelectionRequest(f)
-	r.shape = problems
+func (r *TorrentSelectionRequest) UnmarshalJSON(data []byte) (err error) {
+	r.shape, err = decodeFields(data, r)
 	return err
 }
 
-func (r *SetFilesWantedRequest) UnmarshalJSON(data []byte) error {
-	type fields SetFilesWantedRequest
-	var f fields
-	problems, err := decodeFields(data, &f)
-	*r = SetFilesWantedRequest(f)
-	r.shape = problems
+func (r *SetFilesWantedRequest) UnmarshalJSON(data []byte) (err error) {
+	r.shape, err = decodeFields(data, r)
 	return err
 }
 
-func (r *ConfirmImportRequest) UnmarshalJSON(data []byte) error {
-	type fields ConfirmImportRequest
-	var f fields
-	problems, err := decodeFields(data, &f)
-	*r = ConfirmImportRequest(f)
-	r.shape = problems
+func (r *ConfirmImportRequest) UnmarshalJSON(data []byte) (err error) {
+	r.shape, err = decodeFields(data, r)
 	return err
 }
 
-func (r *CancelImportRequest) UnmarshalJSON(data []byte) error {
-	type fields CancelImportRequest
-	var f fields
-	problems, err := decodeFields(data, &f)
-	*r = CancelImportRequest(f)
-	r.shape = problems
+func (r *CancelImportRequest) UnmarshalJSON(data []byte) (err error) {
+	r.shape, err = decodeFields(data, r)
 	return err
 }
 
-func (r *RemoveTorrentsRequest) UnmarshalJSON(data []byte) error {
-	type fields RemoveTorrentsRequest
-	var f fields
-	problems, err := decodeFields(data, &f)
-	*r = RemoveTorrentsRequest(f)
-	r.shape = problems
+func (r *RemoveTorrentsRequest) UnmarshalJSON(data []byte) (err error) {
+	r.shape, err = decodeFields(data, r)
 	return err
 }
 
-func (r *UpdateSettingsRequest) UnmarshalJSON(data []byte) error {
-	type fields UpdateSettingsRequest
-	var f fields
-	problems, err := decodeFields(data, &f)
-	*r = UpdateSettingsRequest(f)
-	r.shape = problems
+func (r *UpdateSettingsRequest) UnmarshalJSON(data []byte) (err error) {
+	r.shape, err = decodeFields(data, r)
 	return err
 }
 
@@ -168,7 +148,7 @@ func (r *ConfirmImportRequest) Validate() *AppError {
 		CheckUUID("pendingImportID", string(r.PendingImportID)),
 		checkPositive("previewVersion", r.PreviewVersion),
 		checkFileIndexes("selectedFileIndexes", r.SelectedFileIndexes),
-		checkAbsolute("destination", r.Destination),
+		checkFolderPath("destination", r.Destination),
 	)
 }
 
@@ -177,22 +157,22 @@ func (r *CancelImportRequest) Validate() *AppError {
 }
 
 func (r *RemoveTorrentsRequest) Validate() *AppError {
-	var version *AppError
+	var plan *AppError
 	switch {
 	case !r.Mode.Valid():
-		version = InvalidRequest("mode", ReasonValue)
-	case r.Mode == RemoveWithFiles && r.DeletionListVersion == nil:
-		version = InvalidRequest("deletionListVersion", ReasonNull)
+		plan = InvalidRequest("mode", ReasonValue)
+	case r.Mode == RemoveWithFiles && r.DeletionPlanID == nil:
+		plan = InvalidRequest("deletionPlanID", ReasonNull)
 	case r.Mode == RemoveWithFiles:
-		version = checkPositive("deletionListVersion", *r.DeletionListVersion)
-	case r.DeletionListVersion != nil:
-		version = InvalidRequest("deletionListVersion", ReasonValue)
+		plan = CheckUUID("deletionPlanID", *r.DeletionPlanID)
+	case r.DeletionPlanID != nil:
+		plan = InvalidRequest("deletionPlanID", ReasonValue)
 	}
 	return firstProblem(
 		r.shape.problem(""),
 		CheckUUID("operationID", string(r.OperationID)),
 		checkTorrentIDs(r.TorrentIDs),
-		version,
+		plan,
 	)
 }
 
@@ -287,8 +267,15 @@ func checkPositive(field string, value int) *AppError {
 	return nil
 }
 
-func checkAbsolute(field, path string) *AppError {
-	if !filepath.IsAbs(path) {
+// maxPathBytes bounds a folder path from the frontend; macOS paths are at most 1024 bytes.
+const maxPathBytes = 1024
+
+// checkFolderPath accepts only a clean absolute path below the root, without control characters
+// (a NUL would truncate it in C APIs) and at most maxPathBytes long. This is the lexical check of
+// the contract; the file service still resolves symlinks and checks the folder before any write.
+func checkFolderPath(field, path string) *AppError {
+	if len(path) > maxPathBytes || path == "/" || !filepath.IsAbs(path) || filepath.Clean(path) != path ||
+		strings.ContainsFunc(path, unicode.IsControl) {
 		return InvalidRequest(field, ReasonFormat)
 	}
 	return nil

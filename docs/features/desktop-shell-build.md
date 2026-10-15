@@ -15,7 +15,7 @@ Only this proof of the path is implemented. The torrent list, themes, i18n and t
 
 - The first code in the repository; nothing to reuse. Boundaries are taken from [architecture §2–§3](../../product/APPLICATION_ARCHITECTURE.md#2-components-and-dependency-directions): facade in `internal/app`, own bridge in `frontend/src/bridge`, UI in `frontend/src/features`.
 - There is no state or side effects in Go; `GetRuntimeInfo` is a pure function of the embedded runtime. The Wails context (`OnStartup`) is not needed, so it was not added.
-- The `main` entry point is reduced to a single line without branches; all logic is in `run(start, stderr)` with an explicit `start` dependency (`wails.Run` in the product), which makes it testable without a window.
+- The `main` entry point is reduced to a single line without branches; all logic is in `run(start, stderr)` with an explicit `start` dependency (`wails.Run` in the product), which makes it testable without a window. Task 005 added the operation ledger (which owns the runtime ID) as a further explicit parameter ([bridge-contract](bridge-contract.md)).
 - The React component receives `loadRuntimeInfo` as a prop; only `App` wires up the real bridge. Tests work with a fake function, without Wails.
 
 ## Contracts and data
@@ -42,7 +42,7 @@ The bridge returns its own plain object, not the generated `app.RuntimeInfo` cla
 ## Implementation and reuse
 
 ```text
-main.go                         embed frontend/dist; run(start, stderr); main()
+main.go                         embed frontend/dist; run(start, stderr, ledger); main()
 internal/app/app.go             App facade, RuntimeInfo DTO
 frontend/src/main.tsx           mounting into #root
 frontend/src/App.tsx            composition: RuntimeCheck + real bridge

@@ -31,7 +31,11 @@ describe('command encoders', () => {
       }),
     ],
     ['cancel-import.json', encodeCancelImport({ pendingImportID })],
-    ['remove-torrents-record-only.json', encodeRemoveTorrents({ operationID, torrentIDs: [t1], mode: 'recordOnly', deletionListVersion: null })],
+    [
+      'remove-torrents-with-files.json',
+      encodeRemoveTorrents({ operationID, torrentIDs: [t1], mode: 'withFiles', deletionPlanID: '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d' }),
+    ],
+    ['remove-torrents-record-only.json', encodeRemoveTorrents({ operationID, torrentIDs: [t1], mode: 'recordOnly', deletionPlanID: null })],
     [
       'update-settings.json',
       encodeUpdateSettings({

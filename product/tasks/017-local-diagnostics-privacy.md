@@ -51,6 +51,8 @@ Create size-limited local logs that help find errors without leaking personal da
 
 Diagnostics stay local and do not become a channel for automatically sending data. A log error must not change the result of the main operation or hide its error. Redaction rules for private values apply to writing to disk.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): set an own `options.App.Logger` that drops or redacts Wails' `process message error` lines, which contain whole call arguments (paths, magnet links).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

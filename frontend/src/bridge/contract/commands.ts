@@ -2,6 +2,7 @@
 // null, unknown or mistyped key is request.invalid — so each encoder writes exactly the keys of its
 // request, whatever else the value carries at runtime. Every non-trivial mutation carries an
 // operation ID made once per user intention (newOperationID) and reused on retry.
+import type { RemoveMode } from './enums'
 import type { OperationID, PendingImportID, TorrentID } from './ids'
 import { encodeSettings, type Settings } from './settings'
 
@@ -33,15 +34,15 @@ export interface CancelImportRequest {
   pendingImportID: PendingImportID
 }
 
-export const removeModes = ['recordOnly', 'withFiles'] as const
-export type RemoveMode = (typeof removeModes)[number]
-
-/** With files, deletionListVersion is the version of the list the user confirmed; otherwise null. */
+/**
+ * With files, deletionPlanID is the ID Go issued with the file list the user confirmed (bound to
+ * these torrents and files, usable once); for a record-only removal it is null.
+ */
 export interface RemoveTorrentsRequest {
   operationID: OperationID
   torrentIDs: TorrentID[]
   mode: RemoveMode
-  deletionListVersion: number | null
+  deletionPlanID: string | null
 }
 
 export interface UpdateSettingsRequest {
@@ -77,7 +78,7 @@ export function encodeRemoveTorrents(r: RemoveTorrentsRequest): Record<string, u
     operationID: r.operationID,
     torrentIDs: [...r.torrentIDs],
     mode: r.mode,
-    deletionListVersion: r.deletionListVersion,
+    deletionPlanID: r.deletionPlanID,
   }
 }
 

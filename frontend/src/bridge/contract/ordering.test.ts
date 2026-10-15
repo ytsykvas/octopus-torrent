@@ -3,6 +3,7 @@ import {
   fetchFailed,
   initialOrdering,
   isLaterOperationState,
+  needsFetch,
   notFoundMeaning,
   receiveDelta,
   receiveSnapshot,
@@ -91,6 +92,23 @@ describe('deltas', () => {
     expect(decision).toMatchObject({ action: 'fetch', state: { current: null, retired: [A], fetchInFlight: true } })
     expect(receiveDelta(decision.state, delta(A, 41n, 42n)).action).toBe('discard')
     expect(receiveDelta(decision.state, delta(B, 1n, 2n)).action).toBe('discard')
+  })
+
+  it('fetch again when the awaited answer comes from a runtime retired meanwhile', () => {
+    const fetching = startFetch(at(A, 5n)).state
+    const newRuntime = receiveDelta(fetching, delta(B, 0n, 1n))
+
+    expect(newRuntime.action).toBe('discard')
+    const lateAnswer = receiveSnapshot(newRuntime.state, { kind: 'fetch', fetchNumber: fetching.latestFetch }, { runtimeID: A, revision: 6n })
+
+    expect(lateAnswer).toMatchObject({ action: 'fetch', fetchNumber: fetching.latestFetch + 1, state: { fetchInFlight: true } })
+  })
+
+  it('say when no state is applied and nothing is being fetched', () => {
+    expect(needsFetch(initialOrdering)).toBe(true)
+    expect(needsFetch(startFetch(initialOrdering).state)).toBe(false)
+    expect(needsFetch(fetchFailed(startFetch(initialOrdering).state, 1))).toBe(true)
+    expect(needsFetch(at(A, 1n))).toBe(false)
   })
 
   it('fetch again after a failed fetch', () => {

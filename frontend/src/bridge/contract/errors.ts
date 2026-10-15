@@ -60,30 +60,3 @@ export function fromRejection(reason: unknown): AppError {
   const decoded = decodeDto(appError, parsed)
   return decoded.ok ? decoded.value : callFailed(text)
 }
-
-/** What the UI shows for an error: a message key with its parameters and an English fallback. */
-export interface ErrorDescription {
-  key: string
-  params: Record<string, string>
-  fallback: string
-}
-
-// English fallbacks until localization (task 041) owns the texts. Each task that adds a code adds
-// it here and to the ADR table.
-const fallbacks: Record<string, string> = {
-  'request.invalid': 'The request was not valid.',
-  'operation.idConflict': 'This action conflicts with an earlier one.',
-  'operation.notFound': 'The result of this action is unknown; the current state is shown.',
-  'operation.cancelled': 'The action was cancelled.',
-  'internal.unexpected': 'Something went wrong.',
-  'bridge.callFailed': 'The application did not answer.',
-  'contract.invalidDto': 'The application sent data this window cannot read.',
-}
-
-export function describeError(error: AppError): ErrorDescription {
-  const fallback = fallbacks[error.code]
-  if (fallback === undefined) {
-    return { key: 'error.unknown', params: { code: error.code }, fallback: `Unexpected error (${error.code}).` }
-  }
-  return { key: `error.${error.code}`, params: error.params, fallback }
-}

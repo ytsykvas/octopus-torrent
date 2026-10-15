@@ -17,12 +17,29 @@ const (
 	kind      = contracts.OperationPauseTorrents
 )
 
-// wait ends every operation goroutine of l, so their final states can be read.
+// wait lets every recorded operation of l finish, then ends its goroutines, so final states can be
+// read. Shutting down first would cancel operations that had not started yet.
 func wait(t *testing.T, l *Ledger) {
 	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); !allFinished(l); time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("operations did not finish")
+		}
+	}
 	if err := l.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown: %v", err)
 	}
+}
+
+func allFinished(l *Ledger) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, e := range l.entries {
+		if !e.status.State.Finished() {
+			return false
+		}
+	}
+	return true
 }
 
 func get(t *testing.T, l *Ledger, id contracts.OperationID) contracts.OperationStatus {
@@ -129,8 +146,9 @@ func TestFailedOperationKeepsItsErrorWithTheOperationID(t *testing.T) {
 	if got.State != contracts.OperationFailed || got.Error.Code != "torrent.notFound" || *got.Error.OperationID != opID {
 		t.Fatalf("Get = %+v (error %+v), want failed with the mutation's error", got, got.Error)
 	}
-	if failure.OperationID != nil {
-		t.Error("the ledger changed the error the mutation returned")
+	got.Error.Params["added"] = "x"
+	if failure.OperationID != nil || len(failure.Params) != 0 {
+		t.Error("the ledger shares or changed the error the mutation returned")
 	}
 }
 
@@ -150,6 +168,31 @@ func TestCancelBeforeTheMutationTookEffectCancelsIt(t *testing.T) {
 	got := get(t, l, opID)
 	if got.State != contracts.OperationCancelled || got.Error.Code != contracts.CodeOperationCancelled {
 		t.Fatalf("Get = %+v, want cancelled", got)
+	}
+}
+
+// An operation cancelled before its goroutine ran never runs its mutation: no mutation needs its
+// own check of the context before it starts.
+func TestCancelBeforeTheMutationStartedSkipsIt(t *testing.T) {
+	l := NewLedger(runtimeID)
+	release := make(chan struct{})
+	start := l.spawn
+	l.spawn = func(operation func()) {
+		start(func() {
+			<-release
+			operation()
+		})
+	}
+	l.Start(opID, kind, "fp", func(context.Context) *contracts.AppError {
+		t.Error("a cancelled operation ran its mutation")
+		return nil
+	})
+	l.Cancel(opID)
+	close(release)
+	wait(t, l)
+	got := get(t, l, opID)
+	if got.State != contracts.OperationCancelled || got.Error.Code != contracts.CodeOperationCancelled || *got.Error.OperationID != opID {
+		t.Fatalf("Get = %+v, want cancelled without running", got)
 	}
 }
 
@@ -193,7 +236,9 @@ func TestShutdownCancelsRunningMutationsAndWaitsForThem(t *testing.T) {
 		return contracts.NewAppError(contracts.CodeOperationCancelled, nil)
 	})
 	<-started
-	wait(t, l)
+	if err := l.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
 	if !ended.Load() {
 		t.Fatal("Shutdown returned before the mutation ended")
 	}
@@ -206,11 +251,13 @@ func TestShutdownCancelsRunningMutationsAndWaitsForThem(t *testing.T) {
 // context ends and says so.
 func TestShutdownReportsMutationsStillRunningWhenItsContextEnds(t *testing.T) {
 	l := NewLedger(runtimeID)
-	release := make(chan struct{})
+	started, release := make(chan struct{}), make(chan struct{})
 	l.Start(opID, kind, "fp", func(context.Context) *contracts.AppError {
+		close(started)
 		<-release
 		return nil
 	})
+	<-started
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	if err := l.Shutdown(ctx); !errors.Is(err, context.DeadlineExceeded) {

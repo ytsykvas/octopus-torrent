@@ -31,22 +31,21 @@ const shutdownTimeout = 5 * time.Second
 // main has no branches: all logic lives in run, which is unit-tested; main
 // itself is covered by the instrumented run of the real .app (see README).
 func main() {
-	runtimeID := contracts.NewRuntimeID()
-	os.Exit(run(wails.Run, os.Stderr, runtimeID, operations.NewLedger(runtimeID)))
+	os.Exit(run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID())))
 }
 
-// run starts the application of the runtime runtimeID through start
+// run starts the application of the ledger's runtime through start
 // (wails.Run in production) and returns the process exit code. A start
 // failure is reported on stderr. Errors cross the bridge as AppError JSON,
 // and quitting stops the ledger's operations.
-func run(start func(*options.App) error, stderr io.Writer, runtimeID contracts.RuntimeID, ledger *operations.Ledger) int {
+func run(start func(*options.App) error, stderr io.Writer, ledger *operations.Ledger) int {
 	err := start(&options.App{
 		Title:          "OctopusTorrent",
 		Width:          1024,
 		Height:         768,
 		AssetServer:    &assetserver.Options{Assets: assets},
-		Bind:           []any{app.New(runtimeID, ledger)},
-		ErrorFormatter: app.FormatError,
+		Bind:           []any{app.New(ledger)},
+		ErrorFormatter: app.ErrorFormatter(stderr),
 		OnShutdown:     func(ctx context.Context) { stopOperations(ctx, ledger, stderr) },
 	})
 	if err != nil {

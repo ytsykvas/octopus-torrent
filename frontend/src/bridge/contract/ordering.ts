@@ -8,7 +8,7 @@
 // previous one, whose late messages are then dropped whatever their revision.
 import type { AppError } from './errors'
 import type { RuntimeID } from './ids'
-import type { OperationState } from './operations'
+import { operationStates, type OperationState } from './enums'
 
 export interface OrderingState {
   /** The runtime and revision of the applied library state; null before the first snapshot. */
@@ -36,9 +36,17 @@ export function startFetch(state: OrderingState): { state: OrderingState; fetchN
   return { state: { ...state, latestFetch: fetchNumber, fetchInFlight: true }, fetchNumber }
 }
 
-/** A failed fetch lets the next gap fetch again; the failure of an older fetch changes nothing. */
+/**
+ * A failed fetch lets the next gap fetch again; the failure of an older fetch changes nothing. When
+ * no state is applied yet (needsFetch), the store retries with its own back-off (task 035).
+ */
 export function fetchFailed(state: OrderingState, fetchNumber: number): OrderingState {
   return fetchNumber === state.latestFetch ? { ...state, fetchInFlight: false } : state
+}
+
+/** No library state is applied and none is being fetched: the store must fetch. */
+export function needsFetch(state: OrderingState): boolean {
+  return state.current === null && !state.fetchInFlight
 }
 
 export function receiveSnapshot(
@@ -50,7 +58,10 @@ export function receiveSnapshot(
     if (source.fetchNumber !== state.latestFetch) return { action: 'discard', state }
     state = { ...state, fetchInFlight: false }
   }
-  if (state.retired.includes(snapshot.runtimeID)) return { action: 'discard', state }
+  if (state.retired.includes(snapshot.runtimeID)) {
+    // The awaited answer came from a runtime retired meanwhile: nothing is applied, so fetch again.
+    return state.current === null && !state.fetchInFlight ? { action: 'fetch', ...startFetch(state) } : { action: 'discard', state }
+  }
   const { current } = state
   if (current !== null && current.runtimeID === snapshot.runtimeID && snapshot.revision < current.revision) {
     return { action: 'discard', state }
@@ -84,11 +95,14 @@ function retire(state: OrderingState, runtimeID: RuntimeID): OrderingState {
   return { ...state, retired: [...state.retired, current.runtimeID] }
 }
 
-const stateRank: Record<OperationState, number> = { accepted: 0, running: 1, succeeded: 2, failed: 2, cancelled: 2 }
+// accepted, running, then the three final states share the last rank: none follows another.
+function stateRank(state: OperationState): number {
+  return Math.min(operationStates.indexOf(state), operationStates.indexOf('succeeded'))
+}
 
 /** Operation states only move forward; an operation.changed with an earlier or equal state is discarded. */
 export function isLaterOperationState(previous: OperationState, next: OperationState): boolean {
-  return stateRank[next] > stateRank[previous]
+  return stateRank(next) > stateRank(previous)
 }
 
 /**

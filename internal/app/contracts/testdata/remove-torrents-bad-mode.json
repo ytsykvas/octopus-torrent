@@ -3,6 +3,6 @@
   "torrentIDs": [
     "3f2a7c1e-5b4d-4e8f-9a6b-1c2d3e4f5a6b"
   ],
-  "mode": "shred",
-  "deletionListVersion": null
+  "mode": "forever",
+  "deletionPlanID": null
 }

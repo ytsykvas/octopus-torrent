@@ -55,6 +55,8 @@ Approving the root path before writing does not guarantee safety after it is sub
 
 Verifying the destination folder does not invoke the Trash. Spike 012 may be used as a reference about paths, but the absence of a working Trash mechanism blocks 032, not ordinary torrent adding. In this task, path and access verification has its own tests.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): the contract only checks a folder path lexically; resolve symlinks and check a writable directory (`os.Root`) before any write.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

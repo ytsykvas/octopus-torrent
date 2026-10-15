@@ -1,12 +1,7 @@
 // Saved user preferences (SET-01, SET-04, SET-06, SET-08, TR-04).
 import { boolean, nullable, oneOf, struct, string, type Decoder } from './decode'
+import { languages, themes, type Language, type Theme } from './enums'
 import { decimal, encodeDecimal } from './numbers'
-
-export const themes = ['system', 'light', 'dark'] as const
-export type Theme = (typeof themes)[number]
-
-export const languages = ['en', 'uk', 'es', 'de', 'fr', 'pt'] as const
-export type Language = (typeof languages)[number]
 
 export interface Settings {
   /** Absolute folder for future imports; null = not chosen yet. */

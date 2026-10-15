@@ -55,6 +55,8 @@ Choose quantitative budgets by measuring the owner's Mac. Do not introduce arbit
 
 **Basis for technical decisions:** [Go diagnostics](https://go.dev/doc/diagnostics), [React external store](https://react.dev/reference/react/useSyncExternalStore). Check signatures and constraints against the pinned version; reading the API is not a passed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): set a cap on ledger entries and running operations (`operation.busy`).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

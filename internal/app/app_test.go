@@ -1,11 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 
 	"octopustorrent/internal/app/contracts"
 	"octopustorrent/internal/app/operations"
@@ -18,7 +21,7 @@ const (
 
 func newApp() (*App, *operations.Ledger) {
 	ledger := operations.NewLedger(runtimeID)
-	return New(runtimeID, ledger), ledger
+	return New(ledger), ledger
 }
 
 func TestGetRuntimeInfoReportsCompiledGoRuntime(t *testing.T) {
@@ -59,13 +62,21 @@ func TestGetLibrarySnapshotDescribesThisRuntimesEmptyLibrary(t *testing.T) {
 
 func TestGetOperationReturnsTheLedgersStatus(t *testing.T) {
 	a, ledger := newApp()
-	ledger.Start(opID, contracts.OperationPauseTorrents, "fp", func(context.Context) *contracts.AppError { return nil })
-	if err := ledger.Shutdown(context.Background()); err != nil {
-		t.Fatalf("Shutdown: %v", err)
-	}
-	status, err := a.GetOperation(opID)
-	if err != nil || status.State != contracts.OperationSucceeded || status.OperationID != opID {
-		t.Fatalf("GetOperation = %+v, %v", status, err)
+	ran := make(chan struct{})
+	ledger.Start(opID, contracts.OperationPauseTorrents, "fp", func(context.Context) *contracts.AppError {
+		close(ran)
+		return nil
+	})
+	<-ran
+	for {
+		status, err := a.GetOperation(opID)
+		if err != nil || status.OperationID != opID {
+			t.Fatalf("GetOperation = %+v, %v", status, err)
+		}
+		if status.State == contracts.OperationSucceeded {
+			return
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -90,15 +101,34 @@ func TestGetOperationRejectsBadAndUnknownIDsWithAppErrors(t *testing.T) {
 }
 
 // Wails rejects the JavaScript promise with new Error(formatted), so the AppError crosses as the
-// JSON text of the error; anything without a code of its own becomes internal.unexpected.
-func TestFormatErrorSendsAppErrorsAsJSONText(t *testing.T) {
+// JSON text of the error; anything without a code of its own becomes internal.unexpected, and its
+// cause goes to the local diagnostics output instead of the UI.
+func TestErrorFormatterSendsAppErrorsAsJSONText(t *testing.T) {
+	var diagnostics bytes.Buffer
+	format := ErrorFormatter(&diagnostics)
 	problem := contracts.NewAppError(contracts.CodeOperationNotFound, map[string]string{"runtimeID": string(runtimeID)}).WithOperation(opID)
-	for err, want := range map[error]string{
-		problem:                    `{"code":"operation.notFound","operationID":"` + opID + `","torrentID":null,"params":{"runtimeID":"` + string(runtimeID) + `"}}`,
-		errors.New("disk on fire"): `{"code":"internal.unexpected","operationID":null,"torrentID":null,"params":{}}`,
-	} {
-		if got := FormatError(err); got != want {
-			t.Errorf("FormatError(%v) = %v, want %s", err, got, want)
-		}
+
+	if got, want := format(problem), `{"code":"operation.notFound","operationID":"`+opID+`","torrentID":null,"params":{"runtimeID":"`+string(runtimeID)+`"}}`; got != want {
+		t.Errorf("format(AppError) = %v, want %s", got, want)
+	}
+	if diagnostics.Len() != 0 {
+		t.Errorf("an AppError was logged: %q", diagnostics.String())
+	}
+	if got, want := format(errors.New("disk on fire")), `{"code":"internal.unexpected","operationID":null,"torrentID":null,"params":{}}`; got != want {
+		t.Errorf("format(other error) = %v, want %s", got, want)
+	}
+	if want := "OctopusTorrent: unexpected error: \"disk on fire\"\n"; diagnostics.String() != want {
+		t.Errorf("diagnostics = %q, want %q", diagnostics.String(), want)
+	}
+	diagnostics.Reset()
+	if got := format(errors.New("forged\nOctopusTorrent: line")); got != `{"code":"internal.unexpected","operationID":null,"torrentID":null,"params":{}}` {
+		t.Errorf("format(error with a newline) = %v", got)
+	}
+	if strings.Count(diagnostics.String(), "\n") != 1 {
+		t.Errorf("a newline in an error forged a diagnostics line: %q", diagnostics.String())
+	}
+	var typedNil *contracts.AppError
+	if got := format(typedNil); got != `{"code":"internal.unexpected","operationID":null,"torrentID":null,"params":{}}` {
+		t.Errorf("format(typed nil AppError) = %v", got)
 	}
 }

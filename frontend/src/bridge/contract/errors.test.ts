@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { integer } from './decode'
-import { appError, callFailed, decodeDto, describeError, fromRejection } from './errors'
+import { appError, callFailed, decodeDto, fromRejection } from './errors'
+import { describeError } from './errorMessages'
 import { decodedExample } from '../../test/contractExamples'
 
 const notFound = decodedExample(appError, 'app-error.json')
@@ -44,6 +45,14 @@ describe('describeError', () => {
       params: notFound.params,
       fallback: 'The result of this action is unknown; the current state is shown.',
     })
+  })
+
+  it.each(['constructor', 'toString', '__proto__'])('treats %s, a name inherited by objects, as an unknown code', (code) => {
+    expect(describeError({ ...notFound, code })).toMatchObject({ key: 'error.unknown', params: { code } })
+  })
+
+  it('keeps the diagnostic text of a failed call out of the message parameters', () => {
+    expect(describeError(callFailed('error parsing arguments: /Users/owner/secret')).params).toStrictEqual({})
   })
 
   it('gives an unknown code the generic message with the code', () => {
