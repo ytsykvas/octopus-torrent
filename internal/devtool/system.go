@@ -1,6 +1,9 @@
 package devtool
 
 import (
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"syscall"
@@ -48,3 +51,20 @@ func (OSSystem) ReadDir(path string) ([]string, error) {
 }
 
 func (OSSystem) Sleep(d time.Duration) { time.Sleep(d) }
+
+// httpClient bounds every registry request.
+var httpClient = &http.Client{Timeout: 20 * time.Second}
+
+func (OSSystem) Get(url string) ([]byte, error) {
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+func (OSSystem) Now() time.Time { return time.Now() }

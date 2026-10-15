@@ -124,6 +124,27 @@ Controls with `go tool devtool check fast` (each change reverted afterwards):
 | the same file excluded in `vite.config.ts` | exit 1: Vitest passes, the independent inventory reports `frontend/src/untested.ts: not in the coverage report` |
 | an untested exported Go function | exit 1: `FAIL go coverage` |
 
+## Stage D — dependency checks
+
+New code: `internal/devtool/deps.go` (`NpmLockPackages`, `GoModuleVersions`, `EscapeModulePath`,
+`ReleaseAgeProblem`, the steps `release age`, `npm audit`, `govulncheck`, `updates`, bounded
+concurrent downloads), `GoTools` in `gocov.go`, `System.Get` / `Now`, mode `check deps`. The
+network steps belong to the full `check`; `check offline` and `check fast` report them `not_run`.
+
+| Step | Test | Command | Result |
+|---|---|---|---|
+| Release dates before adding | `go get -tool golang.org/x/vuln/cmd/govulncheck@v1.8.0`; `proxy.golang.org/<module>/@v/<version>.info` for every module it added or raised | manual | `pass`: x/vuln v1.8.0 2026-09-08; MVS raised x/crypto, mod, net, sync, sys, telemetry, term, text, tools to versions from 2026-08-24 to 2026-09-08; `go mod verify`: all modules verified |
+| RED | `deps_test.go`: lockfile parsing (aliases, nested copies, links, invalid JSON), `go list -m -json` (main module, replacements, local replacements), proxy path escaping, the 14-day boundary, the step on young npm and Go versions, missing publication time, a package missing from the registry, bad answers, a missing network (`not_run`), unreadable lockfile and `go list`; the updates report; audits fail on findings and do not run offline; offline and deps modes | `go test ./internal/devtool` | `fail`: `undefined: NpmLockPackages` and the others |
+| RED | the updates report listed 61 entries on the repository, almost all transitive Go modules that the policy leaves to MVS; test: an indirect module is not reported, a tool's module is | same | `fail`: the indirect module was listed |
+| GREEN | all | `go test ./internal/devtool` | `pass`, package coverage 100.0% |
+| Real run | the repository | `go tool devtool check deps` | `DEPENDENCIES PASSED` in 9 s: 186 npm package versions and 147 Go modules at least 14 days old; `npm audit`: 0; `govulncheck`: no vulnerabilities |
+| Updates out of quarantine | the report listed vite 8.3.1 → 8.3.2 and vitest, @vitest/coverage-v8 5.0.2 → 5.0.3 (published 2026-10-01 and 2026-09-30); the policy takes them in a task that changes dependencies | `npm --prefix frontend install --save-dev --save-exact vite@8.3.2 vitest@5.0.3 @vitest/coverage-v8@5.0.3` | adopted; `updates`: none left |
+| Full gate | the repository | `go tool devtool check` | first run `GATE FAILED`: one uncovered block (a package missing from the registry, test added) and `single code version` reported a changed file without naming it; the step now names every changed, added or removed file (tests added). Second run `GATE PASSED` in 23 s |
+
+The changed file of that first full run could not be identified afterwards: `npm ci`, `go list -m -u`,
+`npm outdated` and `govulncheck` leave `go.sum`, `go.mod` and the lockfile unchanged, and repeated
+full runs report no change. If it happens again, the report names the file.
+
 ## Stage log
 
 | Stage | State |
@@ -132,5 +153,5 @@ Controls with `go tool devtool check fast` (each change reverted afterwards):
 | B — plan check | done |
 | C0 — lint spike | done |
 | C — check command and coverage inventories | done |
-| D — dependency checks | not started |
+| D — dependency checks | done |
 | E — documents and acceptance | not started |

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -26,6 +27,10 @@ type fakeSystem struct {
 	dirErr    error
 	mkdirErr  error
 	removeErr map[string]error
+	// gets answers Get per URL; Get runs concurrently, so it records calls under mu.
+	gets map[string]fakeResult
+	now  time.Time
+	mu   sync.Mutex
 }
 
 type fakeResult struct {
@@ -98,6 +103,19 @@ func (s *fakeSystem) ReadDir(path string) ([]string, error) {
 }
 
 func (s *fakeSystem) Sleep(d time.Duration) { s.calls = append(s.calls, "sleep "+d.String()) }
+
+func (s *fakeSystem) Get(url string) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls = append(s.calls, "get "+url)
+	r, ok := s.gets[url]
+	if !ok {
+		return nil, errors.New("404 Not Found: " + url)
+	}
+	return []byte(r.out), r.err
+}
+
+func (s *fakeSystem) Now() time.Time { return s.now }
 
 func (s *fakeSystem) Exec(path string, argv []string) error {
 	s.calls = append(s.calls, "exec "+path+" "+strings.Join(argv, " "))

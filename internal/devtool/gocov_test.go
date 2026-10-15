@@ -97,3 +97,10 @@ func TestCheckGoCoverageTakesFilesOnlyTheAppMeasured(t *testing.T) {
 		t.Errorf("CheckGoCoverage = %q, want the .app-only file merged", problems)
 	}
 }
+
+func TestGoToolsReadsBothDirectiveForms(t *testing.T) {
+	gomod := "module m\n\ntool (\n\tgithub.com/wailsapp/wails/v2/cmd/wails\n\tm/cmd/devtool\n)\n\ntool golang.org/x/vuln/cmd/govulncheck\n"
+	if got := strings.Join(GoTools(gomod), " "); got != "github.com/wailsapp/wails/v2/cmd/wails m/cmd/devtool golang.org/x/vuln/cmd/govulncheck" {
+		t.Errorf("GoTools = %q", got)
+	}
+}

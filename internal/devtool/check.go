@@ -36,14 +36,17 @@ func notBuiltYet(detail string) stepResult {
 
 // checkMode selects the steps: the full gate runs everything; offline skips the network steps and
 // fast also skips the .app run. Skipped steps are reported as not_run, so only the full gate passes.
+// deps runs the network steps alone. In a full mode a mandatory step that did not run fails.
 type checkMode struct {
-	app, network bool
+	app, network, depsOnly, full bool
+	label                        string
 }
 
 var checkModes = map[string]checkMode{
-	"check":         {app: true, network: true},
-	"check offline": {app: true},
-	"check fast":    {},
+	"check":         {app: true, network: true, full: true, label: "GATE"},
+	"check offline": {app: true, label: "GATE"},
+	"check fast":    {label: "GATE"},
+	"check deps":    {network: true, depsOnly: true, full: true, label: "DEPENDENCIES"},
 }
 
 const (
@@ -59,21 +62,22 @@ type checkStep struct {
 }
 
 type checker struct {
-	sys    System
-	root   string
-	mode   checkMode
-	files  []string
-	appRan bool
+	sys      System
+	root     string
+	mode     checkMode
+	files    []string
+	appRan   bool
+	npmTimes map[string]map[string]string
 }
 
 // runCheck runs every step of the mode in order, never stopping early, prints one line per step and
 // returns the exit code: 1 if a step failed, or if a mandatory step did not run in the full gate.
-func runCheck(full bool, mode checkMode, stdout io.Writer, sys System) int {
+func runCheck(mode checkMode, stdout io.Writer, sys System) int {
 	c := &checker{sys: sys, mode: mode}
 	before, err := c.start()
 	if err != nil {
 		report(stdout, "repository", fail(err.Error(), ""))
-		fmt.Fprintln(stdout, "GATE FAILED")
+		fmt.Fprintln(stdout, mode.label+" FAILED")
 		return 1
 	}
 	var failed, missing []string
@@ -89,16 +93,16 @@ func runCheck(full bool, mode checkMode, stdout io.Writer, sys System) int {
 	}
 	switch {
 	case len(failed) > 0:
-		fmt.Fprintln(stdout, "GATE FAILED")
+		fmt.Fprintln(stdout, mode.label+" FAILED")
 		return 1
-	case len(missing) > 0 && full:
-		fmt.Fprintln(stdout, "GATE FAILED: not run: "+strings.Join(missing, ", "))
+	case len(missing) > 0 && mode.full:
+		fmt.Fprintln(stdout, mode.label+" FAILED: not run: "+strings.Join(missing, ", "))
 		return 1
 	case len(missing) > 0:
-		fmt.Fprintln(stdout, "GATE INCOMPLETE: not run: "+strings.Join(missing, ", ")+"; only go tool devtool check accepts a change")
+		fmt.Fprintln(stdout, mode.label+" INCOMPLETE: not run: "+strings.Join(missing, ", ")+"; only go tool devtool check accepts a change")
 		return 0
 	}
-	fmt.Fprintln(stdout, "GATE PASSED")
+	fmt.Fprintln(stdout, mode.label+" PASSED")
 	return 0
 }
 
@@ -118,23 +122,23 @@ func report(stdout io.Writer, name string, r stepResult) {
 
 // start requires the repository root as the working directory (every path below is relative to it)
 // and records the source hash.
-func (c *checker) start() (string, error) {
+func (c *checker) start() (map[string]string, error) {
 	prefix, err := c.sys.Output("git", "rev-parse", "--show-prefix")
 	if err != nil {
-		return "", fmt.Errorf("not a git repository: %w", err)
+		return nil, fmt.Errorf("not a git repository: %w", err)
 	}
 	if strings.TrimSpace(prefix) != "" {
-		return "", errors.New("run the check from the repository root, not " + strings.TrimSpace(prefix))
+		return nil, errors.New("run the check from the repository root, not " + strings.TrimSpace(prefix))
 	}
 	root, err := c.sys.Output("git", "rev-parse", "--show-toplevel")
 	if err != nil {
-		return "", fmt.Errorf("find the repository root: %w", err)
+		return nil, fmt.Errorf("find the repository root: %w", err)
 	}
 	c.root = strings.TrimSpace(root)
 	if c.files, err = repositoryFiles(c.sys); err != nil {
-		return "", err
+		return nil, err
 	}
-	return c.hash(c.files), nil
+	return c.fingerprints(c.files), nil
 }
 
 func (c *checker) steps() []checkStep {
@@ -142,7 +146,16 @@ func (c *checker) steps() []checkStep {
 	if !c.mode.network {
 		npmCI = append(npmCI, "--offline")
 	}
-	return []checkStep{
+	network := []checkStep{
+		{"release age", c.network(c.releaseAges)},
+		{"npm audit", c.network(c.audit("npm", "--prefix", "frontend", "audit"))},
+		{"govulncheck", c.network(c.audit("go", "tool", "govulncheck", "./..."))},
+		{"updates", c.network(c.updates)},
+	}
+	if c.mode.depsOnly {
+		return network
+	}
+	return append([]checkStep{
 		{"npm ci", c.tool(npmCI...)},
 		{"npm cooldown", c.npmCooldown},
 		{"typecheck", c.tool("npm", "--prefix", "frontend", "run", "typecheck")},
@@ -159,9 +172,10 @@ func (c *checker) steps() []checkStep {
 		{"release build", c.tool("go", "tool", "wails", "build", "-clean", "-trimpath")},
 		{"docs", c.captured(checkDocs)},
 		{"plan", c.captured(checkPlan)},
-		{"engine integration", func() stepResult { return notBuiltYet("not implemented yet: tasks 007, 018") }},
-		{"test-bridge UI tests", func() stepResult { return notBuiltYet("not implemented yet: task 035") }},
-	}
+	}, append(network,
+		checkStep{"engine integration", func() stepResult { return notBuiltYet("not implemented yet: tasks 007, 018") }},
+		checkStep{"test-bridge UI tests", func() stepResult { return notBuiltYet("not implemented yet: task 035") }},
+	)...)
 }
 
 // tool runs a command; a non-zero exit fails the step with the command's output.
@@ -330,13 +344,25 @@ func (c *checker) escapeHatches() stepResult {
 	return pass("no ignore directives, lint disables or switched-off tests")
 }
 
-func (c *checker) sameSources(before string) stepResult {
+func (c *checker) sameSources(before map[string]string) stepResult {
 	files, err := repositoryFiles(c.sys)
 	if err != nil {
 		return fail(err.Error(), "")
 	}
-	if c.hash(files) != before {
-		return fail("the repository files changed during the check; the results do not describe one version", "")
+	after := c.fingerprints(files)
+	var changed []string
+	for _, name := range sortedKeys(after) {
+		if before[name] != after[name] {
+			changed = append(changed, name)
+		}
+	}
+	for _, name := range sortedKeys(before) {
+		if _, ok := after[name]; !ok {
+			changed = append(changed, name)
+		}
+	}
+	if len(changed) > 0 {
+		return fail("the repository files changed during the check; the results do not describe one version", strings.Join(changed, "\n"))
 	}
 	return pass("the repository files did not change during the check")
 }
@@ -355,11 +381,12 @@ func (c *checker) contents(files []string, prefix string) map[string]string {
 	return out
 }
 
-func (c *checker) hash(files []string) string {
-	h := sha256.New()
-	contents := c.contents(files, "")
-	for _, name := range sortedKeys(contents) {
-		fmt.Fprintf(h, "%s\x00%s\x00", name, contents[name])
+// fingerprints returns the SHA-256 of every listed file's content.
+func (c *checker) fingerprints(files []string) map[string]string {
+	sums := map[string]string{}
+	for name, content := range c.contents(files, "") {
+		sum := sha256.Sum256([]byte(content))
+		sums[name] = hex.EncodeToString(sum[:])
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	return sums
 }

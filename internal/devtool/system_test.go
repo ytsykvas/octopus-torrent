@@ -1,6 +1,8 @@
 package devtool
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,5 +88,28 @@ func TestOSSystemSleeps(t *testing.T) {
 	OSSystem{}.Sleep(time.Millisecond)
 	if time.Since(start) < time.Millisecond {
 		t.Error("Sleep returned early")
+	}
+}
+
+func TestOSSystemGetsURLsAndRejectsErrorStatuses(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/react" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(`{"time":{}}`))
+	}))
+	defer server.Close()
+	if body, err := (OSSystem{}).Get(server.URL + "/react"); err != nil || string(body) != `{"time":{}}` {
+		t.Errorf("Get = %q, %v", body, err)
+	}
+	if _, err := (OSSystem{}).Get(server.URL + "/missing"); err == nil || !strings.Contains(err.Error(), "404") {
+		t.Errorf("Get(missing) = %v, want a 404 error", err)
+	}
+	if _, err := (OSSystem{}).Get("http://127.0.0.1:1/unreachable"); err == nil {
+		t.Error("Get(unreachable) succeeded")
+	}
+	if now := (OSSystem{}).Now(); time.Since(now) > time.Minute {
+		t.Errorf("Now = %v", now)
 	}
 }

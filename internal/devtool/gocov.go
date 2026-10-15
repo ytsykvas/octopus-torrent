@@ -17,6 +17,17 @@ var (
 	profileBlock = regexp.MustCompile(`^(.+):(\d+)\.(\d+),(\d+)\.(\d+) (\d+) (\d+)$`)
 )
 
+var toolBlock = regexp.MustCompile(`(?ms)^tool \((.*?)^\)|^tool (\S+)`)
+
+// GoTools returns the package paths of the tool directives in go.mod.
+func GoTools(gomod string) []string {
+	var tools []string
+	for _, m := range toolBlock.FindAllStringSubmatch(gomod, -1) {
+		tools = append(tools, strings.Fields(m[1]+" "+m[2])...)
+	}
+	return tools
+}
+
 // GoModulePath returns the module path declared in go.mod, or "" if there is none.
 func GoModulePath(gomod string) string {
 	if m := moduleLine.FindStringSubmatch(gomod); m != nil {

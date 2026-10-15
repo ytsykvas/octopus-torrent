@@ -48,7 +48,7 @@ func healthyRepo() *fakeSystem {
 	sys.results["git rev-parse --show-prefix"] = []fakeResult{{out: "\n"}}
 	sys.results["git rev-parse --show-toplevel"] = []fakeResult{{out: "/work/repo\n"}}
 	sys.results[npmConfig] = []fakeResult{{out: "min-release-age=14\nbefore=null\nmin-release-age-exclude=\n"}}
-	return sys
+	return withDependencies(sys)
 }
 
 func runCheckOn(sys *fakeSystem, args ...string) (int, string) {
@@ -74,7 +74,7 @@ func TestCheckPassesTheGateWhenEveryStepPasses(t *testing.T) {
 	}
 	for _, step := range []string{"npm ci", "npm cooldown", "typecheck", "lint", "frontend tests", "frontend build", "gofmt",
 		"go vet", "bindings", "go tests", ".app coverage run", "go coverage", "escape hatches", "release build", "docs", "plan",
-		"single code version"} {
+		"release age", "npm audit", "govulncheck", "updates", "single code version"} {
 		if l := line(report, step); !strings.HasPrefix(l, statusPass) {
 			t.Errorf("step %q: %q, want pass", step, l)
 		}
@@ -186,10 +186,13 @@ func TestCheckStepsReportTheirOwnFailures(t *testing.T) {
 		"stale plan": {func(s *fakeSystem) {
 			s.files["product/tasks/003-check.md"] = strings.Replace(s.files["product/tasks/003-check.md"], "`planned`", "`blocked`", 1)
 		}, "plan", "navigation table is out of date"},
-		"sources changed": {func(s *fakeSystem) {
+		"file added": {func(s *fakeSystem) {
 			s.results[listFiles] = []fakeResult{{out: s.output}, {out: s.output + "notes.txt\n"}}
 			s.files["notes.txt"] = "written during the check\n"
-		}, "single code version", "changed during the check"},
+		}, "single code version", "    notes.txt"},
+		"file removed": {func(s *fakeSystem) {
+			s.results[listFiles] = []fakeResult{{out: s.output}, {out: strings.Replace(s.output, "README.md\n", "", 1)}}
+		}, "single code version", "    README.md"},
 	}
 	for name, c := range cases {
 		sys := healthyRepo()
@@ -257,7 +260,17 @@ func TestBindingsReportARemovedFileAndAnUnreadableListing(t *testing.T) {
 	if got := c.bindings(); got.status != statusFail || !strings.Contains(got.detail, "not a git repository") {
 		t.Errorf("unreadable listing: %+v", got)
 	}
-	if got := c.sameSources("x"); got.status != statusFail || !strings.Contains(got.detail, "not a git repository") {
+	if got := c.sameSources(nil); got.status != statusFail || !strings.Contains(got.detail, "not a git repository") {
 		t.Errorf("unreadable listing at the end: %+v", got)
+	}
+}
+
+func TestSameSourcesNamesAFileWhoseContentChanged(t *testing.T) {
+	sys := &fakeSystem{output: "a.go\nb.go\n", files: fakeFiles{"a.go": "package a\n", "b.go": "package b\n"}}
+	c := &checker{sys: sys, files: []string{"a.go", "b.go"}}
+	before := c.fingerprints(c.files)
+	sys.files["b.go"] = "package b // edited\n"
+	if got := c.sameSources(before); got.status != statusFail || got.output != "b.go" {
+		t.Errorf("sameSources = %+v, want FAIL naming b.go", got)
 	}
 }
