@@ -147,7 +147,7 @@ func (r *UpdateSettingsRequest) UnmarshalJSON(data []byte) error {
 func (r *TorrentSelectionRequest) Validate() *AppError {
 	return firstProblem(
 		r.shape.problem(""),
-		checkUUID("operationID", string(r.OperationID)),
+		CheckUUID("operationID", string(r.OperationID)),
 		checkTorrentIDs(r.TorrentIDs),
 	)
 }
@@ -155,8 +155,8 @@ func (r *TorrentSelectionRequest) Validate() *AppError {
 func (r *SetFilesWantedRequest) Validate() *AppError {
 	return firstProblem(
 		r.shape.problem(""),
-		checkUUID("operationID", string(r.OperationID)),
-		checkUUID("torrentID", string(r.TorrentID)),
+		CheckUUID("operationID", string(r.OperationID)),
+		CheckUUID("torrentID", string(r.TorrentID)),
 		checkFileIndexes("fileIndexes", r.FileIndexes),
 	)
 }
@@ -164,8 +164,8 @@ func (r *SetFilesWantedRequest) Validate() *AppError {
 func (r *ConfirmImportRequest) Validate() *AppError {
 	return firstProblem(
 		r.shape.problem(""),
-		checkUUID("operationID", string(r.OperationID)),
-		checkUUID("pendingImportID", string(r.PendingImportID)),
+		CheckUUID("operationID", string(r.OperationID)),
+		CheckUUID("pendingImportID", string(r.PendingImportID)),
 		checkPositive("previewVersion", r.PreviewVersion),
 		checkFileIndexes("selectedFileIndexes", r.SelectedFileIndexes),
 		checkAbsolute("destination", r.Destination),
@@ -173,7 +173,7 @@ func (r *ConfirmImportRequest) Validate() *AppError {
 }
 
 func (r *CancelImportRequest) Validate() *AppError {
-	return firstProblem(r.shape.problem(""), checkUUID("pendingImportID", string(r.PendingImportID)))
+	return firstProblem(r.shape.problem(""), CheckUUID("pendingImportID", string(r.PendingImportID)))
 }
 
 func (r *RemoveTorrentsRequest) Validate() *AppError {
@@ -190,7 +190,7 @@ func (r *RemoveTorrentsRequest) Validate() *AppError {
 	}
 	return firstProblem(
 		r.shape.problem(""),
-		checkUUID("operationID", string(r.OperationID)),
+		CheckUUID("operationID", string(r.OperationID)),
 		checkTorrentIDs(r.TorrentIDs),
 		version,
 	)
@@ -199,7 +199,7 @@ func (r *RemoveTorrentsRequest) Validate() *AppError {
 func (r *UpdateSettingsRequest) Validate() *AppError {
 	return firstProblem(
 		r.shape.problem(""),
-		checkUUID("operationID", string(r.OperationID)),
+		CheckUUID("operationID", string(r.OperationID)),
 		r.Settings.validate("settings."),
 	)
 }
@@ -242,7 +242,9 @@ func firstProblem(problems ...*AppError) *AppError {
 	return nil
 }
 
-func checkUUID(field, value string) *AppError {
+// CheckUUID returns request.invalid for field when value is empty (missing) or not a canonical
+// version 4 UUID (format), or nil.
+func CheckUUID(field, value string) *AppError {
 	switch {
 	case value == "":
 		return InvalidRequest(field, ReasonMissing)
@@ -257,7 +259,7 @@ func checkTorrentIDs(ids []TorrentID) *AppError {
 		return InvalidRequest("torrentIDs", ReasonEmpty)
 	}
 	for i, id := range ids {
-		if p := checkUUID(fmt.Sprintf("torrentIDs[%d]", i), string(id)); p != nil {
+		if p := CheckUUID(fmt.Sprintf("torrentIDs[%d]", i), string(id)); p != nil {
 			return p
 		}
 	}

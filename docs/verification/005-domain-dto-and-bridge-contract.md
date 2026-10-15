@@ -35,7 +35,7 @@ Approved by the owner on 15 October 2026 after two self-review passes.
 | Stage | State |
 |---|---|
 | A — Go contracts | done |
-| B — ledger, facade, bindings | planned |
+| B — ledger, facade, bindings | done |
 | C — TS decoders and wrappers | planned |
 | D — TS ordering rules | planned |
 | E — documents and acceptance | planned |
@@ -56,3 +56,35 @@ Approved by the owner on 15 October 2026 after two self-review passes.
   all requests. Uncovered branches found at 95.6% were covered by new examples (empty and bad
   torrent IDs, preview version 0, relative destination, record-only with a list version, unknown
   theme, zero download limit) and an `OperationState.Finished` test, not by removing checks.
+
+## Stage B — ledger, facade, `main.go`, bindings
+
+- RED: `go test -race ./internal/app/operations` → `fail` (undefined `Ledger`, `NewLedger`);
+  `go test ./internal/app` → `fail` (`New` takes no arguments, no `GetLibrarySnapshot`);
+  `go vet .` → `fail` (`run` and `app.New` signatures). Expected: the API did not exist.
+- GREEN: `go test -race -count=3 ./internal/app/operations` → `pass`, 100.0%;
+  `go test -race ./internal/app/...` and `go test -race .` → `pass` (`main()` itself is covered only
+  by the `.app` run of the full gate). `go tool wails generate module` regenerated
+  `App.d.ts`, `App.js` and `models.ts`: every 64-bit field is `string` there.
+- `go tool devtool check fast` → `GATE INCOMPLETE` (as designed: `.app` coverage run and network
+  steps `not_run`); every executed step `pass`, bindings in sync.
+- Real Wails round-trip (`go tool wails dev`, headless Chrome on `http://localhost:34115`,
+  expressions evaluated through the DevTools protocol in the page):
+  - `window.go.app.App.GetLibrarySnapshot()` resolved
+    `{"runtimeID":"058fa117-…","revision":"0","torrents":[]}` — `pass`;
+  - `GetOperation(<random UUID>)` rejected with an `Error` whose `message` is
+    `{"code":"operation.notFound",…,"params":{"runtimeID":"058fa117-…"}}` — `pass`;
+  - `GetOperation('not-a-uuid')` rejected with the `request.invalid` JSON (`field` `operationID`,
+    `reason` `format`) — `pass`;
+  - `GetOperation(42)` (a wrong JSON type, rejected by Wails' own argument parsing) never settled in
+    the dev browser. Cause, read in Wails v2.16.0: `NewErrorCallback` returns the callback without
+    the `c` prefix; the desktop frontend (`desktop/darwin/frontend.go:428`) delivers it anyway, so
+    the `.app` rejects with plain text (→ `bridge.callFailed`), but the dev server
+    (`devserver.go:207`) writes it unprefixed and the browser runtime ignores it. Consequence: the
+    TypeScript encoders must never send a wrong type (stage C), and the limitation is recorded in
+    the ADR. Not a defect of our code; not fixed upstream here.
+- The packaged `.app` exercises the same `desktop/calls.js`; a click-through needs a UI that calls
+  these methods (034/035).
+- Refactoring: `contracts.CheckUUID` exported and reused by the facade instead of a second UUID
+  check; lifecycle (`stopOperations`, 5 s bound) kept in `main.go` because every exported method of
+  `App` is bound to JavaScript.
