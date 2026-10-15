@@ -192,9 +192,17 @@ func decideCommand(command, cwd string, readFile func(string) ([]byte, error)) D
 			return d
 		}
 	}
-	if len(bodies) > 0 && !heredocsGoToDataSinks(segments, len(bodies)) {
-		for _, body := range bodies {
-			if d := decideCommand(body, cwd, readFile); d.Deny {
+	toSinks := len(bodies) > 0 && heredocsGoToDataSinks(segments, len(bodies))
+	for _, body := range bodies {
+		if !body.quoted {
+			for _, inner := range bodySubstitutions(body.text) {
+				if d := decideCommand(inner, cwd, readFile); d.Deny {
+					return d
+				}
+			}
+		}
+		if !toSinks {
+			if d := decideCommand(body.text, cwd, readFile); d.Deny {
 				return d
 			}
 		}
@@ -437,16 +445,25 @@ var (
 // dataSinks receive a here-document as data, never as commands.
 var dataSinks = map[string]bool{"cat": true, "git": true, "gh": true, "tee": true}
 
+// heredocBody is the text of one here-document. The shell expands $(...) and `...` in the body
+// unless the delimiter was quoted ('EOF' or "EOF"), whatever program reads it.
+type heredocBody struct {
+	text   string
+	quoted bool
+}
+
 // stripHeredocBodies separates the text of here-documents from the command line. Only an unquoted,
 // unescaped << whose delimiter word is fully understood, and whose terminator line exists, counts;
 // anything else stays in the command line and is decided as commands (fail closed). The bodies are
-// returned so the caller can decide them unless every here-document goes to a data sink.
-func stripHeredocBodies(command string) (string, []string) {
+// returned so the caller can decide their substitutions, and the bodies themselves unless every
+// here-document goes to a data sink.
+func stripHeredocBodies(command string) (string, []heredocBody) {
 	var out strings.Builder
-	var bodies []string
+	var bodies []heredocBody
 	type heredoc struct {
-		word string
-		tabs bool
+		word   string
+		tabs   bool
+		quoted bool
 	}
 	var pending []heredoc
 	var quote byte
@@ -473,14 +490,14 @@ func stripHeredocBodies(command string) (string, []string) {
 		case heredocOperator.MatchString(command[i:]):
 			m := heredocOperator.FindStringSubmatch(command[i:])
 			if heredocEnd.MatchString(command[i+len(m[0]):]) {
-				pending = append(pending, heredoc{word: m[2] + m[3] + m[4], tabs: m[1] == "-"})
+				pending = append(pending, heredoc{word: m[2] + m[3] + m[4], tabs: m[1] == "-", quoted: m[4] == ""})
 			}
 			out.WriteString(m[0])
 			i += len(m[0]) - 1
 			continue
 		case c == '\n' && len(pending) > 0:
 			pos := i + 1
-			var found []string
+			var found []heredocBody
 			for _, h := range pending {
 				start, closed := pos, false
 				for pos < len(command) && !closed {
@@ -494,7 +511,7 @@ func stripHeredocBodies(command string) (string, []string) {
 						line = strings.TrimLeft(line, "\t")
 					}
 					if line == h.word {
-						found, closed = append(found, body), true
+						found, closed = append(found, heredocBody{text: body, quoted: h.quoted}), true
 					}
 				}
 				if !closed {
@@ -566,11 +583,33 @@ func quoteActive(command string) []bool {
 	return active
 }
 
-// substitutions returns the commands inside $(...) and `...` where the shell expands them, outermost
-// first; nested ones are found when those are decided in turn. $((...)) is arithmetic, not a command.
+// escapeActive is quoteActive for the body of an unquoted here-document: quotes there are ordinary
+// characters, and only a backslash stops the next character from being expanded.
+func escapeActive(body string) []bool {
+	active := make([]bool, len(body))
+	escaped := false
+	for i := 0; i < len(body); i++ {
+		active[i] = !escaped
+		escaped = !escaped && body[i] == '\\'
+	}
+	return active
+}
+
+// substitutions returns the commands inside $(...) and `...` where the shell expands them in a
+// command line, outermost first; nested ones are found when those are decided in turn.
 func substitutions(command string) []string {
+	return expansions(command, quoteActive(command))
+}
+
+// bodySubstitutions returns the commands the shell runs while expanding an unquoted here-document.
+func bodySubstitutions(body string) []string {
+	return expansions(body, escapeActive(body))
+}
+
+// expansions returns the commands inside $(...) and `...` that start where active is true.
+// $((...)) is arithmetic, not a command.
+func expansions(command string, active []bool) []string {
 	var found []string
-	active := quoteActive(command)
 	for i := 0; i < len(command); i++ {
 		if !active[i] {
 			continue

@@ -148,7 +148,7 @@ This is a way of organizing work, not a requirement to run additional agents. Co
 | [001](001-scope-and-decision-register.md) | Record the initial scope and open decisions | P0 | — | AI-06, DATA-01, QA-07 | `done` |
 | [002](002-repository-and-agent-entrypoint.md) | Prepare the Git repository and the AI entry point | P0 | [001](001-scope-and-decision-register.md) | AI-01, AI-02, AI-03, AI-04, AI-09, QA-01, QA-03, QA-04, QA-07, QA-08 | `done` |
 | [003](003-wails-macos-build-spike.md) | Build the first Wails .app on the owner's Mac | P1 | [002](002-repository-and-agent-entrypoint.md) | REL-01, REL-02, STACK-05, UI-04, AI-07, QA-01, QA-02, QA-05 | `done` |
-| [004](004-reproducible-check-commands.md) | Record the build and local check commands | P1 | [003](003-wails-macos-build-spike.md) | AI-07, AI-08, QA-01, QA-02, QA-05 | `planned` |
+| [004](004-reproducible-check-commands.md) | Record the build and local check commands | P1 | [003](003-wails-macos-build-spike.md) | AI-07, AI-08, QA-01, QA-02, QA-05 | `in_progress` |
 | [005](005-domain-dto-and-bridge-contract.md) | Describe our own Go–TS contracts and errors | P1 | [003](003-wails-macos-build-spike.md) | AI-05, AI-02, STACK-01, STACK-02, STACK-03 | `planned` |
 | [006](006-controlled-torrent-fixtures.md) | Create controlled torrents and a local swarm | P1 | [004](004-reproducible-check-commands.md) | AI-08, TR-02 | `planned` |
 | [007](007-engine-api-lifecycle-spike.md) | Check the anacrolix API and lifecycle on a single version | P1 | [006](006-controlled-torrent-fixtures.md), [005](005-domain-dto-and-bridge-contract.md) | AI-05, AI-07, STACK-03 | `planned` |

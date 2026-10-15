@@ -89,8 +89,11 @@ program, such as `python3 - <<EOF`, can be refused — use the Write tool for su
 searched for substitutions like any other text. Wrappers (`env`, `sudo`, `time`, `nice`, `command`, `exec`,
 `xargs`), `sh|bash|zsh|dash|ksh -c` (also inside combined flags such as `-lc`), `eval`, `$(…)` and
 backtick substitutions (also inside double quotes), subshells, `cd`/`pushd` and absolute program paths
-are followed. Here-document bodies are data and are skipped, and only real npm flags and real
-assignments are checked, so commit messages and greps that mention the settings are not refused. A
+are followed. A here-document body that goes to a data sink is not decided as commands, but the shell
+still expands `$(…)` and backticks in it unless the delimiter is quoted (`'EOF'`, `"EOF"`), so the
+substitutions of every unquoted body are always decided; inside such a body quotes are ordinary
+characters and only a backslash prevents an expansion. Only real npm flags and real assignments are
+checked, so commit messages and greps that mention the settings are not refused. A
 command given as an argument list is joined; a guarded tool whose input cannot be read is blocked,
 while a payload that is not JSON at all is let through with a warning.
 
@@ -118,12 +121,6 @@ policy, including the ones npm suggests in its own error message. It does not se
   writes to protected files by programs it does not know (an interpreter such as `python3` writing a
   file), or a dependency added by hand to `package.json` / `go.mod` and resolved later.
 - A Go version that is explicit and full but younger than 14 days.
-- **Open gap, found after the push (15 October 2026):** a here-document with an *unquoted* delimiter
-  (`cat <<EOF`) is expanded by the shell, so `$(…)` inside its body runs; the guard skips such a body
-  when it goes to a data sink. Fix: for unquoted delimiters always check the body's substitutions, and
-  skip a body only for a quoted delimiter (`'EOF'`, `"EOF"`). It needs a change to `internal/devtool`,
-  which the hook blocks in the `auto` mode — to be done with the owner in the `default` mode, at the
-  latest in task 004.
 - Its own source when changed outside the Edit tools (see above); Edit/Write changes ask the owner. If
   devtool fails to compile, the hook exits 1 and agents continue (fail-open, so a broken hook cannot
   lock an agent out of the tools it needs to fix it).
@@ -154,7 +151,9 @@ hand ([.claude/docs/dependencies.md](../../.claude/docs/dependencies.md)).
 
 See the [verification report](../verification/agent-tooling.md): RED evidence for every rule, 100%
 raw-counter coverage, the configured hook commands executed by a test, a live block in Claude Code,
-and the runner scripts run in a fresh git worktree with a clean stop.
+and the runner scripts run in a fresh git worktree with a clean stop. The gap with unquoted
+here-documents, found after the first push, was closed test-first in task 004
+([report](../verification/004-reproducible-check-commands.md)).
 
 ## Consequences
 
