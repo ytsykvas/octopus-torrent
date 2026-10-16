@@ -12,6 +12,7 @@ import (
 	"net"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
@@ -126,6 +127,9 @@ func (p *Peer) Seed(ctx context.Context, mi *metainfo.MetaInfo) (*torrent.Torren
 	if err := t.VerifyDataContext(ctx); err != nil {
 		return t, err
 	}
+	if err := settle(ctx, t); err != nil {
+		return t, err
+	}
 	if missing := missingPieces(t); len(missing) > 0 {
 		return t, &IncompleteError{Completed: t.BytesCompleted(), Length: t.Length(), MissingPieces: missing, Err: errors.New("the seeder's data is incomplete")}
 	}
@@ -170,14 +174,21 @@ func (p *Peer) Close(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// Refuses returns an error when addr still accepts a TCP connection.
+// Refuses waits until addr refuses TCP connections, and returns an error when it still accepts
+// them as ctx ends. The engine closes its listeners in a goroutine, after Client.Close returns.
 func Refuses(ctx context.Context, addr net.Addr) error {
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr.String())
-	if err != nil {
-		return nil
+	for {
+		conn, err := net.DialTimeout("tcp", addr.String(), time.Second)
+		if err != nil {
+			return nil
+		}
+		conn.Close()
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%s still accepts connections: %w", addr, ctx.Err())
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
-	conn.Close()
-	return fmt.Errorf("%s still accepts connections", addr)
 }
 
 // syncBuffer is a bytes.Buffer safe for the engine's concurrent log writes.

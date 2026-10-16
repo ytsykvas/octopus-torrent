@@ -59,7 +59,7 @@ func (s spec) build() Fixture {
 	info := map[string]any{"name": name, "piece length": s.pieceLength}
 	layers := map[string]string{}
 	if s.format != V2 {
-		fx.addV1(info)
+		fx.addV1(info, s.root == "")
 	}
 	if s.format != V1 {
 		fx.addV2(info, layers)
@@ -88,10 +88,10 @@ func (s spec) build() Fixture {
 	return fx
 }
 
-// addV1 adds the v1 description: the file list (or the single length) and the SHA-1 piece hashes
+// addV1 adds the v1 description: the file list (or, for a single file, its length) and the SHA-1 piece hashes
 // of the byte stream. A hybrid pads every non-empty file except the last to a piece boundary with
 // a BEP 47 pad file, so v1 and v2 pieces cover the same bytes.
-func (f *Fixture) addV1(info map[string]any) {
+func (f *Fixture) addV1(info map[string]any, single bool) {
 	var stream []byte
 	var list []any
 	for i, file := range f.Files {
@@ -111,7 +111,7 @@ func (f *Fixture) addV1(info map[string]any) {
 	}
 	f.Pieces = len(pieces) / sha1.Size
 	info["pieces"] = string(pieces)
-	if f.root == "" {
+	if single {
 		info["length"] = f.Files[0].Length
 	} else {
 		info["files"] = list

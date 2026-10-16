@@ -136,7 +136,10 @@ func TestACorruptedPieceIsTheOnlyOneMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	Connect(lt, seeder)
-	err = WaitComplete(deadline(t, 3*time.Second), lt)
+	for ctx := deadline(t, transferLimit); lt.BytesCompleted() < lt.Length()-fx.PieceLength && ctx.Err() == nil; {
+		time.Sleep(10 * time.Millisecond)
+	}
+	err = WaitComplete(deadline(t, 500*time.Millisecond), lt)
 	if !errors.As(err, &incomplete) || !slices.Equal(incomplete.MissingPieces, []int{1}) || incomplete.Completed != lt.Length()-fx.PieceLength {
 		t.Fatalf("WaitComplete = %v, want only piece 1 missing", err)
 	}
@@ -255,12 +258,12 @@ func TestEveryFixtureIsAddedAsRecorded(t *testing.T) {
 }
 
 func TestErrorsAreReturnedNotHidden(t *testing.T) {
-	saved := newClient
+	savedClient := newClient
 	newClient = func(*torrent.ClientConfig) (*torrent.Client, error) { return nil, errors.New("no socket") }
 	if _, err := NewPeer(t.TempDir(), Options{}); err == nil || !strings.Contains(err.Error(), "no socket") {
 		t.Errorf("NewPeer = %v", err)
 	}
-	newClient = saved
+	newClient = savedClient
 
 	p := peer(t, Options{RateLimit: rateLimit})
 	if _, err := p.Seed(deadline(t, transferLimit), metaInfo(t, named(t, "v2-single"))); err == nil {
@@ -286,8 +289,15 @@ func TestErrorsAreReturnedNotHidden(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	if err := Refuses(deadline(t, closeLimit), listener.Addr()); err == nil {
-		t.Error("Refuses accepted a live listener")
+	if err := Refuses(deadline(t, 200*time.Millisecond), listener.Addr()); err == nil || !strings.Contains(err.Error(), "still accepts") {
+		t.Errorf("Refuses of a live listener = %v", err)
+	}
+	saved := pieceBusy
+	pieceBusy = func(*torrent.Torrent, int) bool { return true }
+	_, err = p.Seed(deadline(t, 200*time.Millisecond), metaInfo(t, named(t, "v1-single")))
+	pieceBusy = saved
+	if err == nil || !strings.Contains(err.Error(), "still being checked") {
+		t.Errorf("Seed while pieces stay busy = %v", err)
 	}
 	if got := NonLoopback("dial 10.0.0.1:6881 127.0.0.1:1 [::1]:2 [2001:db8::1]:3 [zz] v1.61.0"); !slices.Equal(got, []string{"10.0.0.1", "2001:db8::1"}) {
 		t.Errorf("NonLoopback = %q", got)
@@ -358,6 +368,9 @@ func peer(t *testing.T, opts Options) *Peer {
 		defer cancel()
 		if err := p.Close(ctx); err != nil {
 			t.Error(err)
+		}
+		if t.Failed() {
+			t.Logf("engine log of the peer in %s:\n%s", p.Dir, p.Logs())
 		}
 	})
 	return p

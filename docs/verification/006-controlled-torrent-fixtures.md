@@ -185,3 +185,42 @@ The quality-gate ADR left two inventory rules to this task.
     its connections and the torrent forgets its peers.
   - The fixture catalog gained `v1-tree-no-empty`.
   - `invalid-hybrid-mismatch` was re-recorded as `accepted`.
+
+### Stabilization (after the stage C commit)
+
+Six runs of the whole package then gave four failures from two causes. Both are engine timing,
+not test data:
+
+5. **`Client.Close` returns before its listeners are closed.**
+   - The engine closes each listener with `go s.Close()`, so a dial right after `Close` could still
+     connect ("127.0.0.1:59407 still accepts connections").
+   - `Refuses` now polls with a 1 s dial timeout until the address refuses, or reports at the
+     deadline.
+   - Ordered quit belongs to 028.
+6. **`VerifyDataContext` returns before the result is stored.**
+   - `pieceHashed` increments `numVerifies` and wakes the waiter before it marks the completion
+     (`Marking`). A completion read right after it can be stale: in 3 of 40 isolated runs a seeder
+     with a corrupted piece reported every piece complete.
+   - `Seed` now waits, within its context, until no piece is queued, hashing or marking (`settle`).
+   - The `pieceBusy` test seam covers settle's deadline branch.
+   - Our adapter (018) needs the same wait.
+
+The single-file `hybrid` regression was also fixed. The engine-layout change had made `addV1` use
+the file list for `hybrid-single`. It now follows the spec, so the v1 part keeps single-file mode,
+and `hybrid-single.torrent` is again byte-identical to stage B.
+
+The corrupted-piece test now waits, up to the transfer limit, until every other piece has arrived,
+and then checks with a 0.5 s wait. Before that it waited a fixed 3 s.
+
+Results after the fixes:
+
+| Run | Result |
+|---|---|
+| `TestACorruptedPieceIsTheOnlyOneMissing`, 60 iterations (before the wait change) | 60 pass |
+| the same, 40 iterations (after the wait change) | 40 pass, 22.9 s |
+| the swarm package, 8 separate runs | 8 pass, 14.0–14.4 s each |
+| the swarm package, `-count=10` in one process | pass, 128.7 s |
+| `./internal/torrentengine/...` with coverage, twice | pass, swarm 11.6 s, 100.0% in both packages |
+
+One 40-iteration batch of the corrupted-piece test, run between the two fixes, failed, and its
+output was not kept. The later 100 isolated iterations and 18 package runs passed.
