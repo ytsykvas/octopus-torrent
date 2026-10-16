@@ -1,6 +1,6 @@
 # 006 — Create controlled torrents and a local swarm
 
-**Status:** `in_progress`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
@@ -36,11 +36,11 @@ Prepare own reproducible test torrents and a local transfer environment between 
 
 ## Acceptance criteria
 
-- [ ] The generator re-creates the same metadata and expected hashes from the same test data.
-- [ ] After local transfer, the received files match the expected ones byte for byte, and their checksums match.
-- [ ] Configuration and observation confirm that the test transfer uses only the specified local peers and does not depend on public discovery or trackers.
-- [ ] Absence of peers, a corrupted piece and cancellation give a predictable result within the time limit.
-- [ ] Two consecutive runs finish without leftover processes, open listeners or temporary directory conflicts; user files are not changed.
+- [x] The generator re-creates the same metadata and expected hashes from the same test data.
+- [x] After local transfer, the received files match the expected ones byte for byte, and their checksums match.
+- [x] Configuration and observation confirm that the test transfer uses only the specified local peers and does not depend on public discovery or trackers.
+- [x] Absence of peers, a corrupted piece and cancellation give a predictable result within the time limit.
+- [x] Two consecutive runs finish without leftover processes, open listeners or temporary directory conflicts; user files are not changed.
 
 ## Checks
 
@@ -75,3 +75,45 @@ At the start of each session, follow the [agent rules](../../AGENTS.md): read th
 - Record a short result: what was changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+### Execution result (16 October 2026)
+
+- **Status:** `done`. Evidence: [report 006](../../docs/verification/006-controlled-torrent-fixtures.md). ADR: [controlled-swarm](../../docs/decisions/controlled-swarm.md). Feature: [test torrents and the local swarm](../../docs/tooling/test-torrents.md).
+- **Created:**
+  - **Dependencies:** anacrolix/torrent v1.61.0 and golang.org/x/time v0.16.0. Vulnerable transitive modules were force-upgraded: pion/dtls/v3 v3.1.10, pion/stun/v3 v3.1.7, otel v1.47.0, and golang.org/x/net v0.60.0 (the owner's exception of 2026-10-16, through the gate's new `releaseAgeExceptions`).
+  - **`internal/torrentengine/testutil/fixture`:**
+    - our own bencode;
+    - deterministic payloads;
+    - v1, v2 and hybrid metainfo with BEP 47 pads, merkle roots and piece layers;
+    - 8 valid and 10 invalid fixtures committed in `testdata/` with `fixtures.json` (purpose, infohashes, checksums, engine stage);
+    - `-update` to rewrite them.
+  - **`internal/torrentengine/testutil/swarm`:**
+    - loopback-only, TCP-only clients with every discovery path off, backed by tripwires (an IP block list and refusing HTTP, tracker and DNS hooks);
+    - waits bounded by a context, with `IncompleteError`;
+    - counters and `Recorder`;
+    - `Refuses`, `WaitEngineStopped`, `SeenAddrs`, `Tripped`.
+  - **Gate rules:** no Go under `testdata/`; shell scripts only hand over to `devtool`; exact, expiring release-age exceptions.
+- **Checks:**
+  - RED → GREEN for each stage and each review fix (report).
+  - Every own Go file is at 100% (unit + `.app`).
+  - The swarm package passed 18+ runs under `-race`, about 12 s each.
+  - `/branch-review` ran three agents, and every finding was fixed or answered.
+  - The full `go tool devtool check` result is in the report.
+- **Engine findings** (pinned v1.61.0), tracked by tests or handled in the harness:
+  1. v2-only torrents panic on add.
+  2. The default mmap IO fails a chunk that spans a zero-length file.
+  3. A BEP 52 single file is stored in a folder of its name.
+  4. A hybrid mismatch and `..` paths are accepted.
+  5. `Close` closes listeners asynchronously.
+  6. `VerifyDataContext` returns before completion is stored.
+  7. Payload files stay mapped after `Close`.
+  8. **Adding a torrent truncates existing files at its zero-length paths.**
+
+  The notes are in 007, 009, 010, 011, 018, 019, 020, 023 and 028.
+- **Limitations:**
+  - Transfers are proven for v1 and hybrid; v2-only is parse-only.
+  - `v1-tree` (with an empty file inside a chunk) does not transfer on the pinned engine's default IO.
+  - The residual-traffic number is measured but not interpreted (010).
+  - Observation is in-engine: callbacks, logs and tripwires, plus `lsof` for listeners and mapped files. There is no packet capture.
+  - `golang.org/x/net` v0.60.0 is younger than 14 days until 2026-10-22. On that date the gate fails until its exception entry is removed.
+- **Next task:** [007](007-engine-api-lifecycle-spike.md) (now unblocked), or independently [008](008-sqlite-driver-durability-spike.md), [017](017-local-diagnostics-privacy.md), [035](035-react-bridge-state-resync.md).

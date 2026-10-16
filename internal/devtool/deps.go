@@ -136,6 +136,14 @@ func EscapeModulePath(p string) string {
 	return b.String()
 }
 
+// releaseAgeExceptions are exact versions ("module@version" or "package@version") that the owner
+// accepted before they were minReleaseAgeDays old: only security fixes, each with its decision, also
+// recorded in the toolchain-versions ADR. An entry fails the gate once its version is old enough,
+// so it is removed as soon as the ordinary rule covers it.
+var releaseAgeExceptions = map[string]string{
+	"golang.org/x/net@v0.60.0": "owner's decision of 2026-10-16 (task 006): fixes GO-2026-6603, -6610, -6611, -6612 and -6617, reachable once the torrent engine is linked; 14 days old on 2026-10-22",
+}
+
 // ReleaseAgeProblem describes a version published less than minReleaseAgeDays before now, or "".
 func ReleaseAgeProblem(version string, published, now time.Time) string {
 	age := now.Sub(published)
@@ -229,7 +237,7 @@ func (c *checker) releaseAges() stepResult {
 		}
 	}
 	now := c.sys.Now()
-	var problems []string
+	var problems, accepted []string
 	check := func(version, published string, err error) {
 		t, perr := time.Parse(time.RFC3339, published)
 		switch {
@@ -238,8 +246,15 @@ func (c *checker) releaseAges() stepResult {
 		case published == "" || perr != nil:
 			problems = append(problems, version+": no publication time in the registry")
 		default:
-			if p := ReleaseAgeProblem(version, t, now); p != "" {
+			p := ReleaseAgeProblem(version, t, now)
+			_, excepted := c.ageExceptions[version]
+			switch {
+			case p != "" && excepted:
+				accepted = append(accepted, version)
+			case p != "":
 				problems = append(problems, p)
+			case excepted:
+				problems = append(problems, fmt.Sprintf("%s is at least %d days old: remove its release-age exception", version, minReleaseAgeDays))
 			}
 		}
 	}
@@ -270,7 +285,11 @@ func (c *checker) releaseAges() stepResult {
 	if len(problems) > 0 {
 		return fail(fmt.Sprintf("%d versions are younger than %d days or have no publication time", len(problems), minReleaseAgeDays), strings.Join(problems, "\n"))
 	}
-	return pass(fmt.Sprintf("%d npm package versions and %d Go modules are at least %d days old", len(npm), len(mods), minReleaseAgeDays))
+	summary := fmt.Sprintf("%d npm package versions and %d Go modules are at least %d days old", len(npm), len(mods), minReleaseAgeDays)
+	if len(accepted) > 0 {
+		summary += "; accepted younger: " + strings.Join(accepted, ", ")
+	}
+	return pass(summary)
 }
 
 // npmDocument is what the gate reads from an npm registry document: the publication time of every

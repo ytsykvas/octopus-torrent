@@ -2,7 +2,7 @@
 
 **Task:** [006](../../product/tasks/006-controlled-torrent-fixtures.md)  
 **Date:** 16 October 2026  
-**Change version:** in progress
+**Change version:** commits `d803ce3` (A), `650b157` (B), `0070799` and `b3ce3ba` (C), `23e0e9d`, `aa19254` and the final commit (D)
 
 ## Session architecture plan
 
@@ -36,7 +36,7 @@ Approved by the owner on 16 October 2026 after one self-review pass (7.5 → 9 o
 | A — gate inventory rules | done |
 | B — module and fixture generator | done |
 | C — swarm and scenarios | done |
-| D — documents, review, acceptance | in progress |
+| D — documents, review, acceptance | done |
 
 ## Stage A — gate inventory rules
 
@@ -266,16 +266,29 @@ Not changed, with reasons:
 - **`Connect` stays trusted, with no option.** No test needs untrusted peers yet; 010/018 have the
   note.
 
-### Blocker: `golang.org/x/net` (owner decision)
+### `golang.org/x/net`: the owner's exception
 
 - Linking the engine brings `golang.org/x/net/http2` into the program. Five HTTP/2 vulnerabilities
-  in `golang.org/x/net` v0.59.0 therefore become reachable through the `net/http` client of
+  in `golang.org/x/net` v0.59.0 therefore became reachable through the `net/http` client of
   `internal/devtool` (`OSSystem.Get`): GO-2026-6603, -6610, -6611, -6612, -6617.
 - At 5bf2d40, before this task, `go tool govulncheck ./...` reports "No vulnerabilities found"
   (checked in a separate worktree).
-- The fix is v0.60.0, published 2026-10-08. It leaves the 14-day cooldown on **2026-10-22**, and
-  v0.61.0 (2026-10-09) on 2026-10-23.
-- Until then the `govulncheck` step fails, and the full gate cannot pass.
+- The fix is v0.60.0, published 2026-10-08, which is 8 days old. I asked the owner. On 2026-10-16
+  they chose a one-time exception: take v0.60.0 now.
+- The gate had no way to let it through, so the release-age step gained `releaseAgeExceptions`:
+  - exact versions, each with the decision;
+  - the step names them ("accepted younger");
+  - the step fails once a version is old enough, so the entry is removed on 2026-10-22.
+- **RED:** `TestReleaseAgeExceptionsAreExactAndExpire` failed to build (`c.ageExceptions
+  undefined`, `undefined: releaseAgeExceptions`).
+- **GREEN:** `internal/devtool` at 100.0%.
+- After `go get golang.org/x/net@v0.60.0`:
+  - `go tool govulncheck ./...` reports no symbol-level finding; the module-level finding
+    GO-2026-5932 remains;
+  - `go tool devtool check deps` → `DEPENDENCIES PASSED` ("358 Go modules are at least 14 days old;
+    accepted younger: golang.org/x/net@v0.60.0").
+- Recorded in the toolchain-versions ADR (policy row and version row), the quality-gate ADR,
+  `.claude/docs/dependencies.md` and the controlled-swarm ADR.
 
 ### Full gate on 23e0e9d
 
@@ -292,3 +305,26 @@ Not changed, with reasons:
   - single code version.
 - **FAIL:** `govulncheck`, only the five `golang.org/x/net` v0.59.0 findings above.
 - **not_run (not implemented yet):** engine integration (007, 018), test-bridge UI tests (035).
+
+### Final gate (task closed)
+
+`go tool devtool check` on the final tree → **GATE PASSED**.
+
+- **pass:**
+  - every step, including the `.app` coverage run and the merged Go coverage (every block of
+    every own file);
+  - frontend tests (19 files at 100%);
+  - `scripts`;
+  - release age: 186 npm, 358 Go; accepted younger: `golang.org/x/net@v0.60.0`;
+  - `govulncheck`, `npm audit`, docs, plan, single code version.
+- **not_run (not implemented yet, non-blocking):** engine integration (007, 018), test-bridge UI
+  tests (035).
+
+### Debt check
+
+- No test is skipped, no ignore directive or lint disable was added, and no threshold changed.
+- Engine defects are named tests or harness waits with a reason, and every one is noted in the task
+  that owns its product decision.
+- One planned expiry: the `golang.org/x/net@v0.60.0` exception fails the gate from 2026-10-22 until
+  its entry is removed. That is intended.
+- No other open item.

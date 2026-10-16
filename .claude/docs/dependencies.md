@@ -36,6 +36,14 @@ to the latest release, so do not use them. Changing an `.npmrc` always goes to t
 needs an install script is added to `allowScripts` in `frontend/package.json` only with a stated
 reason. Transitive Go modules stay where Go's MVS puts them unless one has a known vulnerability.
 
+**A security fix younger than 14 days** is taken only on the owner's explicit decision for that
+exact version — never on your own. Then:
+- record it in `releaseAgeExceptions` (`internal/devtool/deps.go`) with the decision and the date;
+- add it to the "Current set" table of the toolchain ADR.
+
+The gate names it as "accepted younger", and fails as soon as the version is 14 days old, so the
+entry is removed then.
+
 ## 4. Verify
 ```bash
 go tool devtool check deps        # release age of every locked version, npm audit, govulncheck

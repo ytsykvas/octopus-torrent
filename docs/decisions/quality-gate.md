@@ -62,7 +62,10 @@ silently bypasses), there was no linter, and dependency age was checked by a one
   pinned as a `go.mod` tool; a report of updates of direct dependencies and tools that have been out
   of quarantine for 14 days; a query the report could not make is `not_run`, never an empty report.
   Each locked npm package must be resolved from `https://registry.npmjs.org/` with the registry's
-  `integrity` for that version, so `npm ci` installs exactly what was dated; a Go module replaced by a
+  `integrity` for that version, so `npm ci` installs exactly what was dated. The only way past the
+  age rule is an exact version in `releaseAgeExceptions`, added on the owner's decision for a
+  security fix (task 006). The step names it ("accepted younger"), and fails once the version is
+  old enough; a Go module replaced by a
   local directory fails (no date). npm's effective cooldown (`npm config get min-release-age before
   min-release-age-exclude`) and Go's module settings (`go env -json`: default `GOPROXY` and `GOSUMDB`;
   `GOFLAGS`, `GOINSECURE`, `GONOPROXY`, `GONOSUMDB`, `GOPRIVATE` unset) are checked offline on every

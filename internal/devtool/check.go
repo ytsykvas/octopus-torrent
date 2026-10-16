@@ -69,10 +69,12 @@ type checker struct {
 	files   []string
 	appRan  bool
 	npmDocs map[string]npmDocument
+	// ageExceptions are the versions the release-age step lets through younger than the minimum.
+	ageExceptions map[string]string
 }
 
 func newChecker(sys System, mode checkMode) *checker {
-	return &checker{sys: sys, mode: mode, npmDocs: map[string]npmDocument{}}
+	return &checker{sys: sys, mode: mode, npmDocs: map[string]npmDocument{}, ageExceptions: releaseAgeExceptions}
 }
 
 // runCheck runs every step of the mode in order, never stopping early, prints one line per step and

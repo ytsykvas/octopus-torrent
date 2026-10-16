@@ -19,6 +19,7 @@
 |---|---|
 | **Third-party packages** — npm and Go modules, **including transitive ones** | The latest stable version published **at least 14 days ago**. Pre-releases (`alpha`, `beta`, `rc`) are not used. |
 | **Tools** — Go, Node.js from official channels (go.dev / Homebrew) | Patch releases of an already adopted line are installed immediately: they often fix vulnerabilities, and the channels are signed and have checksums. A new minor or major line only after 14 days. |
+| Security fix younger than 14 days | Only on the owner's explicit decision for that exact version. It is listed in `releaseAgeExceptions` (`internal/devtool/deps.go`) and in "Current set". The gate's release-age step names it as accepted, and fails once the version is 14 days old, so the entry is removed then. |
 | Transitive Go dependencies | The versions Go MVS selects from the requirements of direct dependencies (as the library author releases them). Only a transitive module with a known vulnerability is force-upgraded. |
 | npm install scripts | Forbidden by default: an explicit list in `allowScripts` (`frontend/package.json`). Currently `fsevents: false` — the package ships with a prebuilt binary, the script is not needed. |
 | Currency | During every task that changes dependencies, and by the regular check from [004](../../product/tasks/004-reproducible-check-commands.md) (`npm outdated`, `go list -m -u all`, release age, `npm audit`, `govulncheck`): a version that has left the 14-day quarantine is updated, not postponed. |
@@ -38,6 +39,7 @@
 | anacrolix/torrent (task 006) | v1.61.0 | 2025-12-17 | `go.mod` / `go.sum`; used only by `internal/torrentengine/testutil` until 018, so the `.app` does not link it; 007 re-checks the pin (O2) — [controlled-swarm](controlled-swarm.md) |
 | golang.org/x/time (task 006) | v0.16.0 | 2026-08-19 | `go.mod`: `rate.Limiter` for the swarm's rate limits (was a transitive v0.8.0) |
 | github.com/pion/dtls/v3, github.com/pion/stun/v3 (transitive, task 006) | v3.1.10 / v3.1.7 | 2026-09-26 / 2026-08-18 | `go.mod` (indirect): force-upgraded from v3.0.3 / v3.0.0 for GO-2026-6165 / GO-2026-6163, reachable through the engine; MVS raised `pion/logging` v0.2.4, `wlynxg/anet` v0.0.5 and added `pion/transport` v4.1.0 and v5.0.0 |
+| golang.org/x/net (transitive, task 006) | v0.60.0 | 2026-10-08 | `go.mod` (indirect): **owner's exception of 2026-10-16**, taken at 8 days old. It fixes GO-2026-6603, -6610, -6611, -6612 and -6617 in v0.59.0, which became reachable once the engine was linked. It is in `releaseAgeExceptions` until it turns 14 days old on 2026-10-22. |
 | go.opentelemetry.io/otel (transitive, task 006) | v1.47.0 | 2026-10-02 | `go.mod` (indirect): force-upgraded from v1.38.0 for GO-2026-5506 (imported by the engine, not called); `otel/metric`, `otel/trace`, `otel/log` follow at v1.47.0, `go-logr/logr` v1.4.4 |
 | Node.js / npm | 26.11.1 / 11.20.0 | 2026-10-07 (patch of line 26) | the version verified here; `frontend/package.json` → `engines.node >=22.12.0` (Vite 8 requirement) |
 | react, react-dom | 19.3.0 | 2026-09-09 | `frontend/package.json` + `package-lock.json` |

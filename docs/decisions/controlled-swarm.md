@@ -180,8 +180,8 @@ and real-network checks are not part of AI-08.
     reachable (GO-2026-6603, -6610, -6611, -6612, -6617). The trace goes through the standard
     `net/http` client used by `internal/devtool`, because the engine brings `golang.org/x/net/http2`
     into the program. At 5bf2d40, before 006, govulncheck finds nothing. The fix is v0.60.0
-    (2026-10-08), which leaves the 14-day cooldown on 2026-10-22. Until then govulncheck fails the
-    full gate.
+    (2026-10-08). On 2026-10-16 the owner decided to take it before the 14-day cooldown ends. It is
+    the first entry in the gate's `releaseAgeExceptions`, which expires on 2026-10-22.
   - `go.opentelemetry.io/otel` v1.38.0 → v1.47.0 (2026-10-02) for GO-2026-5506 (imported by the
     engine, not called).
   - A module-level finding in `golang.org/x/crypto/openpgp` (GO-2026-5932, no fix) is not
