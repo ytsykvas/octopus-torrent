@@ -1,11 +1,16 @@
 # <Feature name>
 
+<!-- Lives in docs/<domain>/<feature>.md (app, bridge, frontend, tooling, development); listed in docs/README.md. -->
+
 **Status:** `planned`  
 **Requirements:** <ID>  
 **Related tasks:** <links>  
-**Last verified version:** <not yet implemented / commit or source hash>
+**Last verified version:** <not yet implemented / commit or source hash>  
+**Last updated:** <YYYY-MM-DD>
 
 ## Goal and behavior
+
+Start with a short flow (call chain from the user's action to the result), like `docs/bridge/calling-go.md`.
 
 Who performs the action, preconditions, the positive outcome, boundaries and observable errors. Distinguish planned from implemented.
 

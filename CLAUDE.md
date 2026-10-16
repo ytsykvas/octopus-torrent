@@ -11,7 +11,7 @@ Everything written into the repository is English; replies to the owner are in U
 ## Layout
 
 - `product/` — everything about the product: [requirements](product/PROJECT_REQUIREMENTS.md) (source of behavior, requirement IDs), concept, [architecture](product/APPLICATION_ARCHITECTURE.md), engine research, `MOCKUP.html` (visual reference only — its demo logic is not a requirement), the plan and 68 numbered tasks in [product/tasks/](product/tasks/README.md#navigation-of-all-tasks), `archive/`.
-- `docs/` — engineering policy, ADRs (`decisions/`, open questions O1–O18 in the [register](docs/decisions/project-baseline.md#6-open-decision-register)), evidence (`verification/`), feature docs (`features/`).
+- `docs/` — engineering policy, ADRs (`decisions/`, open questions O1–O18 in the [register](docs/decisions/project-baseline.md#6-open-decision-register)), evidence (`verification/`), and how-it-works docs by domain: `app/`, `bridge/`, `frontend/`, `tooling/`, `development/` (index: [docs/README.md](docs/README.md); start with [getting started](docs/development/getting-started.md)).
 - Code: `main.go`, `internal/app` (Wails facade), `frontend/` (React), `cmd/devtool` + `internal/devtool` (agent and workspace tooling).
 - Agent tooling: [.claude/docs/README.md](.claude/docs/README.md) — agents, commands, the action instructions shared with Codex, octopus and Conductor.
 

@@ -68,13 +68,13 @@ An agreed future feature is not technical debt in itself. A test double for an e
 
 ## 6. Feature documentation in the same change
 
-The `docs/` folder is part of the project. For every feature, `docs/features/<feature>.md` is created and incrementally maintained according to the [template](../features/_TEMPLATE.md). Before the code, the behavior, boundaries and tests are described; after the code — the actual modules, contracts, handled failures, commands, results and state.
+The `docs/` folder is part of the project. For every feature, `docs/<domain>/<feature>.md` is created and incrementally maintained according to the [template](../_FEATURE_TEMPLATE.md). Before the code, the behavior, boundaries and tests are described; after the code — the actual modules, contracts, handled failures, commands, results and state.
 
 Do not mark a planned feature as implemented. A change to behavior, tests, schema, API or commands updates the corresponding documentation and the index at the same time. Architecture decisions are stored in `docs/decisions/`, evidence in `docs/verification/`; one feature may be developed across several tasks without copies of contradictory descriptions.
 
 ## 7. Blocking completion check
 
-Before integration and the `done` status, the following must pass: behavior tests and the required regression, 100% of the defined metrics, completeness of the file inventory, formatting/types/analyzers, generated contracts, documentation check, review of the architecture change and of the absence of new technical debt. `go tool devtool check` ([quality gate](../features/quality-gate.md), task 004) automates this locally; a cloud service is not required. Only its `GATE PASSED` accepts a change; `check fast` and `check offline` report an incomplete gate.
+Before integration and the `done` status, the following must pass: behavior tests and the required regression, 100% of the defined metrics, completeness of the file inventory, formatting/types/analyzers, generated contracts, documentation check, review of the architecture change and of the absence of new technical debt. `go tool devtool check` ([quality gate](../tooling/quality-gate.md), task 004) automates this locally; a cloud service is not required. Only its `GATE PASSED` accepts a change; `check fast` and `check offline` report an incomplete gate.
 
 Prototypes also work through TDD and 100% coverage and pass the same gate. A new kind of own code (another language, a new source directory) gets an inventory rule in the gate before it is accepted.
 

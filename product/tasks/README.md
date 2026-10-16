@@ -73,7 +73,7 @@ For checks, `pass`, `fail`, `not_run` are recorded separately; these are not tas
 
 - The criteria are proven through TDD, the required regression is green, and own executable code has exactly 100% of the defined metrics with a complete source inventory.
 - The session's architectural plan and the actual impact are reconciled; refactoring of the affected scenario is complete, and new or affected required debt is not deferred.
-- docs/features/<feature>.md and the index are up to date; unrun tests, documentation and temporary workarounds block completion.
+- docs/<domain>/<feature>.md and the index are up to date; unrun tests, documentation and temporary workarounds block completion.
 - The report contains the date, the change version and the checks performed. For network, file and system spikes, add versions, Mac/configuration, test data, exact commands and observations. For a document change, first check the required new state, then change it and re-check the structure/links. A network test unrelated to the change is not required; the evidence is its verifiable result.
 - Go tests prove invariants, the real engine — bytes/traffic, the repository — SQLite, the test bridge — UI, the built .app — macOS integration.
 - Resources are released, data is protected, and AppError does not hide an error as success.
@@ -364,7 +364,7 @@ Similar clients confirm the principles of separation of responsibilities: Transm
 
 ## Short prompt for the next session
 
-> Execute one task from product/tasks/ that is ready to start. At the start of the session, analyze the architecture and reuse, and write down the plan. Work through RED → GREEN → REFACTOR, maintain 100% of own executable code, update docs/features/ in the same change and leave no technical debt. Start with the README, requirements, architecture and dependencies; check the real files and changes. Update the status in the task and the README, implement only its scope, run the checks at the proper boundary and record the evidence/context handoff. Do not call an unrun or failed test successful. Do not change the synced sources/ and do not rely on chat history.
+> Execute one task from product/tasks/ that is ready to start. At the start of the session, analyze the architecture and reuse, and write down the plan. Work through RED → GREEN → REFACTOR, maintain 100% of own executable code, update docs/<domain>/ in the same change and leave no technical debt. Start with the README, requirements, architecture and dependencies; check the real files and changes. Update the status in the task and the README, implement only its scope, run the checks at the proper boundary and record the evidence/context handoff. Do not call an unrun or failed test successful. Do not change the synced sources/ and do not rely on chat history.
 
 ## Check of the plan itself
 

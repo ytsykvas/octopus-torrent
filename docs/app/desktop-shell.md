@@ -3,7 +3,8 @@
 **Status:** `implemented` (prototype from task 003; the product UI will replace it in 034/035/040)  
 **Requirements:** REL-01, REL-02, STACK-05, UI-04 (partially), AI-07, QA-01, QA-02, QA-05 (partially)  
 **Related tasks:** [003](../../product/tasks/003-wails-macos-build-spike.md); next — [004](../../product/tasks/004-reproducible-check-commands.md) (single check command), [034](../../product/tasks/034-wails-facade-real-bindings.md) (real facade), [035](../../product/tasks/035-react-bridge-state-resync.md) (bridge and state)  
-**Last verified version:** task 003 commit
+**Last verified version:** task 005 (startup and quit wiring); task 003 (window and check UI)  
+**Last updated:** 2026-10-15
 
 ## Goal and behavior
 
@@ -11,11 +12,32 @@ The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window 
 
 Only this proof of the path is implemented. The torrent list, themes, i18n and the rest are in later tasks (prototype texts are in English; localization is added by 041).
 
+## Startup and quit
+
+```
+Finder / `open` → OctopusTorrent.app/Contents/MacOS/OctopusTorrent
+  main() → run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID()))
+    wails.Run(options.App{ embedded frontend/dist, Bind: app.New(ledger),
+                           ErrorFormatter: app.ErrorFormatter(stderr), OnShutdown: stopOperations })
+      window (WKWebView) loads index.html → src/main.tsx → <App/>
+  Cmd+Q / Apple Event quit → OnShutdown → ledger.Shutdown (≤ 5 s) → process exits 0
+  wails.Run error (no WebView, …) → "OctopusTorrent: <error>" on stderr, exit 1
+```
+
+- Each start makes a new `runtimeID`; the frontend uses it to tell a restart from a continuing run
+  ([ordering](../bridge/ordering.md)).
+- Quit from a script: `osascript -e 'tell application id "dev.tsykvas.octopustorrent" to quit'`.
+  It returns -128, but the app quits. A normal quit, unlike SIGTERM, also writes coverage counters
+  of an instrumented build ([quality gate](../tooling/quality-gate.md)).
+- `build/darwin/Info.plist` sets bundle ID `dev.tsykvas.octopustorrent` and minimum macOS 27.0
+  ([macos-target](../decisions/macos-target.md)). `Info.dev.plist` adds only
+  `NSAllowsLocalNetworking` for `wails dev`.
+
 ## Architecture analysis before the change
 
 - The first code in the repository; nothing to reuse. Boundaries are taken from [architecture §2–§3](../../product/APPLICATION_ARCHITECTURE.md#2-components-and-dependency-directions): facade in `internal/app`, own bridge in `frontend/src/bridge`, UI in `frontend/src/features`.
 - There is no state or side effects in Go; `GetRuntimeInfo` is a pure function of the embedded runtime. The Wails context (`OnStartup`) is not needed, so it was not added.
-- The `main` entry point is reduced to a single line without branches; all logic is in `run(start, stderr)` with an explicit `start` dependency (`wails.Run` in the product), which makes it testable without a window. Task 005 added the operation ledger (which owns the runtime ID) as a further explicit parameter ([bridge-contract](bridge-contract.md)).
+- The `main` entry point is reduced to a single line without branches; all logic is in `run(start, stderr)` with an explicit `start` dependency (`wails.Run` in the product), which makes it testable without a window. Task 005 added the operation ledger (which owns the runtime ID) as a further explicit parameter ([bridge-contract](../bridge/contract.md)).
 - The React component receives `loadRuntimeInfo` as a prop; only `App` wires up the real bridge. Tests work with a fake function, without Wails.
 
 ## Contracts and data
@@ -33,6 +55,7 @@ The bridge returns its own plain object, not the generated `app.RuntimeInfo` cla
 |---|---|---|
 | Facade returns embedded runtime values; contract JSON keys | `internal/app/app_test.go` | `undefined: New`, `undefined: RuntimeInfo` |
 | `run` passes `wails.Run` the name, the embedded `frontend/dist/index.html`, exactly one bind `*app.App`; startup error → stderr and code 1 | `main_test.go` | `undefined: run` |
+| `OnShutdown` stops the ledger; a mutation that ignores cancellation is reported on stderr (task 005) | `main_test.go`: `TestRunStopsOperationsOnShutdown`, `TestStopOperationsReportsMutationsThatDidNotStop` | `run` signature |
 | Bridge: success → plain DTO; error → reject | `src/bridge/runtimeInfo.test.ts` | `Failed to resolve import "./runtimeInfo"` |
 | UI: initial state, "Checking…", success, `Error`/non-`Error` errors, keyboard (Tab + Enter) and focus | `src/features/runtime-check/RuntimeCheck.test.tsx` | `Failed to resolve import "./RuntimeCheck"` |
 | `App` wires up the bridge; heading | `src/App.test.tsx` | `Failed to resolve import "./App"` |
@@ -42,8 +65,8 @@ The bridge returns its own plain object, not the generated `app.RuntimeInfo` cla
 ## Implementation and reuse
 
 ```text
-main.go                         embed frontend/dist; run(start, stderr, ledger); main()
-internal/app/app.go             App facade, RuntimeInfo DTO
+main.go                         embed frontend/dist; run(start, stderr, ledger); stopOperations; main()
+internal/app/app.go             App facade (see facade.md), RuntimeInfo DTO, ErrorFormatter
 frontend/src/main.tsx           mounting into #root
 frontend/src/App.tsx            composition: RuntimeCheck + real bridge
 frontend/src/bridge/runtimeInfo.ts       the single call of the generated GetRuntimeInfo
@@ -79,4 +102,5 @@ Commands are in the [README](../../README.md#build-and-check-commands); actual r
 
 | Date | Change | Evidence |
 |---|---|---|
+| 2026-10-15 | Moved from `docs/features/desktop-shell-build.md`; startup and quit section; `run` takes the operation ledger, `OnShutdown` stops it, errors cross as AppError JSON (task 005) | [report 005](../verification/005-domain-dto-and-bridge-contract.md) |
 | 2026-10-14 | First `.app`, `GetRuntimeInfo` facade, bridge, check UI, 100% Go/TS coverage | [report 003](../verification/003-wails-macos-build-spike.md), ADR [toolchain-versions](../decisions/toolchain-versions.md), [macos-target](../decisions/macos-target.md) |

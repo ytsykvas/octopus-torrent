@@ -1,6 +1,6 @@
 Run every OctopusTorrent health check, report the results, and offer to fix what failed.
 
-The gate is one command (task 004, [quality gate](../../docs/features/quality-gate.md)). Run it from
+The gate is one command (task 004, [quality gate](../../docs/tooling/quality-gate.md)). Run it from
 the repository root:
 
 ```bash

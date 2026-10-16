@@ -172,7 +172,7 @@ Agreed ([tasks/README.md](../../product/tasks/README.md#phases-and-transition-cr
 - **Read-only:** `product/archive/` (history of the rejected stack). There are no synchronized `sources/` in the project. Specifications (requirements, concept, architecture, research) change only deliberately in the task they concern, with the reason recorded.
 - **Mockup:** `product/MOCKUP.html` — a styling reference; code from it is not considered tested, and porting to React goes through TDD.
 - **Future code:** the structure from [architecture §3](../../product/APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first) (`main.go`, `internal/…`, `frontend/…`, `scripts/`). None of these paths has been created yet; the actual paths are confirmed by 003.
-- **Documentation:** `docs/` per [docs/README.md](../README.md); decisions — `docs/decisions/`, evidence — `docs/verification/`, features — `docs/features/`.
+- **Documentation:** `docs/` per [docs/README.md](../README.md); decisions — `docs/decisions/`, evidence — `docs/verification/`, features and guides — `docs/<domain>/`.
 
 ## 9. Facts, assumptions and future checks
 

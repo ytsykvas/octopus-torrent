@@ -3,7 +3,9 @@
 **Status:** `implemented`  
 **Requirements:** AI-01, AI-06, AI-07, QA-01, QA-02, QA-05  
 **Related tasks:** none (repository tooling); [004](../../product/tasks/004-reproducible-check-commands.md) added `check-plan`, `plan-nav` and the [quality gate](quality-gate.md)  
-**Last verified version:** see `git log -1 -- internal/devtool`
+**Last verified version:** see `git log -1 -- internal/devtool`  
+**Last updated:** 2026-10-15 (moved from `docs/features/agent-tooling.md`)  
+**See also:** [devtool command reference](devtool.md), [task plan](task-plan.md), [workflow](../development/workflow.md)
 
 ## Goal and behavior
 

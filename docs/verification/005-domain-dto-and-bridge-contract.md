@@ -3,7 +3,7 @@
 **Task:** [005](../../product/tasks/005-domain-dto-and-bridge-contract.md)  
 **Date:** 15 October 2026  
 **Change version:** commits `44877f2` (A), `b11e3a2` (B), `dfbc15c` (C), `497d6d9` (D) and the stage E commit after `ae04509`  
-**Feature:** [bridge-contract](../features/bridge-contract.md); **ADR:** [api-contract](../decisions/api-contract.md)
+**Feature:** [bridge-contract](../bridge/contract.md); **ADR:** [api-contract](../decisions/api-contract.md)
 
 ## Session architecture plan
 

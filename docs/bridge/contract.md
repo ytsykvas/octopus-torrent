@@ -3,7 +3,9 @@
 **Status:** `implemented` (contract, ledger and pure rules; real services come with later tasks)  
 **Requirements:** `AI-05`, `AI-02`, `STACK-01`, `STACK-02`, `STACK-03`  
 **Related tasks:** [005](../../product/tasks/005-domain-dto-and-bridge-contract.md); users: 013, 024, 025, 027, 031, 034, 035, 050  
-**Last verified version:** task 005 commits `44877f2`…stage E commit, full gate in the [report](../verification/005-domain-dto-and-bridge-contract.md)
+**Last verified version:** task 005 commits `44877f2`…stage E commit, full gate in the [report](../verification/005-domain-dto-and-bridge-contract.md)  
+**Last updated:** 2026-10-15 (moved from `docs/features/bridge-contract.md`)  
+**Guides:** [calling Go](calling-go.md), [ordering](ordering.md), [adding a command](adding-a-command.md), [facade](../app/facade.md), [operation ledger](../app/operations.md)
 
 ## Goal and behavior
 
@@ -88,9 +90,8 @@ the two facade methods answer truthfully for the current application.
 
 ## Usage and recovery
 
-A new command: request DTO in `contracts` (+ examples + manifest), `Validate`, a facade method that
-starts it through the ledger, regenerate bindings, a wrapper on `callGo`, an encoder matching the
-example. An `operation.notFound` from another runtime: show the full state, do not resend.
+A new command: follow [adding a command](adding-a-command.md). An `operation.notFound` from another
+runtime: show the full state, do not resend ([ordering](ordering.md#operations)).
 
 ## Change history and evidence
 

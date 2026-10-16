@@ -28,7 +28,7 @@ Write clear local help and the actual upgrade and recovery procedure.
 5. Keep known limits/evidence; localize our own help.
 6. Update the README and the contracts together with the procedure.
 
-7. Reconcile the user help with the already maintained docs/features/. Do not postpone the internal feature descriptions until this late task: fix discrepancies and confirm that the current documents were created together with the corresponding changes.
+7. Reconcile the user help with the already maintained docs/<domain>/ documents. Do not postpone the internal feature descriptions until this late task: fix discrepancies and confirm that the current documents were created together with the corresponding changes.
 
 ## Artifacts and change locations
 

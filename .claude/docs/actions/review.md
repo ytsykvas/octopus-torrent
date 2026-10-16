@@ -48,7 +48,7 @@ updates this list.
 
 ### Documentation in the same change (QA-04, AI-06)
 
-- A behavior, contract, command or schema change without its `docs/features/<feature>.md`, the index
+- A behavior, contract, command or schema change without its `docs/<domain>/<feature>.md`, the index
   in `docs/README.md`, a `docs/decisions/` ADR for a significant choice, or the verification report.
 - A task status changed in its file but not in the `product/tasks/README.md` navigation, or the other way round.
 - Repository text that is not English.

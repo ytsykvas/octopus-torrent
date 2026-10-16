@@ -3,7 +3,7 @@
 **Task:** none (repository-wide tooling, owner's request of 15 October 2026)  
 **Date:** 15 October 2026  
 **Change version:** the agent-tooling commit (parent `88204db`)  
-**Feature:** [agent-tooling](../features/agent-tooling.md); **ADR:** [agent-tooling](../decisions/agent-tooling.md)
+**Feature:** [agent-tooling](../tooling/agent-tooling.md); **ADR:** [agent-tooling](../decisions/agent-tooling.md)
 
 ## Session architecture plan
 
