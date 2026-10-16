@@ -24,7 +24,8 @@ changes, and dependencies follow [dependencies.md](../docs/dependencies.md).
 Enter plan mode and write the plan per [planning.md](../docs/planning.md): boundaries and contracts
 that change, what is reused, refactoring needed, the RED tests first with their expected failure, how
 100% coverage will be proven, which documents change, and the verification commands. Ask the owner
-only what the documents cannot answer.
+only what the documents cannot answer. Before asking for approval, review the plan adversarially and
+end it with the "Self-assessment: N/10" section ([planning.md](../docs/planning.md#self-assessment-before-approval)).
 
 ## Step 4: After approval
 

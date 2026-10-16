@@ -23,6 +23,31 @@ Plans are written in English, like everything in the repository.
 | Out of scope | What is deliberately not touched. |
 | Verification | The commands that prove it (normally [`/check`](../commands/check.md) plus `.app` scenarios via `/qa`), and which checks may legitimately remain `not_run`. |
 
+## Self-assessment before approval
+
+The owner expects evidence that the plan was challenged before it is shown, not a confident summary.
+Before asking for approval:
+
+1. Re-read the plan adversarially, as a reviewer looking for what will break. Check assumptions in
+   the source of the pinned libraries, not only their documentation. Look in particular at:
+   - lifecycles and shutdown;
+   - errors crossing a boundary;
+   - validation of input;
+   - restart and recovery;
+   - timing and concurrency;
+   - staging;
+   - each acceptance criterion with no test mapped to it.
+2. Fix every gap you find in the plan itself.
+3. End the plan with a **"Self-assessment: N/10"** section:
+   - If the rating changed during the review, give both numbers.
+   - List what the review fixed.
+   - Name what remains weak and why it is acceptable.
+
+Rate honestly: a first rating of 9 that a stricter re-read lowers is worse than an honest 7. If the
+owner answers the approval request with "Оціни план від 1 до 10" ("rate the plan from 1 to 10"), the
+self-assessment was missing or not convincing. Review the plan again, raise the rating only for gaps
+that were actually fixed, and ask for approval again.
+
 ## What does not belong
 
 Research narrative, alternatives already rejected (state the decision; the ADR keeps the reasoning),
