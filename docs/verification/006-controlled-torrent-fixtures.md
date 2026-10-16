@@ -276,3 +276,19 @@ Not changed, with reasons:
 - The fix is v0.60.0, published 2026-10-08. It leaves the 14-day cooldown on **2026-10-22**, and
   v0.61.0 (2026-10-09) on 2026-10-23.
 - Until then the `govulncheck` step fails, and the full gate cannot pass.
+
+### Full gate on 23e0e9d
+
+`go tool devtool check` → **GATE FAILED**.
+
+- **pass:** every step except one, including:
+  - `go tests` (`-race`, raw counters);
+  - `.app coverage run`;
+  - `go coverage`: every block of every own Go file is covered (unit + `.app`);
+  - frontend tests (19 files at 100%);
+  - `scripts`, docs, plan;
+  - release age (186 npm versions, 358 Go modules ≥ 14 days);
+  - `npm audit`, updates;
+  - single code version.
+- **FAIL:** `govulncheck`, only the five `golang.org/x/net` v0.59.0 findings above.
+- **not_run (not implemented yet):** engine integration (007, 018), test-bridge UI tests (035).
