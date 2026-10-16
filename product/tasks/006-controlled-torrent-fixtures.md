@@ -1,6 +1,6 @@
 # 006 — Create controlled torrents and a local swarm
 
-**Status:** `planned`  
+**Status:** `in_progress`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  

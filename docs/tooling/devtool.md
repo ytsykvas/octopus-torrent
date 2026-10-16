@@ -51,6 +51,7 @@ Everything except `frontend/wailsjs/` is gitignored.
 | `devtool.go` | `Main` dispatch, workspace, docs and plan commands |
 | `check.go` | gate modes, the step runner, the report, npm cooldown, go env, tool steps |
 | `frontendcov.go`, `gocov.go`, `appcov.go` | coverage inventories, profiles, the escape-hatch scan, the instrumented `.app` run |
+| `scripts.go` | the `scripts` step: shell scripts only hand over to `devtool` |
 | `deps.go` | lockfile and build list, registry dates and integrity, audits, updates |
 | `docs.go`, `plan.go`, `codexagents.go` | link and pointer checks, the plan check and navigation, Codex mirrors |
 | `system.go` | `OSSystem`: the real file, process and HTTP calls |

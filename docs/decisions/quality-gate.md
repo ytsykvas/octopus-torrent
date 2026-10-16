@@ -120,7 +120,10 @@ absolute path passes the gate.
 - **No step time limit yet.** A tool that hangs (a stalled `npm ci`, the first-time Automation prompt)
   hangs the gate visibly; the owner interrupts it. Per-step limits through a context arrive with the
   first step that can hang unattended (engine integration, 007/018).
-- **Inventory rules still to decide:** `goInventory` counts every non-test `.go` file, including under
-  `testdata/`, which `./...` does not build, so such a file fails as "not in the coverage profile";
-  shell scripts have no inventory rule. Task 006 (synthetic torrents, possibly `scripts/`) decides
-  both under the rule above.
+- **Inventory rules for generators and scripts** (decided in
+  [006](../../product/tasks/006-controlled-torrent-fixtures.md)): a `.go` file under any `testdata/`
+  directory fails the `go coverage` step with its own message, because `go test ./...` never builds or
+  measures it; generators live in packages and `testdata/` holds only data. Shell has no coverage
+  inventory, so the `scripts` step accepts a `*.sh` file only as a hand-over: `#!/bin/sh`, comments,
+  `set -eu`, `go build -o build/bin/devtool ./cmd/devtool` and `exec build/bin/devtool …`; any other
+  line fails. Logic goes into `cmd/devtool` and `internal/devtool`.

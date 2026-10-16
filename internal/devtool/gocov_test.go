@@ -70,6 +70,10 @@ func TestCheckGoCoverageRejectsEveryWayAroundFullCoverage(t *testing.T) {
 			"internal/app/extra.go has functions but is not in the coverage profile"},
 		"unparsable source": {sources("internal/app/broken.go", "package app\nfunc {"), unitProfile, appProfile, true, "internal/app/broken.go: cannot parse"},
 		"malformed line":    {goSources, unitProfile + "garbage\n", appProfile, true, "malformed coverage line \"garbage\""},
+		"Go under testdata": {sources("internal/x/testdata/gen.go", "package main\n\nfunc main() {}\n"), unitProfile, appProfile, true,
+			"internal/x/testdata/gen.go: Go source under testdata/ is never built or measured; put it in a package"},
+		"Go test under testdata": {sources("internal/x/testdata/gen_test.go", "package x\n"), unitProfile, appProfile, true,
+			"internal/x/testdata/gen_test.go: Go source under testdata/ is never built or measured; put it in a package"},
 	}
 	for name, c := range cases {
 		problems, _ := CheckGoCoverage("octopustorrent", c.sources, c.unit, c.app, c.withApp)

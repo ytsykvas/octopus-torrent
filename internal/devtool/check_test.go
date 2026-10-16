@@ -76,7 +76,7 @@ func TestCheckPassesTheGateWhenEveryStepPasses(t *testing.T) {
 		t.Fatalf("check exit %d, report:\n%s", code, report)
 	}
 	for _, step := range []string{"npm ci", "npm cooldown", "go env", "typecheck", "lint", "frontend tests", "frontend build", "gofmt",
-		"go vet", "bindings", "go tests", ".app coverage run", "go coverage", "escape hatches", "release build", "docs", "plan",
+		"go vet", "bindings", "go tests", ".app coverage run", "go coverage", "escape hatches", "scripts", "release build", "docs", "plan",
 		"release age", "npm audit", "govulncheck", "updates", "single code version"} {
 		if l := line(report, step); !strings.HasPrefix(l, statusPass) {
 			t.Errorf("step %q: %q, want pass", step, l)
@@ -190,6 +190,11 @@ func TestCheckStepsReportTheirOwnFailures(t *testing.T) {
 			"go coverage", "unit coverage profile is missing"},
 		"escape hatch": {func(s *fakeSystem) { s.files["frontend/src/App.tsx"] = "/* v8 ignore next */\n" }, "escape hatches",
 			"frontend/src/App.tsx:1: v8 ignore"},
+		"script with logic": {func(s *fakeSystem) {
+			s.output += "tools/x.sh\x00"
+			s.results[listFiles] = []fakeResult{{out: s.output}, {out: s.output}}
+			s.files["tools/x.sh"] = "#!/bin/sh\ncurl https://example.com\n"
+		}, "scripts", "tools/x.sh:2: curl https://example.com"},
 		"dead link": {func(s *fakeSystem) { s.files["README.md"] = "[x](gone.md)\n" }, "docs", "DEAD README.md: gone.md"},
 		"stale plan": {func(s *fakeSystem) {
 			s.files["product/tasks/003-check.md"] = strings.Replace(s.files["product/tasks/003-check.md"], "`planned`", "`blocked`", 1)

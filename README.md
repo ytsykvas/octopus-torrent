@@ -97,7 +97,8 @@ every own file by raw counts), frontend build, `gofmt`, `go vet`, regenerated Wa
 compared by content, `go test -race` with raw counters, an **instrumented `.app` run** (it opens an
 OctopusTorrent window for a few seconds and quits it through an Apple Event, so `main()` is covered),
 the merged Go profile with no zero block and a complete inventory, escape hatches (ignore directives,
-lint disables, `@ts-` comments, `//nolint`, skipped or conditional tests), the release build,
+lint disables, `@ts-` comments, `//nolint`, skipped or conditional tests), shell scripts that only
+hand over to `devtool`, the release build,
 documentation links, the task plan, the release age of every locked npm version and Go module (and
 that each locked npm artifact is the registry's: `resolved` and `integrity`), `npm audit`, `govulncheck`, a report of updates out of
 quarantine, and a check that no file changed during the run. Exit 0 only on `GATE PASSED` (or

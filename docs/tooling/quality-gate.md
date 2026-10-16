@@ -45,7 +45,7 @@ it, so the whole gate is unit-tested with `fakeSystem`), the repository listing 
 
 The steps, in order: `npm ci` (`--offline` in the partial modes), npm cooldown, go env, typecheck, lint,
 frontend tests + independent TS inventory, frontend build, gofmt, go vet, bindings, go tests with
-raw counters, `.app` coverage run, Go coverage, escape hatches, release build, docs, plan, release
+raw counters, `.app` coverage run, Go coverage, escape hatches, scripts, release build, docs, plan, release
 age, npm audit, govulncheck, updates, the not-yet-built tiers, single code version. The RED cases
 for each are listed in [report 004](../verification/004-reproducible-check-commands.md).
 
@@ -55,7 +55,8 @@ for each are listed in [report 004](../verification/004-reproducible-check-comma
 |---|---|
 | `internal/devtool/check.go` | modes, the step runner, the report, npm cooldown, go env, the steps that wrap tools |
 | `internal/devtool/frontendcov.go` | TS inventory, raw-count check of the Vitest summary, escape hatches |
-| `internal/devtool/gocov.go` | Go inventory (`go/parser`), profile parsing, compatibility, merge, `go.mod` module and tools |
+| `internal/devtool/gocov.go` | Go inventory (`go/parser`; Go under `testdata/` is a problem), profile parsing, compatibility, merge, `go.mod` module and tools |
+| `internal/devtool/scripts.go` | the `scripts` step: a `*.sh` file may only build `devtool` and `exec` it |
 | `internal/devtool/appcov.go` | instrumented `.app` build, launch, Apple Event quit, counters |
 | `internal/devtool/deps.go` | lockfile and build-list parsing, registry dates and integrity, audits, the updates report |
 | `internal/devtool/plan.go` | the task plan check used by the `plan` step |

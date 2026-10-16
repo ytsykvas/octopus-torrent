@@ -9,8 +9,8 @@ go tool devtool check
 
 It runs every step in order and **never stops early**: npm ci, npm cooldown, go env, typecheck, lint,
 frontend tests with the independent 100% inventory, frontend build, gofmt, go vet, bindings, go
-tests with raw counters, the instrumented `.app` run, Go coverage, escape hatches, release build,
-docs, plan, release age, npm audit, govulncheck, updates, and a check that no file changed during
+tests with raw counters, the instrumented `.app` run, Go coverage, escape hatches, scripts, release
+build, docs, plan, release age, npm audit, govulncheck, updates, and a check that no file changed during
 the run. Each step prints `pass`, `FAIL` (with the tail of the tool's output) or `not_run`; the last
 line is `GATE PASSED`, `GATE FAILED` or `GATE INCOMPLETE`. Only `GATE PASSED` from the full `check`
 allows a commit.

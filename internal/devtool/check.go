@@ -175,6 +175,7 @@ func (c *checker) steps() []checkStep {
 		{".app coverage run", c.appRun},
 		{"go coverage", c.goCoverage},
 		{"escape hatches", c.escapeHatches},
+		{"scripts", c.scripts},
 		{"release build", c.tool("go", "tool", "wails", "build", "-clean", "-trimpath")},
 		{"docs", c.own(docsCheck)},
 		{"plan", c.own(planCheck)},
@@ -377,6 +378,13 @@ func (c *checker) escapeHatches() stepResult {
 		return fail("ignore directives, lint disables or switched-off tests", strings.Join(found, "\n"))
 	}
 	return pass("no ignore directives, lint disables or switched-off tests")
+}
+
+func (c *checker) scripts() stepResult {
+	if found := CheckScripts(c.contents(c.files, "")); len(found) > 0 {
+		return fail("shell scripts may only hand over to devtool; write the logic in Go", strings.Join(found, "\n"))
+	}
+	return pass("every shell script only hands over to devtool")
 }
 
 func (c *checker) sameSources(before map[string]string) stepResult {
