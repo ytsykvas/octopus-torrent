@@ -95,6 +95,12 @@ func NewPeer(dir string, opts Options) (*Peer, error) {
 	return p, nil
 }
 
+// Client is the peer's engine client, for tests of the engine's own API. The peer still owns it:
+// close it only through Close.
+func (p *Peer) Client() *torrent.Client {
+	return p.client
+}
+
 // Settings reports what the peer's configuration allows.
 func (p *Peer) Settings() Settings {
 	c := p.config

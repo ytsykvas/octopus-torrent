@@ -1,6 +1,6 @@
 # 007 — Check the anacrolix API and lifecycle on a single version
 
-**Status:** `planned`  
+**Status:** `in_progress`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** Gate/spike with a recorded result  
