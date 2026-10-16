@@ -27,7 +27,7 @@ Confirm single and bulk deletion with the real file list and partial results.
 4. Show partial record/file errors and the exact paths of leftovers.
 5. After a restart, show the restored unfinished operation without a false success.
 
-6. Connect both deletion modes to the facade: record only, and record with files. Confirmation passes the list version and a single `operationID`; a partial result from 032 is shown without losing the stopped record.
+6. Connect both deletion modes to the facade: record only, and record with files. Confirmation passes the `deletionPlanID` Go issued with the list and a single `operationID`; a partial result from 032 is shown without losing the stopped record.
 
 ## Artifacts and change locations
 
@@ -55,6 +55,8 @@ Confirm single and bulk deletion with the real file list and partial results.
 Respect the boundaries of our own DTOs, the repository and the engine adapter. An error has an explicit result; accepting a command does not mean the operation is complete. Do not add new product capabilities covertly. Record contract changes and undefined parameters in an ADR together with the implementation.
 
 **Basis for technical decisions:** [W3C modal pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/). Reconcile signatures and constraints with the pinned version; reading the API is not a passed integration check.
+
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): confirmation sends the `deletionPlanID` Go issued with the list, not a version number.
 
 ## Mandatory TDD cycle and architecture review
 

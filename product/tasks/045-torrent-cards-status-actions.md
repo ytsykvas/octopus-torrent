@@ -52,6 +52,8 @@ Respect the boundaries of our own DTOs, the repository and the engine adapter. A
 
 **Basis for technical decisions:** [Wails events](https://wails.io/docs/reference/runtime/events/). Check signatures and constraints against the pinned version; reading the API is not a passed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): render torrent names isolated from bidi and control characters (`<bdi>`, controls stripped).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

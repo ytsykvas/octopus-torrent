@@ -1,0 +1,42 @@
+{
+  "runtimeID": "8b1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
+  "baseRevision": "41",
+  "revision": "42",
+  "upserted": [
+    {
+      "id": "7d4e5f6a-1b2c-4d3e-8f4a-5b6c7d8e9f0a",
+      "infohashV1": null,
+      "infohashV2": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+      "name": "Debian netinst",
+      "status": "waitingForMetadata",
+      "manualPaused": true,
+      "uploadAllowed": false,
+      "totalBytes": null,
+      "wantedBytes": null,
+      "completedBytes": "0",
+      "downloadBytesPerSecond": "0",
+      "uploadBytesPerSecond": "0",
+      "peerCount": 0,
+      "etaSeconds": null,
+      "savePath": "/Users/owner/Downloads",
+      "source": "magnet",
+      "addedAt": "2026-10-14T08:30:00Z",
+      "fileCount": null,
+      "selectedFileCount": null,
+      "files": [],
+      "errors": [
+        {
+          "code": "torrent.metadataTimeout",
+          "operationID": null,
+          "torrentID": "7d4e5f6a-1b2c-4d3e-8f4a-5b6c7d8e9f0a",
+          "params": {
+            "seconds": "120"
+          }
+        }
+      ]
+    }
+  ],
+  "removed": [
+    "3f2a7c1e-5b4d-4e8f-9a6b-1c2d3e4f5a6b"
+  ]
+}

@@ -53,6 +53,8 @@ The file pause button means stopping its further targeted download. A shared tor
 
 **Basis for technical decisions:** [File source](https://raw.githubusercontent.com/anacrolix/torrent/master/file.go). During implementation, check the signatures and constraints against the pinned version. Reading the API documentation does not replace a performed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): the first command adds the single acceptance path `accept(kind, request, mutation)` (validate, operation ID from the request, fingerprint, start); facade methods never repeat those steps.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

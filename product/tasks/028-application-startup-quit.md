@@ -58,6 +58,8 @@ Respect the boundaries of our own DTOs, the repository and the engine adapter. A
 
 **Basis for technical decisions:** [Wails: how the application is structured](https://wails.io/docs/howdoesitwork/). Reconcile signatures and constraints with the pinned version; reading the API is not a passed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): recover a panicking operation mutation as `failed`/`internal.unexpected`, and make the ledger stop step 1 of the ordered quit (operations, publisher, engine, database); today `OnShutdown` only stops the ledger, bounded by 5 s.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

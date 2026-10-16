@@ -61,6 +61,8 @@ The test bridge and browser checks speed up the UI, but do not prove system call
 
 **Basis for technical decisions:** [React effects](https://react.dev/reference/react/useEffect), [External store](https://react.dev/reference/react/useSyncExternalStore). Reconcile signatures and constraints with the pinned version; reading the API is not a passed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): the ordering rules are `frontend/src/bridge/contract/ordering.ts`; while `needsFetch(state)` is true (no state, nothing fetched — e.g. after a failed first fetch) the store fetches with its own back-off; restoring operations after a reload needs the addition named in 027.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

@@ -1,6 +1,6 @@
 # 005 — Describe our own Go–TS contracts and errors
 
-**Status:** `planned`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
@@ -38,14 +38,14 @@ Describe and verify our own contract between Go and TypeScript: data structures,
 
 ## Acceptance criteria
 
-- [ ] Go and TypeScript in strict mode read shared DTO examples with the same field meaning and units of measurement.
-- [ ] Values beyond `Number.MAX_SAFE_INTEGER` pass through the chosen contract without loss of precision; a `null` ETA and a zero size have an unambiguous meaning.
-- [ ] The contract distinguishes an accepted command from a completed operation and defines the response to a repeated `operationID` and to cancellation.
-- [ ] An understandable fallback message is provided for an unknown error code, and an invalid DTO is rejected with a defined result.
-- [ ] Generated bindings are separated from our own bridge; the contract contains no channels, pointers or mutable anacrolix/torrent objects.
+- [x] Go and TypeScript in strict mode read shared DTO examples with the same field meaning and units of measurement.
+- [x] Values beyond `Number.MAX_SAFE_INTEGER` pass through the chosen contract without loss of precision; a `null` ETA and a zero size have an unambiguous meaning.
+- [x] The contract distinguishes an accepted command from a completed operation and defines the response to a repeated `operationID` and to cancellation.
+- [x] An understandable fallback message is provided for an unknown error code, and an invalid DTO is rejected with a defined result.
+- [x] Generated bindings are separated from our own bridge; the contract contains no channels, pointers or mutable anacrolix/torrent objects.
 
-- [ ] A new run with revision 0 is accepted as a new state; a late event of the old run does not replace it. A revision jump in a full snapshot does not cause endless repeated requests.
-- [ ] Repeating the same `operationID` with the same request does not perform the mutation a second time; a different request with this ID is rejected.
+- [x] A new run with revision 0 is accepted as a new state; a late event of the old run does not replace it. A revision jump in a full snapshot does not cause endless repeated requests.
+- [x] Repeating the same `operationID` with the same request does not perform the mutation a second time; a different request with this ID is rejected.
 
 ## Checks
 
@@ -82,3 +82,11 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Record a short outcome: what changed, exact checks with pass/fail/not_run, ADR, actual code paths and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+### Execution result (15 October 2026)
+
+- **Status:** `done`. Evidence: [report 005](../../docs/verification/005-domain-dto-and-bridge-contract.md); ADR: [api-contract](../../docs/decisions/api-contract.md); feature: [bridge-contract](../../docs/features/bridge-contract.md).
+- **Created:** `internal/app/contracts` (DTOs, closed enumerations, UUID/infohash formats, 64-bit decimal strings with `ts_type:"string"`, `AppError`, strict field-by-field request decoding, `Fingerprint`, normalizing encoders, 57 shared examples + `vocabulary.json`); `internal/app/operations` (idempotent in-memory ledger, sole owner of operation goroutines, cancel, bounded shutdown); facade `GetLibrarySnapshot`, `GetOperation`, `ErrorFormatter` (AppError as JSON text through the Wails rejection); `main.go` wires the formatter and `OnShutdown`; regenerated bindings; `frontend/src/bridge/contract` (strict decoders, bigint numbers, enums, errors and messages, command encoders, ordering rules) and wrappers `bridge/library.ts`, `bridge/operations.ts` over `callGo`.
+- **Checks:** RED → GREEN per stage and per review fix (report); Go packages and every own TS file at 100%; real round-trips through `go tool wails dev` returned the snapshot with a `bigint` revision and the `operation.notFound` / `request.invalid` AppErrors through the own bridge; full gate result in the report. Cancellation and repeated `operationID` are proven at the ledger level — no facade command method exists yet (024/025).
+- **Limitations:** the packaged `.app` does not call the new methods from a UI yet (034/035), the test bridge is 035, real services are 027/034/035 (`not_run`); in `wails dev` a call whose arguments Wails cannot parse never settles (Wails v2.16.0 dev server, ADR); planned contract additions are recorded with their tasks: ordering keys (013), one acceptance path (024/025), pending operations after reload (027/035), panic recovery and ordered quit (028), deletion plan and partial results (023/031/032/049), destination provenance (034), path hygiene (019/020), log redaction (017), ledger cap (064).
+- **Next task:** see the [navigation](README.md#navigation-of-all-tasks); unblocked by 005 among others: [006](006-controlled-torrent-fixtures.md), [008](008-sqlite-driver-durability-spike.md), [017](017-local-diagnostics-privacy.md), [035](035-react-bridge-state-resync.md).

@@ -1,0 +1,409 @@
+[
+  {
+    "file": "library-snapshot.json",
+    "type": "LibrarySnapshot",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "library-snapshot-empty.json",
+    "type": "LibrarySnapshot",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "library-delta.json",
+    "type": "LibraryDelta",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "import-preview-ready.json",
+    "type": "ImportPreview",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "import-preview-waiting.json",
+    "type": "ImportPreview",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "import-preview-duplicate.json",
+    "type": "ImportPreview",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "settings.json",
+    "type": "Settings",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "settings-unset.json",
+    "type": "Settings",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "operation-succeeded.json",
+    "type": "OperationStatus",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "operation-failed.json",
+    "type": "OperationStatus",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "app-error.json",
+    "type": "AppError",
+    "direction": "toFrontend",
+    "valid": true
+  },
+  {
+    "file": "torrent-missing-field.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "etaSeconds"
+  },
+  {
+    "file": "torrent-unknown-key.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "ratio"
+  },
+  {
+    "file": "torrent-unknown-status.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "status"
+  },
+  {
+    "file": "torrent-bytes-as-number.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "totalBytes"
+  },
+  {
+    "file": "torrent-bytes-leading-zero.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "completedBytes"
+  },
+  {
+    "file": "torrent-bytes-overflow.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "totalBytes"
+  },
+  {
+    "file": "torrent-no-infohash.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "infohashV2"
+  },
+  {
+    "file": "torrent-file-index-out-of-range.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "files[1].index"
+  },
+  {
+    "file": "torrent-file-index-negative.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "files[0].index"
+  },
+  {
+    "file": "torrent-bad-id.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "id"
+  },
+  {
+    "file": "torrent-unsafe-peer-count.json",
+    "type": "TorrentSnapshot",
+    "direction": "toFrontend",
+    "valid": false,
+    "path": "peerCount"
+  },
+  {
+    "file": "set-files-wanted.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": true
+  },
+  {
+    "file": "set-files-wanted-false.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": true
+  },
+  {
+    "file": "pause-torrents.json",
+    "type": "TorrentSelectionRequest",
+    "direction": "toGo",
+    "valid": true
+  },
+  {
+    "file": "confirm-import.json",
+    "type": "ConfirmImportRequest",
+    "direction": "toGo",
+    "valid": true
+  },
+  {
+    "file": "cancel-import.json",
+    "type": "CancelImportRequest",
+    "direction": "toGo",
+    "valid": true
+  },
+  {
+    "file": "remove-torrents-record-only.json",
+    "type": "RemoveTorrentsRequest",
+    "direction": "toGo",
+    "valid": true
+  },
+  {
+    "file": "remove-torrents-with-files.json",
+    "type": "RemoveTorrentsRequest",
+    "direction": "toGo",
+    "valid": true
+  },
+  {
+    "file": "update-settings.json",
+    "type": "UpdateSettingsRequest",
+    "direction": "toGo",
+    "valid": true
+  },
+  {
+    "file": "set-files-wanted-missing.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "wanted",
+    "reason": "missing"
+  },
+  {
+    "file": "set-files-wanted-null.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "wanted",
+    "reason": "null"
+  },
+  {
+    "file": "set-files-wanted-unknown-key.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "priority",
+    "reason": "unknown"
+  },
+  {
+    "file": "set-files-wanted-negative-index.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "fileIndexes[1]",
+    "reason": "range"
+  },
+  {
+    "file": "set-files-wanted-empty.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "fileIndexes",
+    "reason": "empty"
+  },
+  {
+    "file": "set-files-wanted-bad-operation-id.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "operationID",
+    "reason": "format"
+  },
+  {
+    "file": "set-files-wanted-wrong-type.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "wanted",
+    "reason": "type"
+  },
+  {
+    "file": "remove-torrents-bad-mode.json",
+    "type": "RemoveTorrentsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "mode",
+    "reason": "value"
+  },
+  {
+    "file": "remove-torrents-with-files-no-plan.json",
+    "type": "RemoveTorrentsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "deletionPlanID",
+    "reason": "null"
+  },
+  {
+    "file": "update-settings-zero-limit.json",
+    "type": "UpdateSettingsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "settings.uploadLimit",
+    "reason": "range"
+  },
+  {
+    "file": "update-settings-limit-overflow.json",
+    "type": "UpdateSettingsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "settings.downloadLimit",
+    "reason": "type"
+  },
+  {
+    "file": "update-settings-unknown-language.json",
+    "type": "UpdateSettingsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "settings.language",
+    "reason": "value"
+  },
+  {
+    "file": "update-settings-relative-path.json",
+    "type": "UpdateSettingsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "settings.defaultSavePath",
+    "reason": "format"
+  },
+  {
+    "file": "update-settings-missing-theme.json",
+    "type": "UpdateSettingsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "settings.theme",
+    "reason": "missing"
+  },
+  {
+    "file": "pause-torrents-empty.json",
+    "type": "TorrentSelectionRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "torrentIDs",
+    "reason": "empty"
+  },
+  {
+    "file": "pause-torrents-bad-id.json",
+    "type": "TorrentSelectionRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "torrentIDs[1]",
+    "reason": "format"
+  },
+  {
+    "file": "confirm-import-zero-version.json",
+    "type": "ConfirmImportRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "previewVersion",
+    "reason": "range"
+  },
+  {
+    "file": "confirm-import-relative-destination.json",
+    "type": "ConfirmImportRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "destination",
+    "reason": "format"
+  },
+  {
+    "file": "remove-torrents-record-only-with-plan.json",
+    "type": "RemoveTorrentsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "deletionPlanID",
+    "reason": "value"
+  },
+  {
+    "file": "update-settings-unknown-theme.json",
+    "type": "UpdateSettingsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "settings.theme",
+    "reason": "value"
+  },
+  {
+    "file": "update-settings-zero-download-limit.json",
+    "type": "UpdateSettingsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "settings.downloadLimit",
+    "reason": "range"
+  },
+  {
+    "file": "remove-torrents-with-files-bad-plan.json",
+    "type": "RemoveTorrentsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "deletionPlanID",
+    "reason": "format"
+  },
+  {
+    "file": "confirm-import-destination-not-clean.json",
+    "type": "ConfirmImportRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "destination",
+    "reason": "format"
+  },
+  {
+    "file": "confirm-import-destination-root.json",
+    "type": "ConfirmImportRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "destination",
+    "reason": "format"
+  },
+  {
+    "file": "confirm-import-destination-control.json",
+    "type": "ConfirmImportRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "destination",
+    "reason": "format"
+  },
+  {
+    "file": "update-settings-path-too-long.json",
+    "type": "UpdateSettingsRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "settings.defaultSavePath",
+    "reason": "format"
+  },
+  {
+    "file": "set-files-wanted-long-unknown-key.json",
+    "type": "SetFilesWantedRequest",
+    "direction": "toGo",
+    "valid": false,
+    "field": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…",
+    "reason": "unknown"
+  }
+]

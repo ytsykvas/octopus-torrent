@@ -59,6 +59,8 @@ Stay within the boundaries of our own DTOs, repository and engine adapter. An er
 
 **Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). Reconcile signatures and constraints with the pinned version; reading the API is not a passed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): removing files is not cancellable once it runs; a partial result is `failed` with a code whose params list what was done (with 032).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

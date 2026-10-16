@@ -53,6 +53,8 @@ Connect the narrow Go API to the real Wails bindings.
 
 The facade grows together with the services. This task closes the base connection; 047/048/049 connect and verify their own additional commands. The API stays single, and the generated bindings are reproduced after every change. The mere future use of a service does not make its implementation a mandatory prerequisite of the whole facade.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): accept a `destination` only if it equals a folder Go got from the native dialog in this run or the saved default.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

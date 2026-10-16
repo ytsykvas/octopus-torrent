@@ -53,6 +53,8 @@ All names and paths come from untrusted metadata. An interface check does not re
 
 **Basis for technical decisions:** [Metainfo API](https://pkg.go.dev/github.com/anacrolix/torrent/metainfo), [BEP52](https://www.bittorrent.org/beps/bep_0052.html). During implementation, cross-check signatures and limitations against the pinned version. Reading API documentation does not replace a performed integration check.
 
+**From 005** ([api-contract](../../docs/decisions/api-contract.md)): clean torrent file paths in Go (relative, no `..`, no empty segments, no control characters) before they enter a DTO; the TypeScript decoders accept the text as is.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.
