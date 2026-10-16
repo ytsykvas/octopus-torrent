@@ -4,7 +4,9 @@ The policy is the owner's decision and is not negotiable:
 [toolchain-versions](../../docs/decisions/toolchain-versions.md). In short — packages (npm and Go
 modules, including transitive ones): the latest stable version published **at least 14 days ago**, no
 pre-releases; toolchains (Go, Node.js): patch releases immediately, new minor/major lines after 14
-days. The `release-guard` hook blocks the usual ways around this; it is a safety net, not the check.
+days. Nothing refuses a command before it runs: `frontend/.npmrc` (`min-release-age=14`) and the
+quality gate (`go tool devtool check`) are the checks, and these rules are what keeps a younger
+version from running at all.
 
 ## 1. Survey
 ```bash
@@ -30,7 +32,7 @@ go get -tool <module>/cmd/<tool>@<version>
 ```
 Never `@latest`, `-u`, `npx <pkg>`, global installs, or a lowered `min-release-age`. A new Go import
 is added with `go get module@vX.Y.Z` **before** building: `go mod tidy` and `-mod=mod` would resolve it
-to the latest release, so the hook refuses them. Changing an `.npmrc` always goes to the owner. A package that
+to the latest release, so do not use them. Changing an `.npmrc` always goes to the owner. A package that
 needs an install script is added to `allowScripts` in `frontend/package.json` only with a stated
 reason. Transitive Go modules stay where Go's MVS puts them unless one has a known vulnerability.
 

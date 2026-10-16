@@ -12,6 +12,9 @@ runners octopus and Conductor. How do they share one set of rules and actions, h
 workspace prepared, and how is the owner's 14-day dependency cooldown protected from an agent that
 reaches for the newest release?
 
+**Revised on 15 October 2026 (owner's decision):** the `release-guard` PreToolUse hook that answered
+the last question at first was removed; see "No pre-tool hook" below.
+
 ## Decision
 
 ### Shared instructions
@@ -35,73 +38,35 @@ reaches for the newest release?
 
 ### Executable logic in Go
 
-The hook, the workspace commands and the documentation checks are `cmd/devtool` +
-`internal/devtool`, tested and counted in the 100% coverage gate like the product. `cmd/devtool` is a
-`tool` in `go.mod` and runs as `go tool devtool …`, which passes exit status 2 through (`go run`
-turns every failure into 1, which agents treat as non-blocking — a regression test runs the
-configured hook commands). The only shell left is the two runner scripts in `.octopus/scripts/`, each
+The workspace commands, the documentation and plan checks and the [quality gate](quality-gate.md) are
+`cmd/devtool` + `internal/devtool`, tested and counted in the 100% coverage gate like the product.
+`cmd/devtool` is a `tool` in `go.mod` and runs as `go tool devtool …`. The only shell left is the two runner scripts in `.octopus/scripts/`, each
 two commands (build devtool, `exec` it) with no branches; the `cmd/devtool` test executes every line
 of both against a fake `go`, which is the measurement for them under
 [TDD_AND_QUALITY §3](../engineering/TDD_AND_QUALITY.md#3-what-exactly-100-coverage-means). `/check` holds no
 inline scripts: links and instruction pointers are `go tool devtool check-docs`.
 
-### The `release-guard` hook
+### No pre-tool hook
 
-PreToolUse on Bash, Edit, MultiEdit and Write (Codex: Bash). Three outcomes:
+The first version had a `release-guard` PreToolUse hook (`go tool devtool hook release-guard`, in
+`.claude/settings.json` and `.codex/hooks.json`): a hand-written shell parser that denied commands
+able to bypass the cooldown (`npx`, global installs, `go get …@latest`, cooldown overrides, writes to
+`.npmrc`) and denied any change to its own code, `go.mod` or agent settings in the permission modes
+that approve by themselves. The owner removed it on 15 October 2026: it blocked routine work (every
+change to `internal/devtool`, `go.mod` or the settings needed a switch to the `default` mode), refused
+harmless commands, and every review — three before task 004, two during it — found new shell forms it
+misread. Its history and evidence stay in the [verification report](../verification/agent-tooling.md)
+and in [report 004](../verification/004-reproducible-check-commands.md).
 
-- **Deny** (exit 2, reason on stderr):
-  - an npm `min-release-age` below 14 days, `before`, `min-release-age-exclude`, `userconfig`,
-    `globalconfig` or `registry`, as a flag or as an `npm_config_*` variable (any case or dash form,
-    including `export`);
-  - `npm config set|delete|edit` of the cooldown keys;
-  - global npm installs, `npm create` / `npm init <initializer>`, `npm exec` without `--no` or with
-    `--yes`, `npx` without `--no-install` or with `--yes`, pnpm, yarn and bun;
-  - npm installs of anything but a registry package (git, GitHub, URL, file specs skip the age
-    filter);
-  - npm install-family commands whose project (`package.json` directory, found the way npm finds it)
-    has no `.npmrc` that keeps the cooldown;
-  - `go get` without an explicit version, any version query that is not a full `vX.Y.Z` /
-    pseudo-version / `none` (`@latest`, `@v1`, branches, ranges), `go get -u`, `go mod tidy`, and
-    `-mod=mod` (both add missing modules at their latest version);
-  - any `GOSUMDB` but the default, `GONOSUMDB`, `GONOSUMCHECK`, `GOINSECURE`, `GOPRIVATE`,
-    `-insecure` — as an assignment, `export` or `go env -w`;
-  - shell writes (redirection, `tee`, `cp`, `mv`, `rm`, `sed -i`, …) to any `.npmrc` or to the guard
-    (see "Ask the owner");
-  - a shell that reads its commands from stdin (`… | sh`, `bash <<EOF`) and a command name taken from a
-    variable (`$PM install …`) — neither can be checked;
-  - an `.npmrc` edit whose result has `min-release-age` below 14, `before`, `min-release-age-exclude`,
-    sections, arrays or quotes.
-- **Ask the owner** (JSON `permissionDecision: "ask"` on stdout): every other change to an `.npmrc`, and
-  every change to what can define, disable or rewrite the guard — `.claude/settings.json`,
-  `.claude/settings.local.json`, `.codex/hooks.json`, `.codex/config.toml`, `internal/devtool/`,
-  `cmd/devtool/`, `go.mod`, `go.sum`. npm's own parser decides what an `.npmrc` means, so the owner —
-  not this parser — approves any change to one. An "ask" only reaches the owner in the `default` and
-  `plan` permission modes; in a mode that settles it on its own (`auto`, `acceptEdits`,
-  `bypassPermissions`, …, read from the hook's `permission_mode`) the change is **denied** instead,
-  and the owner makes it after switching to `default`.
-- **Allow** everything else.
+The cooldown is enforced where it does not depend on reading shell commands:
 
-Commands are parsed the way the shell reads them — single and double quotes, backslash escapes — and
-where the parser is unsure it fails closed: a here-document body is skipped as data only when every
-here-document in the command goes to a data sink — `cat`, `tee`, the built-in `git commit|tag|notes|apply|hash-object`
-without `-c`/`--config-env`/`--exec-path` (aliases and extensions cannot shadow built-ins), or
-`gh pr|issue|release|api|gist` — every program reading a pipe in the command is such a sink too, its
-delimiter is fully parsed and its terminator line exists; a `<<` inside a `#` comment is not a
-here-document. Otherwise the body is decided as commands (so a here-document for another program, such
-as `python3 - <<EOF`, can be refused — use the Write tool for such files). `$((…))` is
-searched for substitutions like any other text. Wrappers (`env`, `sudo`, `time`, `nice`, `command`, `exec`,
-`xargs`), `sh|bash|zsh|dash|ksh -c` (also inside combined flags such as `-lc`), `eval`, `$(…)` and
-backtick substitutions (also inside double quotes), subshells, `cd`/`pushd` and absolute program paths
-are followed. A here-document body that goes to a data sink is not decided as commands, but the shell
-still expands `$(…)` and backticks in it unless the delimiter is quoted (`'EOF'`, `"EOF"`), so the
-substitutions of every unquoted body are always decided; inside such a body quotes are ordinary
-characters and only a backslash prevents an expansion. Because the substitution scan counts brackets
-and backticks without the shell's grammar, everything from the first substitution to the end of such a
-body is decided as well; and a body is decided in the starting directory and in the one after any
-`cd` in the command. Only real npm flags and real assignments are
-checked, so commit messages and greps that mention the settings are not refused. A
-command given as an argument list is joined; a guarded tool whose input cannot be read is blocked,
-while a payload that is not JSON at all is let through with a warning.
+- `frontend/.npmrc` → `min-release-age=14`: npm itself refuses younger versions of any package,
+  including transitive ones; install scripts are off unless listed in `allowScripts`.
+- The [quality gate](quality-gate.md) on every `go tool devtool check`: npm's effective cooldown
+  settings, Go's module settings (`go env`), the release age of every locked npm version and every Go
+  module, that every locked npm artifact is the registry's, `npm audit` and `govulncheck`.
+- The rules for agents in [dependencies.md](../../.claude/docs/dependencies.md): exact versions,
+  `npm --prefix frontend`, no `npx` download, no global installs, no `@latest`.
 
 ### Workspaces
 
@@ -118,32 +83,12 @@ PR instructions target `main`. `origin` is the owner's GitHub repository
 
 ## Limits accepted
 
-The hook is a **safety net, not a sandbox**: it stops the usual and the expedient ways around the
-policy, including the ones npm suggests in its own error message. It does not see:
-
-- Codex file edits (`apply_patch`); the Codex hook payload itself is unverified (no Codex session was
-  used) — if Codex names its shell tool differently, the guard allows everything there.
-- Script files the agent writes and runs (`bash script.sh`, `source`), shell forms beyond the parser,
-  writes to protected files by programs it does not know (an interpreter such as `python3` writing a
-  file), or a dependency added by hand to `package.json` / `go.mod` and resolved later.
-- A Go version that is explicit and full but younger than 14 days.
-- Its own source when changed outside the Edit tools (see above); Edit/Write changes ask the owner. If
-  devtool fails to compile, the hook exits 1 and agents continue (fail-open, so a broken hook cannot
-  lock an agent out of the tools it needs to fix it).
-
-The parser is hand-written and small, so some shell constructions will always read differently from
-the real shell; two automated reviews each found a handful, and the task 004 security review found
-here-document forms (a `<<` in a comment, a sink piped into an executor, a git alias, brackets inside
-a substitution, a `cd` before the body) that were closed test-first. Replacing it with a full shell parser
-(for example `mvdan.cc/sh/v3/syntax`, used by `shfmt`) would close that class of gaps — three
-automated reviews in a row each found more — at the cost of a
-new third-party dependency — the owner's decision under the dependency policy.
-
-The guarantee therefore comes from checking results: since task 004 the [quality gate](quality-gate.md)
-checks the release age of every locked npm package and Go module and that every locked npm artifact is
-the registry's (`go tool devtool check deps`, part of the full `go tool devtool check`), and npm's and
-Go's effective settings on every run, with the same `minReleaseAgeDays` constant. Install scripts run
-before that check, which is why they stay off by default (`allowScripts`).
+Without the hook nothing stops a command before it runs. An agent that ignores
+[dependencies.md](../../.claude/docs/dependencies.md) can execute code younger than 14 days that never
+reaches a lockfile — `npx <package>`, `npm i -g`, `go run <module>@latest`, `go install …@latest` —
+or override the cooldown for one command (`--min-release-age=0`, `npm_config_*`). The gate only sees
+what ends up in `frontend/package-lock.json`, `go.mod`/`go.sum` and the effective settings. Review of
+the transcript and of the diff is the remaining control for those commands.
 
 ## Alternatives considered
 
@@ -151,23 +96,22 @@ before that check, which is why they stay off by default (`allowScripts`).
 |---|---|---|---|
 | Copy planner's setup as is (Rails, Xibo, monitoring) | Fast | Domain-specific rules and scripts that mean nothing here | Only the structure was reused |
 | Hook and runner scripts in Bash (as in planner) | Familiar, no build step | Own executable code without a coverage tool; the policy requires 100% | Owner chose Go |
-| `go run ./cmd/devtool` in hook commands | No `go.mod` change | Exit status 2 becomes 1: the guard would never block | Found in verification; regression test added |
-| Parse every `.npmrc` change and allow the ones that look right | No prompt for the owner | npm reads sections, inline comments and quotes differently from any simple parser (shown by the security review) | The owner approves `.npmrc` changes |
+| Keep the `release-guard` hook | Stops `npx`, global installs and cooldown overrides before they run | A hand-written shell parser: new gaps in every review, false refusals, its self-protection blocked routine edits in `auto`/`acceptEdits` | Removed by the owner on 2026-10-15 |
+| Replace the parser with `mvdan.cc/sh/v3/syntax` | Real shell grammar | A new dependency, and the hook still blocks routine work | Not taken with the removal |
 | Broad prefix permissions (`go test:*`, `git diff:*`) | Fewer prompts | `go test -exec`, `go vet -vettool`, `git diff --output` run or write anything with no prompt | Allow exact commands only |
 | Architecture and testing guides under `.claude/docs` | Self-contained agent docs | Copies of `AGENTS.md`, the architecture and the TDD policy that drift | Link instead; only `review*.md` mirror rules, kept in step by `/update-rules` |
 
 ## Verified grounds
 
-See the [verification report](../verification/agent-tooling.md): RED evidence for every rule, 100%
-raw-counter coverage, the configured hook commands executed by a test, a live block in Claude Code,
-and the runner scripts run in a fresh git worktree with a clean stop. The gap with unquoted
-here-documents, found after the first push, was closed test-first in task 004
-([report](../verification/004-reproducible-check-commands.md)).
+See the [verification report](../verification/agent-tooling.md): the runner scripts run in a fresh
+git worktree with a clean stop, and — for the removed hook — its RED evidence and a live block in
+Claude Code. The removal was verified by a probe that the hook no longer intercepts and by a full
+`go tool devtool check`.
 
 ## Consequences
 
-- Changing the dependency policy means changing `internal/devtool/releaseguard.go` test-first, with
-  this ADR and [toolchain-versions](toolchain-versions.md).
+- Changing the dependency policy means changing `minReleaseAgeDays` (`internal/devtool/deps.go`)
+  test-first, with [toolchain-versions](toolchain-versions.md) and `frontend/.npmrc`.
 - Task [004](../../product/tasks/004-reproducible-check-commands.md) built the single check command
   and the release-age check in `internal/devtool` ([quality-gate](quality-gate.md)); `/check` runs it.
 - Tasks [008](../../product/tasks/008-sqlite-driver-durability-spike.md) and

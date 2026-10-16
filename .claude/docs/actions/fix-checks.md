@@ -39,15 +39,10 @@ finish with the full `go tool devtool check`.
   check.
 - **`single code version` fails.** Something edited the listed files during the run (an editor,
   another agent); run the gate again when nothing else is writing.
-- **The `release-guard` hook refused a command.** It is not a bug to work around: the command would
-  weaken the 14-day release cooldown or checksum verification. Use the exact-version, `--prefix
-  frontend` or `--no-install` form it names, or ask the owner.
-- **The hook asks the owner** (Claude Code shows a permission prompt) for any change to an `.npmrc`,
-  the agent settings that hold hooks (`.claude/settings*.json`, `.codex/hooks.json`,
-  `.codex/config.toml`), the guard's source (`internal/devtool/`, `cmd/devtool/`) or `go.mod` /
-  `go.sum`. Wait for the answer; never route the change around the Edit tool. In a permission mode
-  that would approve the prompt by itself (`auto`, `acceptEdits`, `bypassPermissions`) the hook denies
-  these changes instead: say so and ask the owner to switch to the `default` mode.
+- **A fix would weaken the 14-day cooldown or checksum verification** (a lower `min-release-age`,
+  `@latest`, `npx` download, `GOSUMDB=off`, …). It is never the fix: use the exact-version and
+  `--prefix frontend` forms of [dependencies.md](../dependencies.md), and ask the owner before any
+  `.npmrc` change.
 - **`go test` fails with "`.codex/agents/<name>.toml` is out of date".** An agent in `.claude/agents/`
   changed: run `go tool devtool codex-agents` and commit the result.
 - **`npm ci` refuses a version.** `min-release-age=14` holds back a release younger than 14 days. Pick

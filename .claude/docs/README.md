@@ -17,7 +17,7 @@ None is loaded automatically — read the one that fits the task.
 |---|---|
 | `.claude/agents/` | `code-reviewer`, `security-reviewer`, `tech-lead` (review lenses), `macos-qa` (drives the real `.app`) |
 | `.claude/commands/` | `/task`, `/check`, `/branch-review`, `/qa`, `/update-docs`, `/update-rules`, `/pushit` |
-| `.claude/settings.json` | shared permissions and the `release-guard` hook (`go tool devtool hook release-guard`) |
+| `.claude/settings.json` | shared permissions (no hooks: `release-guard` was removed, see the [ADR](../../docs/decisions/agent-tooling.md#no-pre-tool-hook)) |
 | `.codex/` | the same agents and hook for Codex |
 | `.octopus/`, `.conductor/` | parallel-workspace runners: setup/run scripts and action prompts pointing here |
 

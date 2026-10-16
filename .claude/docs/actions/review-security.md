@@ -42,7 +42,8 @@ sequence that triggers it.
 - New or bumped dependencies: published at least 14 days ago, not a pre-release, exact version,
   `npm audit` and `govulncheck` clean, install scripts only via `allowScripts`.
 - No `GOSUMDB=off`, `GOINSECURE`, `GONOSUMDB`, `npx` downloads or global npm installs in scripts or
-  documentation. The `release-guard` hook enforces this for agents; review catches it in committed text.
+  documentation. Nothing blocks these commands before they run; review catches them in committed text
+  and in what the agent ran.
 
 ### Secrets
 

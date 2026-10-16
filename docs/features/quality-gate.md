@@ -25,7 +25,7 @@ the others. The decision is in [quality-gate](../decisions/quality-gate.md).
 Developer tooling only; the product layers and the Wails contract are untouched. The gate reuses the
 `System` boundary of `internal/devtool` (every process, file, directory and HTTP call goes through
 it, so the whole gate is unit-tested with `fakeSystem`), the repository listing and link checks of
-`check-docs`, the plan check, and the hook's `minReleaseAgeDays`.
+`check-docs`, the plan check, and `minReleaseAgeDays`.
 
 ## Contracts and data
 
