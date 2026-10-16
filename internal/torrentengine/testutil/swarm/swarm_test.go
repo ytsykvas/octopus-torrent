@@ -8,9 +8,13 @@ import (
 	"errors"
 	"io/fs"
 	"net"
+	"net/http/httptest"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -57,8 +61,14 @@ func TestTransfersArriveByteForByteFromLocalPeersOnly(t *testing.T) {
 				if s := p.Settings(); s.DHT || s.Trackers || s.PEX || s.PortForwarding || s.WebSeeds || s.WebTorrent || s.UTP || s.IPv6 {
 					t.Errorf("a discovery or transport path is on: %+v", s)
 				}
+				if tripped := p.Tripped(); tripped != "" {
+					t.Errorf("the engine tried paths outside the swarm:\n%s", tripped)
+				}
 				if bad := NonLoopback(p.Logs()); len(bad) > 0 {
 					t.Errorf("the engine logged non-loopback addresses %q", bad)
+				}
+				if who := personal(t); strings.Contains(p.Logs(), who[0]) || strings.Contains(p.Logs(), "/"+who[1]+"/") {
+					t.Errorf("the engine log names the home folder %q or the user %q", who[0], who[1])
 				}
 				if addrs := p.ListenAddrs(); len(addrs) != 1 || addrs[0].Network() != "tcp" || !addrs[0].(*net.TCPAddr).IP.IsLoopback() {
 					t.Errorf("listening on %v, want one loopback TCP address", addrs)
@@ -148,6 +158,128 @@ func TestACorruptedPieceIsTheOnlyOneMissing(t *testing.T) {
 	}
 }
 
+// The seeder verified its data, then piece 1 changed on its disk: it serves bad bytes. The leecher
+// must never accept them. Connect marks peers trusted (all share 127.0.0.1, and the engine bans by
+// IP), so the leecher re-requests the piece instead of banning the seeder.
+func TestACorruptedPieceReceivedOverTheWireIsNeverAccepted(t *testing.T) {
+	fx := named(t, "v1-tree-no-empty")
+	seeder, leecher := peer(t, Options{}), peer(t, Options{})
+	if err := fx.WritePayload(seeder.Dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := seeder.Seed(deadline(t, transferLimit), metaInfo(t, fx)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.CorruptPiece(seeder.Dir, 1); err != nil {
+		t.Fatal(err)
+	}
+	lt, err := leecher.Leech(metaInfo(t, fx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	Connect(lt, seeder)
+	for ctx := deadline(t, transferLimit); !slices.Equal(missingPieces(lt), []int{1}) && ctx.Err() == nil; {
+		time.Sleep(10 * time.Millisecond)
+	}
+	err = WaitComplete(deadline(t, 500*time.Millisecond), lt)
+	var incomplete *IncompleteError
+	if !errors.As(err, &incomplete) || !slices.Equal(incomplete.MissingPieces, []int{1}) {
+		t.Fatalf("WaitComplete = %v, want only piece 1 missing", err)
+	}
+	if !strings.Contains(leecher.Logs(), "piece 1 failed hash") {
+		t.Error("the leecher did not log a hash failure of piece 1")
+	}
+}
+
+// The pinned engine's default file IO maps payload files and never unmaps them: after Close, and
+// after every engine goroutine ended, the files stay mapped in the process. This test turns red
+// when an engine version releases them.
+func TestPinnedEngineKeepsPayloadFilesMappedAfterClose(t *testing.T) {
+	fx := named(t, "v1-single")
+	seeder, leecher, _, lt := pair(t, fx, Options{})
+	if err := WaitComplete(deadline(t, transferLimit), lt); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []*Peer{seeder, leecher} {
+		if err := p.Close(deadline(t, closeLimit)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := WaitEngineStopped(deadline(t, closeLimit)); err != nil {
+		t.Fatal(err)
+	}
+	if open := openUnder(t, seeder.Dir); len(open) == 0 {
+		t.Error("no payload file of the closed seeder is open or mapped any more: the engine now releases them")
+	}
+}
+
+// The pinned engine creates every zero-length file of a torrent as soon as it is added, truncating
+// whatever is there, and only checks that the path stays inside the save folder. An existing file
+// loses its content: on a name collision inside the torrent folder, one level up through "..", and
+// through a component with embedded separators. Our parser (019) and path plan (020) must reject
+// such metainfo before the engine sees it. This test turns red when the engine stops truncating.
+func TestPinnedEngineTruncatesExistingFilesAtZeroLengthPathsOnAdd(t *testing.T) {
+	p := peer(t, Options{})
+	for name, victim := range map[string]string{
+		"v1-tree":                    filepath.Join(p.Dir, "tree", "empty.dat"),
+		"invalid-empty-traversal":    filepath.Join(p.Dir, "victim.txt"),
+		"invalid-embedded-separator": filepath.Join(p.Dir, "x"),
+	} {
+		if err := os.MkdirAll(filepath.Dir(victim), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(victim, []byte("synthetic data that must survive"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		tor, err := p.Add(metaInfo(t, named(t, name)))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		tor.Drop()
+		if info, err := os.Stat(victim); err != nil || info.Size() != 0 {
+			t.Errorf("%s: %s is %v (%v), want it truncated to 0 bytes by the pinned engine", name, victim, info, err)
+		}
+	}
+}
+
+// Every path out of the closed swarm is refused and recorded, whatever reaches the engine.
+func TestTripwiresRefuseEveryPathOutOfTheSwarm(t *testing.T) {
+	p := peer(t, Options{})
+	c := p.config
+	_, dial := c.HTTPDialContext(context.Background(), "tcp", "example.com:80")
+	_, tracker := c.TrackerDialContext(context.Background(), "tcp", "tracker.example:6969")
+	_, packet := c.TrackerListenPacket("udp", ":0")
+	_, lookup := c.LookupTrackerIp(&url.URL{Host: "tracker.example"})
+	_, web := c.WebTransport.RoundTrip(httptest.NewRequest("GET", "http://seed.example/file", nil))
+	for _, err := range []error{dial, tracker, packet, lookup, web} {
+		if err == nil || !strings.Contains(err.Error(), "is not allowed") {
+			t.Errorf("tripwire = %v, want a refusal", err)
+		}
+	}
+	for _, want := range []string{"example.com:80", "tracker.example:6969", "tracker socket", "tracker lookup", "seed.example"} {
+		if !strings.Contains(p.Tripped(), want) {
+			t.Errorf("Tripped() lacks %q:\n%s", want, p.Tripped())
+		}
+	}
+	if _, blocked := c.IPBlocklist.Lookup(net.ParseIP("203.0.113.7")); !blocked || c.IPBlocklist.NumRanges() != 1 {
+		t.Error("a public address is not blocked")
+	}
+	if _, blocked := c.IPBlocklist.Lookup(net.ParseIP("127.0.0.1")); blocked {
+		t.Error("loopback is blocked")
+	}
+	mi := metaInfo(t, named(t, "v1-single"))
+	mi.Announce = "http://tracker.example/announce"
+	if _, err := p.Add(mi); err == nil || !strings.Contains(err.Error(), "no tracker") {
+		t.Errorf("Add with a tracker = %v", err)
+	}
+	// A magnet's peer in another network is blocked by the list, never dialled.
+	tor := p.AddInfohash(metaInfo(t, named(t, "v1-tree")).HashInfoBytes())
+	tor.AddPeers([]torrent.PeerInfo{{Addr: torrent.StringAddr("203.0.113.7:6881"), Trusted: true}})
+	if addrs := p.SeenAddrs(); len(addrs) != 0 {
+		t.Errorf("the engine created peers %q outside loopback", addrs)
+	}
+}
+
 func TestCancellingAWaitReturnsPromptly(t *testing.T) {
 	_, _, _, lt := pair(t, named(t, "v1-large"), Options{RateLimit: rateLimit})
 	ctx, cancel := context.WithCancel(deadline(t, transferLimit))
@@ -169,10 +301,11 @@ func TestCancellingAWaitReturnsPromptly(t *testing.T) {
 	}
 }
 
-func TestTheRecorderMeasuresStartStopAndResidualTraffic(t *testing.T) {
+func TestTheRecorderMeasuresARateLimitedTransferAndItsResidualTraffic(t *testing.T) {
 	fx := named(t, "v1-large")
 	_, _, st, lt := pair(t, fx, Options{RateLimit: rateLimit})
 	rec := Record(50*time.Millisecond, map[string]*torrent.Torrent{"seeder": st, "leecher": lt})
+	t.Cleanup(func() { rec.Stop() })
 	for ctx := deadline(t, transferLimit); Count(lt).PayloadRead < lt.Length()/4 && ctx.Err() == nil; {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -180,15 +313,19 @@ func TestTheRecorderMeasuresStartStopAndResidualTraffic(t *testing.T) {
 	st.DisallowDataUpload()
 	time.Sleep(time.Second)
 	log := rec.Stop()
+	if again := rec.Stop(); len(again.Samples) != len(log.Samples) {
+		t.Errorf("a second Stop changed the log: %d samples, then %d", len(log.Samples), len(again.Samples))
+	}
 	first, ok := log.FirstPayload("leecher")
 	stop := log.MarkAt("stop")
-	if !ok || first > stop {
-		t.Errorf("first payload at %v (%v), stop at %v", first, ok, stop)
+	// A quarter of 1 MiB at 256 KiB/s takes about 1 s; well under 0.5 s means the limit does not hold.
+	if !ok || first > stop || stop < 500*time.Millisecond {
+		t.Errorf("first payload at %v (%v), a quarter of the file at %v", first, ok, stop)
 	}
 	last, _ := log.LastPayload("leecher")
 	after, err := log.PayloadAfter("stop", "leecher")
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || after < 0 || last > log.Samples[len(log.Samples)-1].At {
+		t.Fatalf("PayloadAfter = %d, %v; last payload %v", after, err, last)
 	}
 	t.Logf("v1-large at %d B/s: first payload %v, upload disallowed at %v, last payload %v, %d payload bytes after the stop",
 		rateLimit, first, stop, last, after)
@@ -197,14 +334,8 @@ func TestTheRecorderMeasuresStartStopAndResidualTraffic(t *testing.T) {
 func TestTwoRunsInARowLeaveNoListenerOrGoroutine(t *testing.T) {
 	for run := range 2 {
 		fx := named(t, "v1-single")
-		seeder, err := NewPeer(t.TempDir(), Options{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		leecher, err := NewPeer(t.TempDir(), Options{})
-		if err != nil {
-			t.Fatal(err)
-		}
+		// Closed explicitly below; the cleanup only matters when the run fails before that.
+		seeder, leecher := peer(t, Options{}), peer(t, Options{})
 		if err := fx.WritePayload(seeder.Dir); err != nil {
 			t.Fatal(err)
 		}
@@ -258,47 +389,50 @@ func TestEveryFixtureIsAddedAsRecorded(t *testing.T) {
 }
 
 func TestErrorsAreReturnedNotHidden(t *testing.T) {
-	savedClient := newClient
-	newClient = func(*torrent.ClientConfig) (*torrent.Client, error) { return nil, errors.New("no socket") }
-	if _, err := NewPeer(t.TempDir(), Options{}); err == nil || !strings.Contains(err.Error(), "no socket") {
-		t.Errorf("NewPeer = %v", err)
-	}
-	newClient = savedClient
-
-	p := peer(t, Options{RateLimit: rateLimit})
-	if _, err := p.Seed(deadline(t, transferLimit), metaInfo(t, named(t, "v2-single"))); err == nil {
-		t.Error("Seed of a torrent the engine refuses succeeded")
-	}
-	if _, err := p.Leech(metaInfo(t, named(t, "v2-tree"))); err == nil {
-		t.Error("Leech of a torrent the engine refuses succeeded")
-	}
-	var incomplete *IncompleteError
-	if _, err := p.Seed(deadline(t, transferLimit), metaInfo(t, named(t, "v1-tree-no-empty"))); !errors.As(err, &incomplete) || len(incomplete.MissingPieces) != 3 {
-		t.Errorf("Seed without data = %v, want every piece missing", err)
-	}
-	cancelled, cancel := context.WithCancel(context.Background())
-	cancel()
-	if _, err := p.Seed(cancelled, metaInfo(t, named(t, "hybrid-single"))); !errors.Is(err, context.Canceled) {
-		t.Errorf("Seed with a cancelled context = %v", err)
-	}
-	if err := WaitEngineStopped(cancelled); err == nil || !strings.Contains(err.Error(), "anacrolix") {
-		t.Errorf("WaitEngineStopped with a running client = %v, want its stacks", err)
-	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	if err := Refuses(deadline(t, 200*time.Millisecond), listener.Addr()); err == nil || !strings.Contains(err.Error(), "still accepts") {
-		t.Errorf("Refuses of a live listener = %v", err)
-	}
-	saved := pieceBusy
-	pieceBusy = func(*torrent.Torrent, int) bool { return true }
-	_, err = p.Seed(deadline(t, 200*time.Millisecond), metaInfo(t, named(t, "v1-single")))
-	pieceBusy = saved
-	if err == nil || !strings.Contains(err.Error(), "still being checked") {
-		t.Errorf("Seed while pieces stay busy = %v", err)
-	}
+	t.Run("the engine does not start", func(t *testing.T) {
+		replace(t, &newClient, func(*torrent.ClientConfig) (*torrent.Client, error) { return nil, errors.New("no socket") })
+		if _, err := NewPeer(t.TempDir(), Options{}); err == nil || !strings.Contains(err.Error(), "no socket") {
+			t.Errorf("NewPeer = %v", err)
+		}
+	})
+	t.Run("pieces stay busy", func(t *testing.T) {
+		p := peer(t, Options{})
+		replace(t, &pieceBusy, func(*torrent.Torrent, int) bool { return true })
+		if _, err := p.Seed(deadline(t, 200*time.Millisecond), metaInfo(t, named(t, "v1-single"))); err == nil || !strings.Contains(err.Error(), "still being checked") {
+			t.Errorf("Seed while pieces stay busy = %v", err)
+		}
+	})
+	t.Run("the engine refuses or cannot verify", func(t *testing.T) {
+		p := peer(t, Options{RateLimit: rateLimit})
+		if _, err := p.Seed(deadline(t, transferLimit), metaInfo(t, named(t, "v2-single"))); err == nil {
+			t.Error("Seed of a torrent the engine refuses succeeded")
+		}
+		if _, err := p.Leech(metaInfo(t, named(t, "v2-tree"))); err == nil {
+			t.Error("Leech of a torrent the engine refuses succeeded")
+		}
+		var incomplete *IncompleteError
+		if _, err := p.Seed(deadline(t, transferLimit), metaInfo(t, named(t, "v1-tree-no-empty"))); !errors.As(err, &incomplete) || len(incomplete.MissingPieces) != 3 {
+			t.Errorf("Seed without data = %v, want every piece missing", err)
+		}
+		cancelled, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, err := p.Seed(cancelled, metaInfo(t, named(t, "hybrid-single"))); !errors.Is(err, context.Canceled) {
+			t.Errorf("Seed with a cancelled context = %v", err)
+		}
+		if err := WaitEngineStopped(cancelled); err == nil || !strings.Contains(err.Error(), "anacrolix") {
+			t.Errorf("WaitEngineStopped with a running client = %v, want its stacks", err)
+		}
+	})
+	t.Run("an address still accepts", func(t *testing.T) {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer listener.Close()
+		if err := Refuses(deadline(t, 200*time.Millisecond), listener.Addr()); err == nil || !strings.Contains(err.Error(), "still accepts") {
+			t.Errorf("Refuses of a live listener = %v", err)
+		}
+	})
 	if got := NonLoopback("dial 10.0.0.1:6881 127.0.0.1:1 [::1]:2 [2001:db8::1]:3 [zz] v1.61.0"); !slices.Equal(got, []string{"10.0.0.1", "2001:db8::1"}) {
 		t.Errorf("NonLoopback = %q", got)
 	}
@@ -336,6 +470,43 @@ func TestLogFunctionsReadSamples(t *testing.T) {
 	if _, ok := log.LastPayload("x"); ok {
 		t.Error("LastPayload of a peer without payload reported one")
 	}
+}
+
+// personal returns the owner's home folder and user name, which no engine log may contain.
+func personal(t *testing.T) [2]string {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return [2]string{home, filepath.Base(home)}
+}
+
+// openUnder lists the files under dir that this process has open or mapped, from lsof.
+func openUnder(t *testing.T, dir string) []string {
+	t.Helper()
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("lsof", "-n", "-P", "-p", strconv.Itoa(os.Getpid()), "-Fn").Output()
+	if err != nil {
+		t.Fatalf("lsof: %v", err)
+	}
+	var open []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "n"+real+"/") {
+			open = append(open, line[1:])
+		}
+	}
+	return open
+}
+
+// replace sets a test seam for the rest of the test and restores it when the test ends, even if it fails.
+func replace[T any](t *testing.T, seam *T, value T) {
+	saved := *seam
+	*seam = value
+	t.Cleanup(func() { *seam = saved })
 }
 
 // pair starts a seeder with the fixture's payload and a leecher connected to it.
@@ -408,12 +579,14 @@ func assertOnlyPayload(t *testing.T, dir string, fx fixture.Fixture) {
 	for _, f := range fx.Files {
 		want = append(want, fx.FilePath(dir, f))
 	}
-	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
 			got = append(got, path)
 		}
 		return err
-	})
+	}); err != nil {
+		t.Fatalf("list %s: %v", dir, err)
+	}
 	slices.Sort(want)
 	slices.Sort(got)
 	if !slices.Equal(got, want) {

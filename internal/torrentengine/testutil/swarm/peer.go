@@ -10,11 +10,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
+	"net/url"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 	"golang.org/x/time/rate"
@@ -45,6 +48,7 @@ type Peer struct {
 	logs    *syncBuffer
 	options Options
 	seen    sync.Map // remote address → true, for every peer the engine created
+	tripped syncBuffer
 }
 
 // newClient starts the engine; tests replace it to reach the error branch.
@@ -61,16 +65,31 @@ func NewPeer(dir string, opts Options) (*Peer, error) {
 	cfg.NoDHT, cfg.DisableTrackers, cfg.DisablePEX = true, true, true
 	cfg.NoDefaultPortForwarding, cfg.DisableWebseeds, cfg.DisableWebtorrent = true, true, true
 	cfg.DisableUTP, cfg.DisableIPv6 = true, true
+	// Tripwires behind the switches above: whatever a configuration or a metainfo lets through, no
+	// peer outside loopback is added or accepted, and every HTTP, tracker or DNS path is refused and
+	// recorded in Tripped.
+	cfg.IPBlocklist = loopbackOnly{}
+	cfg.WebTransport = refusingTransport{p}
+	cfg.HTTPDialContext = func(_ context.Context, _, addr string) (net.Conn, error) {
+		return nil, p.refuse("HTTP dial to " + addr)
+	}
+	cfg.TrackerDialContext = func(_ context.Context, _, addr string) (net.Conn, error) {
+		return nil, p.refuse("tracker dial to " + addr)
+	}
+	cfg.TrackerListenPacket = func(_, addr string) (net.PacketConn, error) { return nil, p.refuse("tracker socket on " + addr) }
+	cfg.LookupTrackerIp = func(u *url.URL) ([]net.IP, error) { return nil, p.refuse("tracker lookup of " + u.Host) }
+	cfg.ICEServerList = nil
 	cfg.Seed = true
 	cfg.Callbacks.NewPeer = append(cfg.Callbacks.NewPeer, func(peer *torrent.Peer) { p.seen.Store(peer.RemoteAddr.String(), true) })
 	cfg.Slogger = slog.New(slog.NewTextHandler(p.logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	if opts.RateLimit > 0 {
+		// Burst 0: the engine sets each limiter's burst itself (to at least one chunk) when it is 0.
 		cfg.UploadRateLimiter = rate.NewLimiter(rate.Limit(opts.RateLimit), 0)
 		cfg.DownloadRateLimiter = rate.NewLimiter(rate.Limit(opts.RateLimit), 0)
 	}
 	client, err := newClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("start a swarm peer: %w", err)
+		return nil, errors.Join(fmt.Errorf("start a swarm peer: %w", err), p.storage.Close())
 	}
 	p.client, p.config = client, cfg
 	return p, nil
@@ -101,14 +120,48 @@ func (p *Peer) SeenAddrs() []string {
 	return addrs
 }
 
+// Tripped lists every network path outside loopback the engine tried; empty in a closed swarm.
+func (p *Peer) Tripped() string {
+	return p.tripped.String()
+}
+
+func (p *Peer) refuse(what string) error {
+	fmt.Fprintln(&p.tripped, what)
+	return fmt.Errorf("swarm peer: %s is not allowed", what)
+}
+
+// refusingTransport is the engine's HTTP transport (web seeds, HTTP trackers): it refuses every request.
+type refusingTransport struct{ p *Peer }
+
+func (r refusingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return nil, r.p.refuse("HTTP request to " + req.URL.Host)
+}
+
+// loopbackOnly is the engine's IP block list: every address but loopback is blocked.
+type loopbackOnly struct{}
+
+func (loopbackOnly) Lookup(ip net.IP) (iplist.Range, bool) {
+	if ip.IsLoopback() {
+		return iplist.Range{}, false
+	}
+	return iplist.Range{First: ip, Last: ip, Description: "outside the closed swarm"}, true
+}
+
+func (loopbackOnly) NumRanges() int {
+	return 1
+}
+
 // Logs returns everything the engine logged so far.
 func (p *Peer) Logs() string {
 	return p.logs.String()
 }
 
-// Add adds a torrent. The pinned engine panics on some metainfo (a v2-only torrent has no v1
+// Add adds a torrent that names no tracker, web seed or DHT node. The pinned engine panics on some metainfo (a v2-only torrent has no v1
 // infohash); the panic is returned as an error.
 func (p *Peer) Add(mi *metainfo.MetaInfo) (t *torrent.Torrent, err error) {
+	if mi.Announce != "" || len(mi.AnnounceList) > 0 || len(mi.UrlList) > 0 || len(mi.Nodes) > 0 {
+		return nil, errors.New("a swarm torrent may name no tracker, web seed or DHT node")
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("the engine panicked adding the torrent: %v", r)
@@ -153,7 +206,10 @@ func (p *Peer) AddInfohash(h metainfo.Hash) *torrent.Torrent {
 	return t
 }
 
-// Connect gives the torrent the listen addresses of the peers; no other peer source exists.
+// Connect gives the torrent the listen addresses of the peers; no other peer source exists. The peers
+// are trusted: they all share 127.0.0.1 and the engine bans a peer that sent bad data by its IP, so
+// one ban would cut off every local peer. A trusted peer is never banned; its bad piece is requested
+// again (and fails again) until the wait ends.
 func Connect(t *torrent.Torrent, peers ...*Peer) {
 	var infos []torrent.PeerInfo
 	for _, p := range peers {
@@ -183,10 +239,8 @@ func Refuses(ctx context.Context, addr net.Addr) error {
 			return nil
 		}
 		conn.Close()
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("%s still accepts connections: %w", addr, ctx.Err())
-		case <-time.After(10 * time.Millisecond):
+		if err := pause(ctx, 10*time.Millisecond); err != nil {
+			return fmt.Errorf("%s still accepts connections: %w", addr, err)
 		}
 	}
 }

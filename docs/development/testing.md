@@ -1,6 +1,6 @@
 # Testing
 
-> Last updated: 2026-10-15
+> Last updated: 2026-10-16
 
 Every change goes RED → GREEN → REFACTOR, and all own executable code stays at **100%**. The policy
 is in [TDD_AND_QUALITY](../engineering/TDD_AND_QUALITY.md); this page explains how the tests are
@@ -19,6 +19,22 @@ do not reconstruct it by hand.
 - **Coverage:** the gate collects raw counters from `go test -covermode=atomic` plus an
   instrumented `.app` run, because `main()` runs only in the real app. Every own file with a
   function must be measured, and no block may be zero. `check fast` reports `main()` as `not_run`.
+
+## Engine tests: own torrents and a local swarm
+
+Anything that needs the real torrent engine uses the [test torrents and the local swarm](../tooling/test-torrents.md):
+
+- `fixture.Named("hybrid-tree")` gives deterministic payload bytes and metainfo, with the expected
+  hashes in `fixtures.json`; `fx.WritePayload(dir)` writes the files where the engine expects them.
+- `swarm.NewPeer(t.TempDir(), …)` starts an anacrolix client on 127.0.0.1 with every discovery path
+  off; peers meet only through `swarm.Connect`.
+- **Every wait has a deadline** (`context.WithTimeout`): `WaitComplete` returns an
+  `IncompleteError` listing the missing pieces instead of hanging. `t.Skip` is forbidden, so these
+  tests run in every gate mode, offline included (loopback is not the network).
+- Close every peer in `t.Cleanup`; on a failure the helper prints both engines' logs.
+- Engine timing is handled in the harness (`settle`, `Refuses`); do not read piece state right after
+  `VerifyDataContext` or assume a port is free right after `Client.Close`.
+- Swarm tests are not `t.Parallel`: `WaitEngineStopped` needs the only engine in the process.
 
 ## TypeScript
 
@@ -50,6 +66,8 @@ TypeScript reads the files through `src/test/contractExamples.ts` (`example`, `r
 
 ```sh
 go test -race ./internal/app/... -run TestName -v
+go test -race -count=1 ./internal/torrentengine/...                 # fixtures and the swarm, about 12 s
+go test ./internal/torrentengine/testutil/fixture -args -update     # rewrite the committed torrents
 npm --prefix frontend test -- src/bridge/contract/errors.test.ts -t 'unknown code'
 npm --prefix frontend run test:coverage     # all files, per-file thresholds
 go tool devtool check fast                  # everything except the .app run and the network
@@ -74,4 +92,5 @@ The gate fails on any of these:
 - skipped or conditional tests (`.skip`, `.only`, `.todo`, `skipIf`, `runIf`, `fails`, `xit`, `t.Skip`).
 
 Tests use only synthetic data in temporary directories or `testdata/`, never the owner's
-torrents or downloads.
+torrents or downloads. Go code under `testdata/` fails the gate (`go test ./...` never builds it):
+generators live in packages, `testdata/` holds only data.

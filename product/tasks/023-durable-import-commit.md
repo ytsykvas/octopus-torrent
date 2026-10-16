@@ -55,6 +55,8 @@ Creating the entry, the storage and the engine object passes through several sep
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): confirming an import is not cancellable once it runs; a partial result is `failed` with a code whose params list what was done.
 
+**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): The engine truncates existing files at zero-length paths as soon as a torrent is added; the import commit adds the torrent to the engine only after the path plan (020) is confirmed.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

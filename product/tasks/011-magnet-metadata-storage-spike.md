@@ -53,6 +53,8 @@ A pending import has no right to remove the object of an existing torrent that i
 
 **Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, reconcile signatures and constraints with the pinned version. Reading the API documentation does not replace a performed integration check.
 
+**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): `swarm.Peer.AddInfohash` adds a torrent known only by its infohash (as a magnet) and `swarm.WaitInfo` bounds the wait for metadata; a BEP 52 single-file torrent is stored inside a folder of its name on v1.61.0.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

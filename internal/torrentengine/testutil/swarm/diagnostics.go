@@ -27,17 +27,12 @@ func NonLoopback(text string) []string {
 // WaitEngineStopped waits until no goroutine runs engine code, so a closed swarm left nothing
 // behind. When ctx ends first it returns the stacks of those goroutines.
 func WaitEngineStopped(ctx context.Context) error {
-	for {
-		stacks := engineStacks()
-		if stacks == "" {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("engine goroutines still running: %w\n%s", ctx.Err(), stacks)
-		case <-time.After(20 * time.Millisecond):
+	for stacks := engineStacks(); stacks != ""; stacks = engineStacks() {
+		if err := pause(ctx, 20*time.Millisecond); err != nil {
+			return fmt.Errorf("engine goroutines still running: %w\n%s", err, stacks)
 		}
 	}
+	return nil
 }
 
 func engineStacks() string {

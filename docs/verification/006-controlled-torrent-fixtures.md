@@ -136,7 +136,7 @@ The quality-gate ADR left two inventory rules to this task.
     `Log.FirstPayload`, `LastPayload`, `MarkAt`, `PayloadAfter`.
   - `diagnostics.go`: `NonLoopback` and `WaitEngineStopped` (polls the goroutine stacks for engine
     frames).
-  - `newClient` is the only test seam.
+  - `newClient` is the test seam for the engine start; `pieceBusy` was added during stabilization.
 - **Results:** `go test -race -count=1 ./internal/torrentengine/...` was green twice in a row. The
   swarm package took 13.5–14.0 s, under the 60 s budget. Coverage is 100.0% of statements for both
   packages. Under `-race`, no data race was reported in the engine or in our code.
@@ -223,4 +223,56 @@ Results after the fixes:
 | `./internal/torrentengine/...` with coverage, twice | pass, swarm 11.6 s, 100.0% in both packages |
 
 One 40-iteration batch of the corrupted-piece test, run between the two fixes, failed, and its
-output was not kept. The later 100 isolated iterations and 18 package runs passed.
+output was not kept. The cause was not identified for certain. The likely cause is the fixed 3 s
+wait, which the later change replaced. The later 100 isolated iterations and 18 package runs
+passed.
+
+## Stage D — review, fixes, documents
+
+`/branch-review` was run with three agents:
+- `code-reviewer`: no critical issue; quality notes.
+- `tech-lead`: needs changes. The over-the-wire corruption was not tested, mmap retention was not
+  recorded, and the evidence was incomplete.
+- `security-reviewer`: one critical engine finding, a stale govulncheck statement, and missing
+  tripwires.
+
+Every finding was fixed or answered.
+
+| Finding | Change |
+|---|---|
+| Engine truncates existing files at zero-length paths on add (security, critical) | Fixtures `invalid-empty-traversal`, `invalid-embedded-separator`, `invalid-dot-components`. `TestPinnedEngineTruncatesExistingFilesAtZeroLengthPathsOnAdd` proves truncation on synthetic files: a collision in the torrent folder, one `..` level, and an embedded separator. This is limitation 8 in the ADR, with notes in 018, 019, 020 and 023. |
+| govulncheck fails once the swarm links the engine (security) | `pion/dtls/v3` → v3.1.10, `pion/stun/v3` → v3.1.7, `otel` → v1.47.0, each the latest version out of the cooldown. Recorded in both ADRs. `golang.org/x/net` stays open; see the blocker below. |
+| No tripwire behind the config switches (security) | IP block list that lets only loopback pass. Refusing HTTP transport, HTTP and tracker dialers, tracker socket and DNS lookup, recorded in `Peer.Tripped`. `Add` refuses trackers, web seeds and DHT nodes. Tests: `TestTripwiresRefuseEveryPathOutOfTheSwarm`, and the transfer test asserts `Tripped() == ""`. |
+| File helpers trust their directory (security) | `WritePayload` requires an absolute directory and never replaces a file (`O_EXCL`). `CorruptPiece` refuses data that is not the fixture's own, and refuses metainfo-only fixtures. |
+| `GOPPROF` / `TORRENT_STORAGE_DEFAULT_FILE_IO` change the engine (security, tech lead) | `TestMain` refuses both. |
+| Scripts rule gaps (security, code review) | The rule now also checks extensionless files with a shebang. It requires `set -eu` first, the `go build` line, and `exec` last. |
+| Corruption over the wire untested (tech lead) | `TestACorruptedPieceReceivedOverTheWireIsNeverAccepted`: the seeder verified its data, then piece 1 changed on its disk. The leecher logs "piece 1 failed hash" and ends with exactly [1] missing. `Connect`'s `Trusted` is now documented: the engine bans by IP, and every peer shares 127.0.0.1. |
+| Payload files stay mapped after `Close` (tech lead) | `TestPinnedEngineKeepsPayloadFilesMappedAfterClose` (lsof). This is limitation 7, with notes in 009, 018 and 028. "Resources are released" is narrowed to listeners and goroutines. |
+| Package-wide leak check (tech lead) | `TestMain` runs `WaitEngineStopped` after all tests. |
+| Personal data in diagnostics (tech lead) | The transfer test asserts that no engine log names the home folder or the user. |
+| ADR claimed tests for limitations 5 and 6 (tech lead) | Reworded: 5 and 6 are timing races the harness waits out; 1–4, 7 and 8 are asserted. |
+| Seams restored by hand; `Recorder` without cleanup; `Stop` twice panics (code review, tech lead) | `replace` restores a seam in `t.Cleanup`, and `TestErrorsAreReturnedNotHidden` is split into subtests. `Recorder.Stop` is idempotent (`sync.Once`), and the test registers it in `t.Cleanup`. |
+| `NewPeer` leaked its storage when the client failed (code review) | The storage is closed on that path. |
+| Unchecked `WalkDir`; wrong `LastPayload` comment; shared slices from `All()`; names `Engine`, `build`, `strings2any`; hard-to-read `CorruptPiece` loop; burst 0 (code review) | All fixed. `EngineModule`, `buildCatalog` and `pathList` are the new names; `All`/`Named` return copies; the burst-0 behavior is commented. |
+| Rate limiting not asserted (code review) | The recorder test asserts that a quarter of `v1-large` takes at least 0.5 s at 256 KiB/s. |
+| `IncompleteError.Completed` counts unverified chunks (tech lead) | Documented on the type and in the note for 018. |
+| Empty-file coverage block in `WaitEngineStopped` under the gate (first full run) | One `pause(ctx, d)` helper replaces three `select` blocks (`settle`, `Refuses`, `WaitEngineStopped`). |
+
+Not changed, with reasons:
+- **Unreadable listed files** are skipped by `check.go`'s content reader. This is an existing gate
+  behavior outside this task. Git lists only files the user can read.
+- **Runner commands in `.conductor/settings.toml` and `.octopus/project.json`** are not scripts. They
+  call the checked `.octopus/scripts/*.sh`.
+- **`Connect` stays trusted, with no option.** No test needs untrusted peers yet; 010/018 have the
+  note.
+
+### Blocker: `golang.org/x/net` (owner decision)
+
+- Linking the engine brings `golang.org/x/net/http2` into the program. Five HTTP/2 vulnerabilities
+  in `golang.org/x/net` v0.59.0 therefore become reachable through the `net/http` client of
+  `internal/devtool` (`OSSystem.Get`): GO-2026-6603, -6610, -6611, -6612, -6617.
+- At 5bf2d40, before this task, `go tool govulncheck ./...` reports "No vulnerabilities found"
+  (checked in a separate worktree).
+- The fix is v0.60.0, published 2026-10-08. It leaves the 14-day cooldown on **2026-10-22**, and
+  v0.61.0 (2026-10-09) on 2026-10-23.
+- Until then the `govulncheck` step fails, and the full gate cannot pass.

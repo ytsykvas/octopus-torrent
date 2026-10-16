@@ -318,6 +318,33 @@
       "engine": "accepted"
     },
     {
+      "name": "invalid-empty-traversal",
+      "purpose": "the empty file's path is [\"..\", \"victim.txt\"]: one level above the torrent folder; the engine accepts it and truncates an existing file there on add",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "e6fa089f89fbef1300e15f4d8e6de6334bf59129",
+      "engine": "accepted"
+    },
+    {
+      "name": "invalid-embedded-separator",
+      "purpose": "the empty file's path is one component \"a/../../x\", which resolves to the save folder",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "ec4a692f28860a7ea305c659d4ef8773c4f6f57b",
+      "engine": "accepted"
+    },
+    {
+      "name": "invalid-dot-components",
+      "purpose": "path components \".\" and \"\" in the empty file's path",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "ea4cdb730f54b387251adb8098412ef0a7f1883e",
+      "engine": "accepted"
+    },
+    {
       "name": "invalid-hybrid-mismatch",
       "purpose": "a hybrid whose v1 file list disagrees with its file tree; the engine accepts it",
       "format": "hybrid",

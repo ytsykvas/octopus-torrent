@@ -55,6 +55,8 @@ All names and paths come from untrusted metadata. An interface check does not re
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): clean torrent file paths in Go (relative, no `..`, no empty segments, no control characters) before they enter a DTO; the TypeScript decoders accept the text as is.
 
+**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): parse the committed fixtures in `internal/torrentengine/testutil/fixture/testdata` (`fixtures.json` lists purpose, hashes and the engine's stage for each). The engine **accepts** `invalid-hybrid-mismatch` (v1 list disagrees with the file tree) and `invalid-path-traversal` (`..`): our parser must reject both. `invalid-pieces-length` and `invalid-negative-length` pass the engine's parsing and fail only on add. Adding a torrent to the engine already truncates existing files at its zero-length paths (`invalid-empty-traversal`, `invalid-embedded-separator`, a name collision), so reject `..`, `.`, empty components and components containing a separator before the engine sees the metainfo; compare cleaned joined paths, not components.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.

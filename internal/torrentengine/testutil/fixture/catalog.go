@@ -15,9 +15,9 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 )
 
-// Engine is the module whose behaviour the Engine field of every fixture records. A test fails when
-// the build uses another version: the results are then re-recorded.
-const Engine = "github.com/anacrolix/torrent v1.61.0"
+// EngineModule is the module whose behaviour the Engine field of every fixture records. A test fails
+// when the build uses another version: the results are then re-recorded.
+const EngineModule = "github.com/anacrolix/torrent v1.61.0"
 
 // Format is the BitTorrent version of a metainfo file.
 type Format string
@@ -70,7 +70,8 @@ func (f Fixture) MetaInfo() (*metainfo.MetaInfo, error) {
 }
 
 // ParseStage runs the engine's parsing steps and returns the first that rejects the metainfo with
-// its error, or "" when every step accepts it. Adding it to a client is checked by the swarm.
+// its error, or "" when every parsing step accepts it. That is not StageAccepted: whether a client
+// adds it (StageAdd) is checked by the swarm, which needs a running client.
 func (f Fixture) ParseStage() (Stage, error) {
 	mi, err := f.MetaInfo()
 	if err != nil {
@@ -88,9 +89,9 @@ func (f Fixture) ParseStage() (Stage, error) {
 	return "", nil
 }
 
-var catalog = sync.OnceValue(build)
+var catalog = sync.OnceValue(buildCatalog)
 
-func build() []Fixture {
+func buildCatalog() []Fixture {
 	var fixtures []Fixture
 	for _, s := range specs() {
 		fixtures = append(fixtures, s.build())
@@ -98,16 +99,29 @@ func build() []Fixture {
 	return fixtures
 }
 
-// All returns every fixture in catalog order. The fixtures share their slices: do not modify them.
+// All returns a copy of every fixture in catalog order.
 func All() []Fixture {
-	return slices.Clone(catalog())
+	var fixtures []Fixture
+	for _, fx := range catalog() {
+		fixtures = append(fixtures, fx.clone())
+	}
+	return fixtures
+}
+
+// clone copies the slices a caller could change, so no test can alter the shared catalog.
+func (f Fixture) clone() Fixture {
+	f.Metainfo, f.Files = slices.Clone(f.Metainfo), slices.Clone(f.Files)
+	for i := range f.Files {
+		f.Files[i].Path = slices.Clone(f.Files[i].Path)
+	}
+	return f
 }
 
 // Named returns the fixture with that name.
 func Named(name string) (Fixture, error) {
 	for _, fx := range catalog() {
 		if fx.Name == name {
-			return fx, nil
+			return fx.clone(), nil
 		}
 	}
 	return Fixture{}, fmt.Errorf("no fixture named %q", name)
@@ -123,7 +137,7 @@ func WriteCatalog(dir string) error {
 	manifest := struct {
 		Engine   string    `json:"engine"`
 		Fixtures []Fixture `json:"fixtures"`
-	}{Engine, catalog()}
+	}{EngineModule, catalog()}
 	data, _ := json.MarshalIndent(manifest, "", "  ") // plain strings, numbers and slices: cannot fail
 	return os.WriteFile(filepath.Join(dir, "fixtures.json"), append(data, '\n'), 0o644)
 }

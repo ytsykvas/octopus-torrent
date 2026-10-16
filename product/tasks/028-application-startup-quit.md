@@ -60,6 +60,8 @@ Respect the boundaries of our own DTOs, the repository and the engine adapter. A
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): recover a panicking operation mutation as `failed`/`internal.unexpected`, and make the ledger stop step 1 of the ordered quit (operations, publisher, engine, database); today `OnShutdown` only stops the ledger, bounded by 5 s.
 
+**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): `Client.Close` on anacrolix/torrent v1.61.0 returns before its listeners are closed (`go s.Close()`); the ordered quit must not report the engine stopped until the listen address refuses connections (see `swarm.Refuses`). Payload files stay mapped after `Client.Close` with the default mmap IO until the process exits; quit must not claim the files released.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

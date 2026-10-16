@@ -54,6 +54,15 @@ func specs() []spec {
 		invalid(v1Tree, "invalid-path-traversal", "a path component \"..\" that leaves the save folder; the engine accepts it", StageAccepted, func(info map[string]any, _ map[string]string) {
 			info["files"].([]any)[0].(map[string]any)["path"] = []any{"..", "escape.bin"}
 		}, 0),
+		invalid(v1Tree, "invalid-empty-traversal", "the empty file's path is [\"..\", \"victim.txt\"]: one level above the torrent folder; the engine accepts it and truncates an existing file there on add", StageAccepted, func(info map[string]any, _ map[string]string) {
+			zeroLength(info)["path"] = []any{"..", "victim.txt"}
+		}, 0),
+		invalid(v1Tree, "invalid-embedded-separator", "the empty file's path is one component \"a/../../x\", which resolves to the save folder", StageAccepted, func(info map[string]any, _ map[string]string) {
+			zeroLength(info)["path"] = []any{"a/../../x"}
+		}, 0),
+		invalid(v1Tree, "invalid-dot-components", "path components \".\" and \"\" in the empty file's path", StageAccepted, func(info map[string]any, _ map[string]string) {
+			zeroLength(info)["path"] = []any{".", "", "dots.dat"}
+		}, 0),
 		invalid(hybridTree, "invalid-hybrid-mismatch", "a hybrid whose v1 file list disagrees with its file tree; the engine accepts it", StageAccepted, func(info map[string]any, _ map[string]string) {
 			info["files"].([]any)[0].(map[string]any)["length"] = int64(10001)
 		}, 0),
@@ -63,6 +72,12 @@ func specs() []spec {
 			}
 		}, 0),
 	}
+}
+
+// zeroLength is the v1 file entry of the tree's empty file, empty.dat: second in path order,
+// after docs/readme.txt.
+func zeroLength(info map[string]any) map[string]any {
+	return info["files"].([]any)[1].(map[string]any)
 }
 
 // invalid derives a metainfo-only fixture from base.

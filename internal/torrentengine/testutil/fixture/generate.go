@@ -96,7 +96,7 @@ func (f *Fixture) addV1(info map[string]any, single bool) {
 	var list []any
 	for i, file := range f.Files {
 		stream = append(stream, f.Content(file)...)
-		list = append(list, map[string]any{"length": file.Length, "path": strings2any(file.Path)})
+		list = append(list, map[string]any{"length": file.Length, "path": pathList(file.Path)})
 		f.segments = append(f.segments, segment{file: i, length: file.Length})
 		if pad := (f.PieceLength - file.Length%f.PieceLength) % f.PieceLength; f.Format == Hybrid && i < len(f.Files)-1 && pad > 0 {
 			stream = append(stream, make([]byte, pad)...)
@@ -159,7 +159,8 @@ func (f *Fixture) addV2(info map[string]any, layers map[string]string) {
 	}
 }
 
-func strings2any(s []string) []any {
+// pathList is a path as a bencode list of strings.
+func pathList(s []string) []any {
 	out := make([]any, len(s))
 	for i, v := range s {
 		out[i] = v

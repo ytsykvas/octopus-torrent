@@ -46,6 +46,7 @@ type Recorder struct {
 	log      Log
 	stop     chan struct{}
 	done     chan struct{}
+	stopped  sync.Once
 }
 
 // Record starts sampling the torrents every interval.
@@ -83,11 +84,16 @@ func (r *Recorder) Mark(label string) {
 	r.sample(label)
 }
 
-// Stop ends the sampling, takes a last sample and returns the log.
+// Stop ends the sampling, takes a last sample and returns the log. Calling it again returns the
+// same log.
 func (r *Recorder) Stop() Log {
-	close(r.stop)
-	<-r.done
-	r.sample("")
+	r.stopped.Do(func() {
+		close(r.stop)
+		<-r.done
+		r.sample("")
+	})
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.log
 }
 
@@ -101,8 +107,8 @@ func (l Log) FirstPayload(name string) (time.Duration, bool) {
 	return 0, false
 }
 
-// LastPayload is the first sample after the torrent's payload stopped changing, and whether it
-// ever changed.
+// LastPayload is the time of the last sample at which the torrent's payload had changed, and
+// whether it ever changed.
 func (l Log) LastPayload(name string) (time.Duration, bool) {
 	at, found := time.Duration(0), false
 	for i := 1; i < len(l.Samples); i++ {

@@ -4,13 +4,13 @@ A personal local BitTorrent client for macOS (the owner's own Apple Silicon Mac)
 
 ## Current state
 
-**Stage P1 has started.** There are specifications, a mockup, a plan, a decision register, the **first minimal `.app`** (task 003): a Wails window with a React button that calls a Go method, **one local quality gate** (task 004): `go tool devtool check`, and **the Go–TypeScript contract** (task 005): DTOs, errors, idempotent operations and ordering rules, executable in both languages. There are no product features (torrents, library) yet.
+**Stage P1 has started.** There are specifications, a mockup, a plan, a decision register, the **first minimal `.app`** (task 003): a Wails window with a React button that calls a Go method, **one local quality gate** (task 004): `go tool devtool check`, **the Go–TypeScript contract** (task 005): DTOs, errors, idempotent operations and ordering rules, executable in both languages, and **own test torrents with a closed local swarm** (task 006) on anacrolix/torrent v1.61.0. There are no product features (torrents, library) yet.
 
 | What | State |
 |---|---|
-| Tasks [001](product/tasks/001-scope-and-decision-register.md), [002](product/tasks/002-repository-and-agent-entrypoint.md), [003](product/tasks/003-wails-macos-build-spike.md), [004](product/tasks/004-reproducible-check-commands.md), [005](product/tasks/005-domain-dto-and-bridge-contract.md) | see [navigation](product/tasks/README.md#navigation-of-all-tasks) |
-| **Next tasks** | [006 — controlled torrents](product/tasks/006-controlled-torrent-fixtures.md), [008 — SQLite driver](product/tasks/008-sqlite-driver-durability-spike.md), [017 — local diagnostics](product/tasks/017-local-diagnostics-privacy.md), [035 — React bridge and resync](product/tasks/035-react-bridge-state-resync.md) |
-| Coverage of our own code | 100% Go (statements, raw counters, unit tests + `.app` run) and 100% TS (4 metrics per file), enforced by `go tool devtool check` — [report 004](docs/verification/004-reproducible-check-commands.md), [report 005](docs/verification/005-domain-dto-and-bridge-contract.md) |
+| Tasks [001](product/tasks/001-scope-and-decision-register.md), [002](product/tasks/002-repository-and-agent-entrypoint.md), [003](product/tasks/003-wails-macos-build-spike.md), [004](product/tasks/004-reproducible-check-commands.md), [005](product/tasks/005-domain-dto-and-bridge-contract.md), [006](product/tasks/006-controlled-torrent-fixtures.md) | see [navigation](product/tasks/README.md#navigation-of-all-tasks) |
+| **Next tasks** | [007 — engine API and lifecycle](product/tasks/007-engine-api-lifecycle-spike.md), [008 — SQLite driver](product/tasks/008-sqlite-driver-durability-spike.md), [017 — local diagnostics](product/tasks/017-local-diagnostics-privacy.md), [035 — React bridge and resync](product/tasks/035-react-bridge-state-resync.md) |
+| Coverage of our own code | 100% Go (statements, raw counters, unit tests + `.app` run) and 100% TS (4 metrics per file), enforced by `go tool devtool check` — [report 004](docs/verification/004-reproducible-check-commands.md), [report 005](docs/verification/005-domain-dto-and-bridge-contract.md), [report 006](docs/verification/006-controlled-torrent-fixtures.md) |
 
 ## Stack
 
@@ -46,11 +46,12 @@ product/                      everything about the product concept and plan:
   tasks/                      plan and 68 numbered tasks
   archive/                    historical materials, read-only
 main.go, main_test.go         Wails entry point: embedded frontend/dist, run(start, stderr, ledger)
-go.mod, go.sum                Go 1.27.2, Wails v2.16.0 (library + CLI as go tool)
+go.mod, go.sum                Go 1.27.2, Wails v2.16.0 (library + CLI as go tool), anacrolix/torrent v1.61.0 (tests only so far)
 wails.json                    Wails configuration (npm ci, npm run build)
 internal/app/                 Wails facade (AppAPI): GetRuntimeInfo, GetLibrarySnapshot, GetOperation, ErrorFormatter
 internal/app/contracts/       bridge DTOs, AppError, strict requests, shared JSON examples (testdata/)
 internal/app/operations/      idempotent operation ledger
+internal/torrentengine/testutil/  fixture: own v1/v2/hybrid test torrents (testdata/); swarm: closed loopback swarm
 cmd/devtool/, internal/devtool/   quality gate, plan and doc checks, workspace setup/run, run as go tool devtool
 .claude/, .codex/             agents, commands, hook and action instructions for Claude Code and Codex
 .octopus/, .conductor/        parallel-workspace runners: setup/run scripts, action prompts
@@ -63,7 +64,7 @@ build/darwin/, build/appicon.png   Info.plist (bundle ID, minimum macOS), icon
 docs/                         policy, ADRs, evidence, and docs by domain: app, bridge, frontend, tooling, development
 ```
 
-**Not created yet** — from [architecture §3](product/APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first): `internal/torrentengine/`, `internal/library/`, `internal/files/`, `internal/automation/`, `internal/platform/`, `internal/diagnostics/`, `frontend/src/{state,i18n,styles}/`, `scripts/`.
+**Not created yet** — from [architecture §3](product/APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first): `internal/torrentengine/` itself (only `testutil/` exists), `internal/library/`, `internal/files/`, `internal/automation/`, `internal/platform/`, `internal/diagnostics/`, `frontend/src/{state,i18n,styles}/`.
 
 Tracing a scenario from the UI to Go: [desktop shell](docs/app/desktop-shell.md) — the button in `frontend/src/features/runtime-check` → `frontend/src/bridge/runtimeInfo.ts` → `frontend/wailsjs/go/app/App.js` → `internal/app.App.GetRuntimeInfo`. For a future requirement: [TR-01](product/PROJECT_REQUIREMENTS.md#22-downloading-and-seeding) → [matrix](product/tasks/README.md#full-coverage-of-the-80-requirements) → [025](product/tasks/025-pause-resume-application.md) → `internal/app` → `internal/torrentengine` / `internal/library`.
 
@@ -119,6 +120,7 @@ engine (tasks 007, 018) and UI tests through the test bridge (task 035). Manual 
 
 ```sh
 go test -race ./internal/app -run TestGetRuntimeInfoReportsCompiledGoRuntime -v
+go test -race -count=1 ./internal/torrentengine/...   # test torrents and the loopback swarm, about 12 s
 npm --prefix frontend test -- src/features/runtime-check/RuntimeCheck.test.tsx
 npm --prefix frontend run lint -- src/features/runtime-check/RuntimeCheck.tsx
 ```
@@ -134,6 +136,7 @@ go tool devtool check-docs                    # documentation links and agent-in
 go tool devtool check-plan                    # the task plan; plan-nav regenerates its navigation table
 go tool devtool plan-nav
 go tool devtool codex-agents                  # Codex agents from .claude/agents
+go test ./internal/torrentengine/testutil/fixture -args -update   # rewrite the committed test torrents
 sh .octopus/scripts/setup.sh                  # workspace preparation for octopus / Conductor
 OCTOPUS_PORT=34115 sh .octopus/scripts/run.sh # dev server for a workspace
 ```

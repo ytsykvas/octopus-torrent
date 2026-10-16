@@ -68,7 +68,8 @@ fail it (the first real run did exactly that). Package coverage 100.0% of statem
 `.app` profile without a zero block. Real boundaries checked for real: `OSSystem` methods
 (`system_test.go`, including `Get` against `httptest`), the `.app` run on the owner's Mac, the
 registries over the network. Not built yet and printed as `not_run`: real-engine integration (007,
-018), test-bridge UI tests (035).
+018), test-bridge UI tests (035). The loopback swarm tests of 006 are ordinary Go tests and run in
+the `go tests` step of every mode ([test torrents](test-torrents.md)).
 
 ## Refactoring and debt check
 

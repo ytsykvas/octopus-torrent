@@ -51,12 +51,17 @@ func TestCatalogMatchesTheCommittedTestdata(t *testing.T) {
 }
 
 func TestBuildingTwiceGivesTheSameBytes(t *testing.T) {
-	first, second := build(), build()
+	first, second := buildCatalog(), buildCatalog()
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("two builds of the catalog differ")
 	}
 	if !reflect.DeepEqual(first, All()) {
 		t.Fatal("All() differs from a fresh build")
+	}
+	mutated := All()
+	mutated[0].Metainfo[0], mutated[0].Files[0].Path[0] = 'x', "changed"
+	if !reflect.DeepEqual(first, All()) {
+		t.Fatal("changing a fixture returned by All() changed the catalog")
 	}
 }
 
@@ -64,8 +69,8 @@ func TestEngineNamesTheModuleThisBuildUses(t *testing.T) {
 	info, _ := debug.ReadBuildInfo()
 	for _, m := range info.Deps {
 		if m.Path == "github.com/anacrolix/torrent" {
-			if got := m.Path + " " + m.Version; got != Engine {
-				t.Fatalf("Engine = %q, the build uses %q: re-record the engine results and update Engine", Engine, got)
+			if got := m.Path + " " + m.Version; got != EngineModule {
+				t.Fatalf("EngineModule = %q, the build uses %q: re-record the engine results and update EngineModule", EngineModule, got)
 			}
 			return
 		}
@@ -303,8 +308,27 @@ func TestErrorsAreReturnedNotHidden(t *testing.T) {
 	if err := named(t, "v2-single").CorruptPiece(dir, 0); err == nil || !strings.Contains(err.Error(), "v2") {
 		t.Errorf("CorruptPiece on v2 = %v, want a refusal", err)
 	}
+	if err := named(t, "v1-single").WritePayload("relative"); err == nil || !strings.Contains(err.Error(), "not absolute") {
+		t.Errorf("WritePayload into a relative directory = %v", err)
+	}
+	written := t.TempDir()
+	if err := named(t, "v1-single").WritePayload(written); err != nil {
+		t.Fatal(err)
+	}
+	if err := named(t, "v1-single").WritePayload(written); err == nil {
+		t.Error("WritePayload replaced existing files")
+	}
+	if err := named(t, "v1-single").CorruptPiece(written, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := named(t, "v1-single").CorruptPiece(written, 0); err == nil || !strings.Contains(err.Error(), "not this fixture's payload") {
+		t.Errorf("CorruptPiece of changed data = %v", err)
+	}
 	if err := named(t, "invalid-truncated").WritePayload(dir); err == nil {
 		t.Error("WritePayload of a metainfo-only fixture succeeded")
+	}
+	if err := named(t, "invalid-piece-layer").CorruptPiece(dir, 0); err == nil || !strings.Contains(err.Error(), "metainfo-only") {
+		t.Errorf("CorruptPiece of a metainfo-only fixture = %v", err)
 	}
 }
 

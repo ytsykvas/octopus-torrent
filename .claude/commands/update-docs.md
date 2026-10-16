@@ -29,7 +29,7 @@ git ls-files -co --exclude-standard 'docs/*.md'
 | Change | Document that must agree |
 |---|---|
 | Behavior, module, contract or command of a feature | its feature document `docs/<domain>/<feature>.md` (from `docs/_FEATURE_TEMPLATE.md`), and its row in `docs/README.md` |
-| How a domain works (flow, API, recipe) | the guide or reference in that domain. `app/`: shell, facade, operations; `bridge/`: contract, calling Go, ordering, adding a command; `frontend/`: structure; `tooling/`: gate, devtool, task plan, agent tooling; `development/`: getting started, testing, workflow |
+| How a domain works (flow, API, recipe) | the guide or reference in that domain. `app/`: shell, facade, operations; `bridge/`: contract, calling Go, ordering, adding a command; `frontend/`: structure; `tooling/`: gate, devtool, task plan, test torrents and the swarm (`internal/torrentengine/testutil`), agent tooling; `development/`: getting started, testing, workflow |
 | A significant choice (library, version, boundary, policy) | an ADR in `docs/decisions/` (from `_ADR_TEMPLATE.md`), its row in `docs/README.md`, and the register entry in `docs/decisions/project-baseline.md` if it closes an O-item |
 | Work on a numbered task | `docs/verification/<NNN>-<slug>.md`; the status in **both** the task file and the `product/tasks/README.md` navigation (`go tool devtool plan-nav`); the "Execution result" section |
 | Build or check commands, directories, current state | `README.md` (commands, directory map, current state) and [getting started](../../docs/development/getting-started.md) |
@@ -57,6 +57,7 @@ grep -hoE 'func \([a-z]* \*App\) [A-Z][A-Za-z]*' internal/app/*.go | sed 's/.* /
 grep -o 'usage: devtool [^`]*' internal/devtool/devtool.go                               # commands → docs/tooling/devtool.md
 grep -hoE 'export (async )?function [a-zA-Z]+' frontend/src/bridge/*.ts | sed 's/.* //'  # wrappers → docs/bridge/calling-go.md "Wrappers" (callGo is the helper)
 grep -o '"[a-z]*\.[a-zA-Z]*"' internal/app/contracts/testdata/vocabulary.json            # error codes → ADR api-contract "Errors" table (codes only; error.unknown is a message key)
+grep -o '"name": "[a-z0-9-]*"' internal/torrentengine/testutil/fixture/testdata/fixtures.json  # fixtures → docs/tooling/test-torrents.md catalog tables
 ```
 
 - **Missing row:** the code has it and the document does not. Action: Create.

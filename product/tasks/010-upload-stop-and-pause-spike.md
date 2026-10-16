@@ -53,6 +53,8 @@ A failed result of this prototype blocks completion of tasks 053 and 054 and fin
 
 **Basis for technical decisions:** [Upload implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go). During implementation, reconcile signatures and constraints with the pinned version. Reading the API documentation does not replace a performed integration check.
 
+**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): measure with `swarm.Record` (payload counters sampled per torrent, `Mark` for the command time, `Log.FirstPayload`/`LastPayload`/`PayloadAfter`) on the rate-limited `v1-large` fixture. 006 recorded, without interpreting: after `DisallowDataUpload` on the seeder at 256 KiB/s, 0 payload bytes reached the leecher in the next second (50 ms sampling); `Count` separates payload from protocol bytes. `swarm.Connect` marks peers trusted (all share 127.0.0.1 and the engine bans by IP); a trusted peer that sends bad data is never banned and its piece is re-requested in a loop.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

@@ -57,6 +57,8 @@ Verifying the destination folder does not invoke the Trash. Spike 012 may be use
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): the contract only checks a folder path lexically; resolve symlinks and check a writable directory (`os.Root`) before any write.
 
+**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): on anacrolix/torrent v1.61.0 a BEP 52 (v2 or hybrid) single-file torrent is stored as `<save folder>/<name>/<name>`, unlike a v1 single file (`<save folder>/<name>`); the path plan must match what 009 decides for storage. The engine truncates an existing file at any zero-length path of a torrent the moment it is added, so the path plan and the collision check (DEL-02) must include zero-length files and must run before the torrent reaches the engine.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

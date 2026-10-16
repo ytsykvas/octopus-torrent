@@ -60,6 +60,8 @@ The application must exchange its own DTOs through the engine adapter and perfor
 
 **Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, check the signatures and constraints against the pinned version. Reading the API documentation does not replace a performed integration check.
 
+**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): anacrolix/torrent v1.61.0 is already in `go.mod` for the test fixtures and swarm (`internal/torrentengine/testutil`); confirm or move the pin here (O2) and update `fixture.Engine`. Use `fixture` and `swarm` for every check; do not write a second harness. On v1.61.0 a v2-only torrent panics on add (`panicif.Zero(infoHash)` in `Client.AddTorrentOpt`) — decide the product answer (reject such imports with an error, or wait for a release with the fix) and keep the tracking test. `VerifyDataContext` returns before the piece completion is stored, and `Client.Close` closes listeners in a goroutine: lifecycle checks must wait for both (see `settle` and `Refuses` in the swarm).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.
