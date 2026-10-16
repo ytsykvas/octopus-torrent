@@ -50,6 +50,11 @@ func (s spec) build() Fixture {
 	name := s.root
 	if name == "" {
 		name = fx.Files[0].Path[0]
+		if s.format != V1 {
+			// The pinned engine treats a BEP 52 file tree as a folder even with one file, so it keeps
+			// a single-file v2 or hybrid torrent in a folder of the torrent's name.
+			fx.root = name
+		}
 	}
 	info := map[string]any{"name": name, "piece length": s.pieceLength}
 	layers := map[string]string{}

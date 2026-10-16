@@ -223,8 +223,15 @@ func TestWritePayloadCreatesEveryFileUnderTheDirectory(t *testing.T) {
 			}
 		}
 	}
-	if got := named(t, "v1-tree").FilePath("/d", File{Path: []string{"docs", "readme.txt"}}); got != "/d/tree/docs/readme.txt" {
-		t.Errorf("FilePath = %q", got)
+	for name, want := range map[string]string{"v1-tree": "/d/tree/docs/readme.txt", "v1-single": "/d/single.bin", "hybrid-single": "/d/single.bin/single.bin"} {
+		fx := named(t, name)
+		file := fx.Files[0]
+		if name == "v1-tree" {
+			file = File{Path: []string{"docs", "readme.txt"}}
+		}
+		if got := fx.FilePath("/d", file); got != want {
+			t.Errorf("%s: FilePath = %q, want %q", name, got, want)
+		}
 	}
 }
 
@@ -308,8 +315,8 @@ func valid(t *testing.T) (fixtures []Fixture) {
 			fixtures = append(fixtures, fx)
 		}
 	}
-	if len(fixtures) != 7 {
-		t.Fatalf("%d fixtures with payload, want 7", len(fixtures))
+	if len(fixtures) != 8 {
+		t.Fatalf("%d fixtures with payload, want 8", len(fixtures))
 	}
 	return fixtures
 }

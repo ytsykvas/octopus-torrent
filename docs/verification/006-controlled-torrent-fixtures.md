@@ -35,8 +35,8 @@ Approved by the owner on 16 October 2026 after one self-review pass (7.5 → 9 o
 |---|---|
 | A — gate inventory rules | done |
 | B — module and fixture generator | done |
-| C — swarm and scenarios | in progress |
-| D — documents, review, acceptance | planned |
+| C — swarm and scenarios | done |
+| D — documents, review, acceptance | in progress |
 
 ## Stage A — gate inventory rules
 
@@ -114,3 +114,74 @@ The quality-gate ADR left two inventory rules to this task.
   `add`/`accepted` results of the invalid fixtures are confirmed by the swarm tests in stage C.
 - **Refactoring:** none beyond the above. The generator writes its own bencode instead of using the
   engine's `Info` struct, because that struct cannot leave out `pieces root` for an empty file.
+
+## Stage C — swarm and scenarios
+
+- **RED** `go test ./internal/torrentengine/testutil/swarm` failed to build: `undefined: Options`,
+  `WaitComplete`, `Count`, `Peer`, `NonLoopback`, … (the package did not exist).
+- **GREEN:** package `internal/torrentengine/testutil/swarm`.
+  - `peer.go`:
+    - `NewPeer` builds a client listening on 127.0.0.1 only, TCP only (`DisableUTP`), no IPv6. DHT,
+      trackers, PEX, port forwarding, web seeds and WebTorrent are off; the engine has no LSD.
+    - Storage is `storage.NewFileOpts` in `Dir` with in-memory piece completion, so no database file
+      is written.
+    - Logs go to a buffer, and `Callbacks.NewPeer` records every peer address.
+    - `Settings`, `ListenAddrs`, `SeenAddrs`, `Logs`.
+    - `Add` returns an engine panic as an error.
+    - `Seed` returns `*IncompleteError` for missing pieces; `Leech`, `AddInfohash`, `Connect`.
+    - `Close` stops the client and storage, then checks the address with `Refuses`.
+  - `wait.go`: `WaitInfo`, `WaitComplete`, and `IncompleteError` (completed, length, missing pieces,
+    wrapped reason).
+  - `counters.go`: `Count` (payload separately from all bytes); `Recorder` with `Mark` and `Stop`;
+    `Log.FirstPayload`, `LastPayload`, `MarkAt`, `PayloadAfter`.
+  - `diagnostics.go`: `NonLoopback` and `WaitEngineStopped` (polls the goroutine stacks for engine
+    frames).
+  - `newClient` is the only test seam.
+- **Results:** `go test -race -count=1 ./internal/torrentengine/...` was green twice in a row. The
+  swarm package took 13.5–14.0 s, under the 60 s budget. Coverage is 100.0% of statements for both
+  packages. Under `-race`, no data race was reported in the engine or in our code.
+
+### Scenarios and measured results
+
+| Scenario | Fixture | Limit | Result |
+|---|---|---|---|
+| Single-file transfer | `v1-single`, `hybrid-single` | 20 s | pass. Bytes and SHA-256 match. The leecher's payload read and the seeder's payload written are ≥ the total. Only the payload files are in either directory. |
+| Multi-file transfer | `v1-tree-no-empty`, `hybrid-tree` (with `empty.dat`) | 20 s | pass. Same checks; the zero-length file exists. |
+| Only local peers | all four transfers | — | pass. Every discovery switch is off. One TCP listen address on 127.0.0.1. Every peer address seen is loopback. No non-loopback IP appears in either engine log (debug level). |
+| No peers | `v1-single`; magnet of `v1-tree` | 2 s | pass. `IncompleteError` with 0 of 57344 bytes and pieces [0 1 2 3], and "no metainfo" for the magnet. Both return within 3 s. |
+| Corrupted piece | `v1-tree-no-empty`, piece 1 flipped on the seeder | 3 s | pass. `Seed` reports piece 1 missing. The leecher ends with exactly [1] missing and 75000 − 32768 bytes complete. |
+| Cancellation | `v1-large` at 256 KiB/s | — | pass. `context.Canceled` within 1 s of the cancel, with a partial transfer. |
+| Measurement | `v1-large` at 256 KiB/s, sampled every 50 ms | 20 s | First payload at 51 ms. `DisallowDataUpload` on the seeder at 986 ms, after a quarter of the file. **0 payload bytes** after the stop within the next second. The number is recorded only; 010 interprets it. |
+| Two runs in a row | `v1-single` | 5 s each | pass. Both former listen addresses refuse connections, and no engine goroutine is left after either run. `lsof -iTCP -sTCP:LISTEN` before and after the package shows no new listener. |
+| Add stage of every fixture | all that parse | — | pass. Matches `fixtures.json`. |
+
+### Engine findings (pinned anacrolix/torrent v1.61.0)
+
+1. **v2-only torrents cannot be added.**
+   - `Client.AddTorrentOpt` panics on a zero v1 infohash (`panicif.Zero`).
+   - `Peer.Add` recovers the panic as an error, and `TestEveryFixtureIsAddedAsRecorded` asserts it.
+   - This is recorded as `engine: add` for `v2-single` and `v2-tree`.
+2. **The default file IO (mmap) cannot write a chunk that spans a zero-length file.**
+   - The engine logs "writing received chunk 0: invalid argument", then "disabling data download".
+     Piece 0 of `v1-tree` (docs/readme.txt, then the empty file, then clip.bin) never completes.
+   - With `TORRENT_STORAGE_DEFAULT_FILE_IO=classic` (an environment variable read in the engine's
+     `init`) the same transfer completes.
+   - The control fixture `v1-tree-no-empty` transfers.
+   - Hybrids are not affected: pad files put the empty file on a piece boundary.
+   - `TestPinnedEngineCannotWriteAChunkAcrossAnEmptyFile` tracks it.
+   - The storage decision is 009's.
+3. **A BEP 52 single-file torrent is stored inside a folder of its name.**
+   - Even with one entry, `FileTree.IsDir()` is true, so `hybrid-single` lives at
+     `<dir>/single.bin/single.bin`.
+   - `fixture.FilePath` follows this layout. File placement is 009/020's.
+4. **The engine accepts two invalid fixtures.**
+   - `invalid-hybrid-mismatch`: the v1 list disagrees with the file tree.
+   - `invalid-path-traversal`: a `..` component.
+   - Our parser (019) must reject both. Truncated bencode fails at load, a wrong info type at
+     `UnmarshalInfo`, and a corrupted piece layer at `ValidatePieceLayers`. A short `pieces` and a
+     negative length fail at add.
+- **Refactoring:**
+  - `RemoteAddrs(torrent)` was replaced by `Peer.SeenAddrs()`, because a completed transfer closes
+    its connections and the torrent forgets its peers.
+  - The fixture catalog gained `v1-tree-no-empty`.
+  - `invalid-hybrid-mismatch` was re-recorded as `accepted`.

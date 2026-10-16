@@ -1,5 +1,7 @@
 package fixture
 
+import "slices"
+
 const (
 	singleLength = 57344   // 3.5 pieces of 16 KiB
 	largeLength  = 1 << 20 // 64 pieces of 16 KiB
@@ -27,6 +29,9 @@ func specs() []spec {
 	return []spec{
 		v1Single,
 		v1Tree,
+		{name: "v1-tree-no-empty", purpose: "v1-tree without the empty file: the control for the pinned engine's empty-file chunk failure",
+			set: "tree", format: V1, pieceLength: 32 << 10, root: "tree", files: slices.DeleteFunc(slices.Clone(treeFiles), func(e entry) bool { return e.length == 0 }),
+			engine: StageAccepted},
 		{name: "v1-large", purpose: "1 MiB v1 file for rate-limited transfers, measurement and cancellation", set: "large", format: V1,
 			pieceLength: 16 << 10, files: []entry{{"large.bin", largeLength}}, engine: StageAccepted},
 		{name: "v2-single", purpose: "v2-only single file; the pinned engine panics when it is added", set: "single", format: V2,
@@ -46,10 +51,10 @@ func specs() []spec {
 		invalid(v1Tree, "invalid-negative-length", "a file with length -1", StageAdd, func(info map[string]any, _ map[string]string) {
 			info["files"].([]any)[0].(map[string]any)["length"] = int64(-1)
 		}, 0),
-		invalid(v1Tree, "invalid-path-traversal", "a path component \"..\" that leaves the save folder", StageAccepted, func(info map[string]any, _ map[string]string) {
+		invalid(v1Tree, "invalid-path-traversal", "a path component \"..\" that leaves the save folder; the engine accepts it", StageAccepted, func(info map[string]any, _ map[string]string) {
 			info["files"].([]any)[0].(map[string]any)["path"] = []any{"..", "escape.bin"}
 		}, 0),
-		invalid(hybridTree, "invalid-hybrid-mismatch", "a hybrid whose v1 file list disagrees with its file tree", StageAdd, func(info map[string]any, _ map[string]string) {
+		invalid(hybridTree, "invalid-hybrid-mismatch", "a hybrid whose v1 file list disagrees with its file tree; the engine accepts it", StageAccepted, func(info map[string]any, _ map[string]string) {
 			info["files"].([]any)[0].(map[string]any)["length"] = int64(10001)
 		}, 0),
 		invalid(hybridTree, "invalid-piece-layer", "a hybrid whose piece layer does not hash to its pieces root", StagePieceLayers, func(_ map[string]any, layers map[string]string) {

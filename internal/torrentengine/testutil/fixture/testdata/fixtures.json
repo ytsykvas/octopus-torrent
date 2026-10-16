@@ -71,6 +71,50 @@
       "engine": "accepted"
     },
     {
+      "name": "v1-tree-no-empty",
+      "purpose": "v1-tree without the empty file: the control for the pinned engine's empty-file chunk failure",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "690d517572d061b6546308120dce5d181f4cbccc",
+      "files": [
+        {
+          "path": [
+            "docs",
+            "readme.txt"
+          ],
+          "length": 10000,
+          "sha256": "ac7daee8d67be494a71e6d795ad8d93f9f2c2ab9a1ccca5d48301b2cbdf978b3"
+        },
+        {
+          "path": [
+            "media",
+            "clips",
+            "clip.bin"
+          ],
+          "length": 40000,
+          "sha256": "e99fae9f574f5655b9d1d679e6bd494d42c7f93a85079f288127aadba4d9520e"
+        },
+        {
+          "path": [
+            "media",
+            "readme.txt"
+          ],
+          "length": 20000,
+          "sha256": "9117439f23798faee80d0bacf4939f934f753dd1747c2ba6b07c086ae2598237"
+        },
+        {
+          "path": [
+            "Ünïcode",
+            "файл.bin"
+          ],
+          "length": 5000,
+          "sha256": "a3c1adc1c9d20e89f382220b981f25065528d7877c7dab1319bbc45eb512d649"
+        }
+      ],
+      "engine": "accepted"
+    },
+    {
       "name": "v1-large",
       "purpose": "1 MiB v1 file for rate-limited transfers, measurement and cancellation",
       "format": "v1",
@@ -163,8 +207,8 @@
       "format": "hybrid",
       "pieceLength": 16384,
       "pieces": 4,
-      "infohashV1": "fa935fc1dd0d9dbd6934811513bea2abee525aa2",
-      "infohashV2": "fc31bf94b331dbfdfcb1476f913828c3992be8adda3d2eb1cb964ca1dd8f0eff",
+      "infohashV1": "3d63aaa8ec77f868430ff3ed72810d2897aeedc7",
+      "infohashV2": "9c2951ae11e9aaacf5481d56053da1c0874b9aa15fda09499e88a47a8def9c0f",
       "files": [
         {
           "path": [
@@ -266,7 +310,7 @@
     },
     {
       "name": "invalid-path-traversal",
-      "purpose": "a path component \"..\" that leaves the save folder",
+      "purpose": "a path component \"..\" that leaves the save folder; the engine accepts it",
       "format": "v1",
       "pieceLength": 32768,
       "pieces": 3,
@@ -275,13 +319,13 @@
     },
     {
       "name": "invalid-hybrid-mismatch",
-      "purpose": "a hybrid whose v1 file list disagrees with its file tree",
+      "purpose": "a hybrid whose v1 file list disagrees with its file tree; the engine accepts it",
       "format": "hybrid",
       "pieceLength": 32768,
       "pieces": 5,
       "infohashV1": "2c194636c8f14b34a48bbdac623f285578fcc638",
       "infohashV2": "44615594c95aad0cad1c6bdaf2bbd3f9064354bf053b6c467c700b6fb4f1ff36",
-      "engine": "add"
+      "engine": "accepted"
     },
     {
       "name": "invalid-piece-layer",
