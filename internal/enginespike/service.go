@@ -24,8 +24,20 @@ var (
 	rateLimit    = 64 << 10
 	tickInterval = 250 * time.Millisecond
 	seedLimit    = 20 * time.Second
+	// releaseLimit bounds the clean-up of a failed Start, which no caller's context covers.
+	releaseLimit = 5 * time.Second
+	// stallTicks is how many ticks a running transfer may stand still before the ticker switches the
+	// seeder's upload off and on again (engine finding 14): 2 s.
+	stallTicks   = 8
+	setUpload    = switchUpload
 	mkdirTemp    = os.MkdirTemp
 	writePayload = fixture.Fixture.WritePayload
+)
+
+// The peers' folders inside the spike's own folder.
+const (
+	seederDir  = "seeder"
+	leecherDir = "leecher"
 )
 
 var (
@@ -46,10 +58,14 @@ type NewPeer func(dir string, opts swarm.Options) (*swarm.Peer, error)
 //
 // One mutex orders everything: Start, Pause, Resume, every tick and Shutdown. A command changes the
 // engine and takes the next revision in the same critical section, so the order of the revisions is
-// the order in which the commands reached the engine.
+// the order in which the commands reached the engine. Start holds the mutex while it creates the run,
+// which takes as long as the seeder's piece check; Shutdown ends the service's lifetime context
+// before it waits for the mutex, so a Start in progress gives up instead of delaying the quit.
 type Service struct {
 	emit    Emit
 	newPeer NewPeer
+	life    context.Context // ends when Shutdown begins; bounds every engine wait of a Start
+	end     context.CancelFunc
 
 	mu      sync.Mutex
 	ctx     context.Context // from Startup; nil before it
@@ -62,6 +78,8 @@ type Service struct {
 	lt      *torrent.Torrent // the leecher's torrent: the published progress
 	stop    chan struct{}    // closes the ticker
 	ticking chan struct{}    // closed when the ticker has returned
+	still   int              // ticks the running transfer has stood still
+	waking  bool             // the ticker switched the upload off; the next tick switches it on
 
 	shutdown sync.Once
 	closed   error
@@ -69,7 +87,8 @@ type Service struct {
 
 // New returns an idle service.
 func New(emit Emit, newPeer NewPeer) *Service {
-	return &Service{emit: emit, newPeer: newPeer, state: Transfer{State: Idle}}
+	life, end := context.WithCancel(context.Background())
+	return &Service{emit: emit, newPeer: newPeer, life: life, end: end, state: Transfer{State: Idle}}
 }
 
 // API is the only type bound to JavaScript.
@@ -89,6 +108,7 @@ func (s *Service) Startup(ctx context.Context) {
 // the first result. Nothing is published after it returns, and Start is refused.
 func (s *Service) Shutdown(ctx context.Context) error {
 	s.shutdown.Do(func() {
+		s.end()
 		s.mu.Lock()
 		s.stopped = true
 		stop, ticking := s.stop, s.ticking
@@ -104,7 +124,9 @@ func (s *Service) Shutdown(ctx context.Context) error {
 	return s.closed
 }
 
-// release closes what a run created and removes its folder; the caller holds mu.
+// release closes what a run created and removes its folder; the caller holds mu. Only the two peer
+// folders are removed recursively; the folder itself must then be empty, so a wrong s.dir could
+// never cost more than those two names.
 func (s *Service) release(ctx context.Context) error {
 	var errs []error
 	for _, p := range []*swarm.Peer{s.leecher, s.seeder} {
@@ -113,7 +135,10 @@ func (s *Service) release(ctx context.Context) error {
 		}
 	}
 	if s.dir != "" {
-		errs = append(errs, os.RemoveAll(s.dir))
+		for _, sub := range []string{seederDir, leecherDir} {
+			errs = append(errs, os.RemoveAll(filepath.Join(s.dir, sub)))
+		}
+		errs = append(errs, os.Remove(s.dir))
 	}
 	s.leecher, s.seeder, s.st, s.lt, s.dir = nil, nil, nil, nil, ""
 	return errors.Join(errs...)
@@ -131,7 +156,9 @@ func (s *Service) start() (Transfer, error) {
 		return s.state, nil // one run per service: a reloaded page gets the same run
 	}
 	if err := s.launch(); err != nil {
-		err = errors.Join(err, s.release(context.Background()))
+		ctx, cancel := context.WithTimeout(context.Background(), releaseLimit)
+		defer cancel()
+		err = errors.Join(err, s.release(ctx))
 		s.state.State, s.state.Error = Failed, err.Error()
 		s.publish()
 		return s.state, err
@@ -159,7 +186,7 @@ func (s *Service) launch() error {
 		return fmt.Errorf("create the spike's folder: %w", err)
 	}
 	s.dir = dir
-	seedDir, leechDir := filepath.Join(dir, "seeder"), filepath.Join(dir, "leecher")
+	seedDir, leechDir := filepath.Join(dir, seederDir), filepath.Join(dir, leecherDir)
 	if err := writePayload(fx, seedDir); err != nil {
 		return fmt.Errorf("write the payload: %w", err)
 	}
@@ -175,7 +202,7 @@ func (s *Service) launch() error {
 	if s.lt, err = s.leecher.Leech(mi); err != nil {
 		return fmt.Errorf("add the torrent to the leecher: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(s.ctx, seedLimit)
+	ctx, cancel := context.WithTimeout(s.life, seedLimit)
 	defer cancel()
 	if s.st, err = s.seeder.Seed(ctx, mi); err != nil {
 		return fmt.Errorf("seed the payload: %w", err)
@@ -184,20 +211,29 @@ func (s *Service) launch() error {
 	return nil
 }
 
+// switchUpload is the seeder's upload switch of the pinned engine.
+func switchUpload(t *torrent.Torrent, allowed bool) {
+	if allowed {
+		t.AllowDataUpload()
+	} else {
+		t.DisallowDataUpload()
+	}
+}
+
 // command applies the seeder's upload switch and publishes the result. The engine is called only
-// when the state changes. The leecher's download switch is not used: allowing download after
-// disallowing it can stall the pinned engine's transfer for good (engine finding 12), while the
-// upload switch resumed in every run.
-func (s *Service) command(next State, apply func(*torrent.Torrent)) (Transfer, error) {
+// when the state changes. The leecher's download switch is not used: allowing download right after
+// disallowing it stalls the pinned engine's transfer (engine finding 12). The upload switch stalls
+// far more rarely (finding 14), and the ticker wakes such a stall.
+func (s *Service) command(next State) (Transfer, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.stopped || (s.state.State != Running && s.state.State != Paused) {
 		return s.state, errNotRunning
 	}
 	if s.state.State != next {
-		apply(s.st)
+		setUpload(s.st, next == Running)
 	}
-	s.state.State = next
+	s.state.State, s.still, s.waking = next, 0, false
 	s.publish()
 	return s.state, nil
 }
@@ -213,13 +249,36 @@ func (s *Service) tick(stop <-chan struct{}, ticking chan<- struct{}) {
 			return
 		case <-ticker.C:
 			s.mu.Lock()
+			before := s.state.BytesCompleted
 			s.publish()
+			s.wake(before)
 			done := s.state.State == Complete
 			s.mu.Unlock()
 			if done {
 				return
 			}
 		}
+	}
+}
+
+// wake switches the seeder's upload off when a running transfer has stood still for stallTicks, and
+// on again at the next tick, and counts it; the caller holds mu. Engine finding 14: after the upload
+// is allowed again the pinned engine can keep a queued request unserved, and a second off and on
+// serves it. A paused or finished transfer is left alone.
+func (s *Service) wake(before contracts.ByteCount) {
+	switch {
+	case s.state.State != Running:
+	case s.waking:
+		setUpload(s.st, true)
+		s.waking, s.still = false, 0
+	case s.state.BytesCompleted != before:
+		s.still = 0
+	case s.still+1 < stallTicks:
+		s.still++
+	default:
+		setUpload(s.st, false)
+		s.waking = true
+		s.state.Recoveries++
 	}
 }
 
@@ -248,12 +307,12 @@ func (a *API) Start() (Transfer, error) { return a.s.start() }
 
 // Pause stops the seeder's upload, so no payload reaches the leecher.
 func (a *API) Pause() (Transfer, error) {
-	return a.s.command(Paused, (*torrent.Torrent).DisallowDataUpload)
+	return a.s.command(Paused)
 }
 
 // Resume lets the seeder upload again.
 func (a *API) Resume() (Transfer, error) {
-	return a.s.command(Running, (*torrent.Torrent).AllowDataUpload)
+	return a.s.command(Running)
 }
 
 // Snapshot returns the last published state.

@@ -28,7 +28,7 @@ silently bypasses), there was no linter, and dependency age was checked by a one
   acceptance.
 - **Not-run semantics.** A step whose environment is missing (no network, Automation permission
   refused, another OctopusTorrent running) is a mandatory `not_run` and fails the full gate. A tier that
-  does not exist yet — real-engine integration (007, 018), test-bridge UI tests (035) — is printed as
+  does not exist yet — real-engine integration (018), test-bridge UI tests (035) — is printed as
   `not_run (not implemented yet)` and does not block; the line disappears when the tier is built.
 - **TS coverage, independent of the tool.** Vitest 5.0.3 with `@vitest/coverage-v8` 5.0.3 (pinned,
   four metrics, `perFile` thresholds 100) writes `coverage-summary.json`; the gate then derives the
@@ -100,9 +100,10 @@ absolute path passes the gate.
 
 - `/check` runs `go tool devtool check`; `.claude/commands/check.md`, `fix-checks.md`, the README and
   `CLAUDE.md` describe the command instead of a step list.
-- The full gate opens an OctopusTorrent window for a few seconds, needs a logged-in GUI session, the
-  terminal's Automation permission for OctopusTorrent (a one-time macOS prompt) and the network; it
-  refuses while another OctopusTorrent runs, so two workspaces cannot run it at the same time.
+- The full gate opens an OctopusTorrent window, then an EngineSpike window, for a few seconds each.
+  It needs a logged-in GUI session, the terminal's Automation permission for each app (a one-time
+  macOS prompt per app) and the network. It refuses while another instance of either app runs, so
+  two workspaces cannot run it at the same time.
 - A new owned language or source directory needs an inventory rule in the gate before it is
   accepted. New tiers (engine integration, test-bridge UI tests, real `.app` scenarios) replace their
   `not_run` lines when their tasks build them.
@@ -122,7 +123,7 @@ absolute path passes the gate.
   not.
 - **No step time limit yet.** A tool that hangs (a stalled `npm ci`, the first-time Automation prompt)
   hangs the gate visibly; the owner interrupts it. Per-step limits through a context arrive with the
-  first step that can hang unattended (engine integration, 007/018).
+  first step that can hang unattended (engine integration, 018).
 - **Inventory rules for generators and scripts** (decided in
   [006](../../product/tasks/006-controlled-torrent-fixtures.md)): a `.go` file under any `testdata/`
   directory fails the `go coverage` step with its own message, because `go test ./...` never builds or
@@ -130,3 +131,11 @@ absolute path passes the gate.
   inventory, so the `scripts` step accepts a `*.sh` file only as a hand-over: `#!/bin/sh`, comments,
   `set -eu`, `go build -o build/bin/devtool ./cmd/devtool` and `exec build/bin/devtool …`; any other
   line fails. Logic goes into `cmd/devtool` and `internal/devtool`.
+- **More than one Wails app (task 007, [engine-lifecycle](engine-lifecycle.md)).**
+  - Every Wails project is a row of `wailsApps`. The `.app` run, the bindings step and the
+    main-file check cover each row.
+  - The instrumented builds use the import-path pattern `-coverpkg=octopustorrent/...`, so profiles
+    built in different directories cover the same packages.
+  - A `product isolation` step keeps the spike, test support and (until 018) the engine out of the
+    product binary. It lists the product's dependencies with the release build's tags, so it sees
+    what the shipped binary links.

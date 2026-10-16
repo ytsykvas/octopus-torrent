@@ -35,6 +35,9 @@ type Transfer struct {
 	Peers          int                 `json:"peers"`
 	// ClientsStarted counts every engine client this service created; a frontend reload must not
 	// change it.
-	ClientsStarted int    `json:"clientsStarted"`
-	Error          string `json:"error"`
+	ClientsStarted int `json:"clientsStarted"`
+	// Recoveries counts the stalls the ticker woke: a running transfer stood still for 2 s and the
+	// seeder's upload was switched off and on again (engine finding 14).
+	Recoveries int    `json:"recoveries"`
+	Error      string `json:"error"`
 }

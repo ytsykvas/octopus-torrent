@@ -19,9 +19,13 @@ func CheckProductIsolation(module string, deps []string) []string {
 	return found
 }
 
+// releaseTags are the build tags wails build gives the product's release binary on macOS; the
+// isolation step lists the dependencies under them, so it sees what the shipped binary links.
+const releaseTags = "desktop,wv2runtime.download,production"
+
 // isolation proves that the product binary links no spike, no test support and no engine.
 func (c *checker) isolation() stepResult {
-	out, err := c.sys.Capture("go", "list", "-deps", "-f", "{{.ImportPath}}", ".")
+	out, err := c.sys.Capture("go", "list", "-tags", releaseTags, "-deps", "-f", "{{.ImportPath}}", ".")
 	if err != nil {
 		return fail("go list -deps .: "+err.Error(), out)
 	}

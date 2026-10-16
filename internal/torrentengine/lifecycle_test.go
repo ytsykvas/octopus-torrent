@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +28,7 @@ const (
 	transferLimit = 20 * time.Second
 	closeLimit    = 5 * time.Second
 	promptLimit   = time.Second
+	deadlockGrace = 2 * time.Second
 )
 
 // The signatures every later task relies on. A pinned version that changes one fails to compile
@@ -120,7 +123,11 @@ func TestAddingAKnownTorrentReturnsTheSameTorrentWithNewFalse(t *testing.T) {
 
 	otherDir := t.TempDir()
 	other := storage.NewFileOpts(storage.NewFileClientOpts{ClientBaseDir: otherDir, PieceCompletion: storage.NewMapPieceCompletion()})
-	t.Cleanup(func() { _ = other.Close() })
+	t.Cleanup(func() {
+		if err := other.Close(); err != nil {
+			t.Errorf("closing the second storage: %v", err)
+		}
+	})
 	spec, err := torrent.TorrentSpecFromMetaInfoErr(mi)
 	if err != nil {
 		t.Fatal(err)
@@ -288,9 +295,17 @@ func TestATorrentWaitingForMetadataIsDroppedAndClosedPromptly(t *testing.T) {
 	t.Run("Client.Close", func(t *testing.T) {
 		leecher := peer(t, swarm.Options{})
 		lt := leecher.AddInfohash(hash)
-		done := make(chan struct{})
-		go func() { leecher.Client().Close(); close(done) }()
-		if !waitClosed(done, promptLimit) || !waitClosed(lt.Closed(), promptLimit) {
+		closed := make(chan []error, 1)
+		go func() { closed <- leecher.Client().Close() }()
+		select {
+		case errs := <-closed:
+			if len(errs) != 0 {
+				t.Errorf("Client.Close = %v, want no error", errs)
+			}
+		case <-time.After(promptLimit):
+			t.Fatal("Client.Close did not return within 1 s while metadata was awaited")
+		}
+		if !waitClosed(lt.Closed(), promptLimit) {
 			t.Fatal("Client.Close did not end the wait for metadata within 1 s")
 		}
 		closeAll(t, leecher)
@@ -316,7 +331,9 @@ func TestClosingTheClientRepeatedlyDuringTransfersLeavesNothingRunning(t *testin
 		}
 
 		for _, p := range []*swarm.Peer{leecher, seeder} {
-			p.Client().Close()
+			if errs := p.Client().Close(); len(errs) != 0 {
+				t.Errorf("cycle %d: Client.Close = %v, want no error", cycle, errs)
+			}
 			if !waitClosed(p.Client().Closed(), closeLimit) {
 				t.Fatalf("cycle %d: Client.Closed is still open", cycle)
 			}
@@ -384,7 +401,8 @@ func TestPinnedEngineStallsWhenDownloadIsAllowedRightAfterDisallowing(t *testing
 	}
 	lt.DisallowDataDownload()
 	lt.AllowDataDownload()
-	err = swarm.WaitComplete(deadline(t, 3*time.Second), lt) // 1 MiB at 256 KiB/s needs at most 4 s
+	// 1 MiB at 256 KiB/s needs at most 4 s, so a transfer that resumed completes within the wait.
+	err = swarm.WaitComplete(deadline(t, 8*time.Second), lt)
 	var incomplete *swarm.IncompleteError
 	if !errors.As(err, &incomplete) {
 		t.Fatalf("WaitComplete = %v; the transfer resumed, so the engine no longer stalls: re-check 010, 018 and 025's notes", err)
@@ -394,6 +412,50 @@ func TestPinnedEngineStallsWhenDownloadIsAllowedRightAfterDisallowing(t *testing
 	if now := lt.BytesCompleted(); now != before {
 		t.Fatalf("the transfer moved from %d to %d bytes: the engine no longer stalls: re-check 010, 018 and 025's notes", before, now)
 	}
+}
+
+// Finding 13 continued: the rename is not where it ends. The user's file, renamed to the part file,
+// is where the engine then writes the torrent's bytes, and the completed part file takes the name
+// back. A user's file at a torrent path is overwritten, not set aside.
+func TestPinnedEngineOverwritesAUsersFileAtATorrentPathWhenItDownloads(t *testing.T) {
+	// v1-single: v1-tree has a zero-length file, which the default IO cannot download across (006
+	// limitation 2).
+	fx := named(t, "v1-single")
+	seeder := seed(t, fx, swarm.Options{})
+	leecher := peer(t, swarm.Options{})
+	file := fx.Files[0]
+	path := fx.FilePath(leecher.Dir, file)
+	users := []byte("the user's own file, which the torrent never named")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, users, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lt, err := leecher.Leech(metaInfo(t, fx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	swarm.Connect(lt, seeder)
+	if err := swarm.WaitComplete(deadline(t, transferLimit), lt); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(path); err != nil || !bytes.Equal(data, fx.Content(file)) {
+		t.Errorf("%s holds %d bytes (%v), want the torrent's %d: the engine changed, re-check 020, 023, 029 and 030's notes", path, len(data), err, file.Length)
+	}
+	err = filepath.WalkDir(leecher.Dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if data, err := os.ReadFile(p); err != nil || bytes.Contains(data, users) {
+			t.Errorf("%s still holds the user's bytes (%v): the engine changed, re-check 020, 023, 029 and 030's notes", p, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeAll(t, leecher, seeder)
 }
 
 // childDirEnv runs TestPinnedEngineDeadlocksOnVerifyAfterDrop as the child process that deadlocks.
@@ -407,7 +469,8 @@ func TestPinnedEngineDeadlocksOnVerifyAfterDrop(t *testing.T) {
 	// The deadlock keeps the client lock forever, so it runs in a child process: in this one it would
 	// hang every later test and the goroutine check.
 	var out lockedBuffer
-	cmd := exec.Command(os.Args[0], "-test.run=^TestPinnedEngineDeadlocksOnVerifyAfterDrop$", "-test.count=1", "-test.v")
+	// The child's own timeout ends it even if this process dies before it can kill the child.
+	cmd := exec.Command(os.Args[0], "-test.run=^TestPinnedEngineDeadlocksOnVerifyAfterDrop$", "-test.count=1", "-test.v", "-test.timeout=60s")
 	cmd.Env = append(os.Environ(), childDirEnv+"="+t.TempDir())
 	cmd.Stdout, cmd.Stderr = &out, &out
 	if err := cmd.Start(); err != nil {
@@ -415,17 +478,34 @@ func TestPinnedEngineDeadlocksOnVerifyAfterDrop(t *testing.T) {
 	}
 	exited := make(chan error, 1)
 	go func() { exited <- cmd.Wait() }()
+	ended := false
+	defer func() {
+		if !ended {
+			_ = cmd.Process.Kill()
+			<-exited
+		}
+	}()
+	// The child's setup (a client, a payload, a piece check) has a generous limit, so a loaded machine
+	// cannot pass for a fixed engine; the deadlock itself then has a fixed grace period to end.
+	limit := time.After(transferLimit)
+	for !strings.Contains(out.String(), "VerifyDataContext returned") {
+		select {
+		case err := <-exited:
+			ended = true
+			t.Fatalf("the child exited (%v) before VerifyDataContext returned:\n%s", err, out.String())
+		case <-limit:
+			t.Fatalf("VerifyDataContext did not return within %v:\n%s", transferLimit, out.String())
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
 	select {
 	case err := <-exited:
+		ended = true
 		t.Fatalf("the child exited (%v), so the deadlock is gone: re-check 018's notes\n%s", err, out.String())
-	case <-time.After(2 * time.Second):
+	case <-time.After(deadlockGrace):
 	}
-	if err := cmd.Process.Kill(); err != nil {
-		t.Fatal(err)
-	}
-	<-exited
-	if text := out.String(); !strings.Contains(text, "VerifyDataContext returned") || strings.Contains(text, "Torrents returned") {
-		t.Errorf("the child did not stop inside Torrents after VerifyDataContext:\n%s", text)
+	if text := out.String(); strings.Contains(text, "Torrents returned") {
+		t.Errorf("Torrents returned after VerifyDataContext on a dropped torrent:\n%s", text)
 	}
 }
 

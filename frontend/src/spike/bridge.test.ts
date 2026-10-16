@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { spikeBridge, transfer, transferEvent } from './bridge'
+import { spikeBridge, transfer, transferEvent, transferStates } from './bridge'
 import { decodeDto } from '../bridge/contract/errors'
 import { record } from '../test/contractExamples'
 
@@ -20,6 +20,7 @@ const decoded = {
   payloadWritten: 0n,
   peers: 1,
   clientsStarted: 2,
+  recoveries: 1,
   error: '',
 }
 
@@ -49,6 +50,7 @@ afterEach(() => {
 describe('the transfer decoder', () => {
   it('reads the shared example under the event name Go emits', () => {
     expect(shared.event).toBe(transferEvent)
+    expect(example.states).toEqual(transferStates)
     expect(decodeDto(transfer, shared.transfer)).toEqual({ ok: true, value: decoded })
   })
 

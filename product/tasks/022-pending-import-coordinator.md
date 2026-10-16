@@ -53,6 +53,8 @@ The coordinator validates commands independently of the interface and does not a
 
 **Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, check the signatures and constraints against the pinned version. Reading the API documentation does not replace a performed integration check.
 
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): reject a v2-only magnet (`btmh` without `btih`) and a v2-only metainfo with a clear error before any engine call (owner's decision of 2026-10-16). A magnet's metadata comes from peers and the engine accepts bytes that do not match the infohash (finding 11): follow 011's isolated metadata storage and add the torrent to the save folder only after the info bytes are verified.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

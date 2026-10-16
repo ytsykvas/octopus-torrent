@@ -13,7 +13,7 @@ const (
 	isRunning  = `osascript -e application id "dev.tsykvas.octopustorrent" is running`
 	appBuild   = "env -C . GOFLAGS=-cover -covermode=atomic -coverpkg=octopustorrent/... go tool wails build -s -trimpath"
 	appOpen    = "open -n --env GOCOVERDIR=" + appDir + " /work/repo/build/bin/OctopusTorrent.app"
-	appPgrep   = "pgrep -f /work/repo/build/bin/OctopusTorrent.app/Contents/MacOS/"
+	appPgrep   = "pgrep -f ^/work/repo/build/bin/OctopusTorrent\\.app/Contents/MacOS/"
 	appQuit    = `osascript -e tell application id "dev.tsykvas.octopustorrent" to quit`
 	appAlive   = "ps -p 4242"
 	cancelled  = "execution error: OctopusTorrent got an error: User canceled. (-128)"
@@ -25,7 +25,7 @@ var exitStatus1 = errors.New("exit status 1")
 // The committed engine spike, the second row of wailsApps.
 const (
 	engineSpikeRunning = `osascript -e application id "dev.tsykvas.octopustorrent.enginespike" is running`
-	engineSpikePgrep   = "pgrep -f /work/repo/cmd/engine-spike/build/bin/EngineSpike.app/Contents/MacOS/"
+	engineSpikePgrep   = "pgrep -f ^/work/repo/cmd/engine-spike/build/bin/EngineSpike\\.app/Contents/MacOS/"
 	engineSpikeQuit    = `osascript -e tell application id "dev.tsykvas.octopustorrent.enginespike" to quit`
 	engineSpikeAlive   = "ps -p 6363"
 )
@@ -113,7 +113,7 @@ const (
 	spikeRunning = `osascript -e application id "dev.example.spike" is running`
 	spikeBuild   = "env -C cmd/spike GOFLAGS=-cover -covermode=atomic -coverpkg=octopustorrent/... go tool wails build -s -trimpath"
 	spikeOpen    = "open -n --env GOCOVERDIR=" + appDir + " /work/repo/cmd/spike/build/bin/Spike.app"
-	spikePgrep   = "pgrep -f /work/repo/cmd/spike/build/bin/Spike.app/Contents/MacOS/"
+	spikePgrep   = "pgrep -f ^/work/repo/cmd/spike/build/bin/Spike\\.app/Contents/MacOS/"
 	spikeQuit    = `osascript -e tell application id "dev.example.spike" to quit`
 	spikeAlive   = "ps -p 5151"
 )

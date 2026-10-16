@@ -20,7 +20,7 @@
 | `app/` | The Go application: desktop shell, Wails facade, operation ledger; later services, engine, library, files. |
 | `bridge/` | The Go–TypeScript contract and how React calls Go. |
 | `frontend/` | React structure; later state, i18n, styles and screens. |
-| `tooling/` | Developer tooling: quality gate, `devtool`, task plan, test torrents and the local swarm, agent tooling. |
+| `tooling/` | Developer tooling: quality gate, `devtool`, task plan, test torrents and the local swarm, the engine spike app, agent tooling. |
 | `development/` | Getting started, testing, the task-to-commit workflow. |
 | `decisions/` | Significant decisions, alternatives and reasons following the [ADR template](decisions/_ADR_TEMPLATE.md); not a log of every cosmetic edit. |
 | `verification/` | Evidence of TDD, checks, coverage and architecture conclusions; a specific task's verification report can be reused. |
@@ -38,6 +38,7 @@
 | [Local quality gate](decisions/quality-gate.md) (O3) | accepted, [004](../product/tasks/004-reproducible-check-commands.md); [report](verification/004-reproducible-check-commands.md) |
 | [Go–TypeScript contract: DTOs, numbers, errors, operations, ordering](decisions/api-contract.md) | accepted, [005](../product/tasks/005-domain-dto-and-bridge-contract.md); [report](verification/005-domain-dto-and-bridge-contract.md) |
 | [Controlled test torrents and a closed local swarm](decisions/controlled-swarm.md) | accepted, [006](../product/tasks/006-controlled-torrent-fixtures.md); [report](verification/006-controlled-torrent-fixtures.md) |
+| [The engine version, its lifecycle and who may release what](decisions/engine-lifecycle.md) (O2) | accepted, [007](../product/tasks/007-engine-api-lifecycle-spike.md); [report](verification/007-engine-api-lifecycle-spike.md) |
 
 ## Documentation index
 
@@ -73,7 +74,8 @@ A feature document (from the [template](_FEATURE_TEMPLATE.md)) records one featu
 | [Local quality gate](tooling/quality-gate.md) | feature | `implemented` | [004](../product/tasks/004-reproducible-check-commands.md) |
 | [devtool command reference](tooling/devtool.md) | reference | current | [004](../product/tasks/004-reproducible-check-commands.md) |
 | [Task plan](tooling/task-plan.md) | guide | current | [004](../product/tasks/004-reproducible-check-commands.md) |
-| [Test torrents and the local swarm](tooling/test-torrents.md) | feature | `implemented` (test support) | [006](../product/tasks/006-controlled-torrent-fixtures.md) |
+| [Test torrents and the local swarm](tooling/test-torrents.md) | feature | `implemented` (test support) | [006](../product/tasks/006-controlled-torrent-fixtures.md), [007](../product/tasks/007-engine-api-lifecycle-spike.md) |
+| [Engine spike app](tooling/engine-spike.md) | feature | `implemented` (temporary, deleted by [034](../product/tasks/034-wails-facade-real-bindings.md)) | [007](../product/tasks/007-engine-api-lifecycle-spike.md) |
 | [Agent tooling](tooling/agent-tooling.md) | feature | `implemented` | — |
 
 ### `development/` — working on the project

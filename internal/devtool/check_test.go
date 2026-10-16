@@ -16,7 +16,7 @@ const (
 	typecheck    = "npm --prefix frontend run typecheck"
 	releaseBuild = "go tool wails build -clean -trimpath"
 	generate     = "env -C . go tool wails generate module"
-	goListDeps   = "go list -deps -f {{.ImportPath}} ."
+	goListDeps   = "go list -tags desktop,wv2runtime.download,production -deps -f {{.ImportPath}} ."
 	goEnv        = "go env -json GOFLAGS GOINSECURE GONOPROXY GONOSUMDB GOPRIVATE GOPROXY GOSUMDB"
 	goEnvDefault = `{"GOFLAGS":"","GOINSECURE":"","GONOPROXY":"","GONOSUMDB":"","GOPRIVATE":"","GOPROXY":"https://proxy.golang.org,direct","GOSUMDB":"sum.golang.org"}`
 )

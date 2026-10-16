@@ -18,7 +18,8 @@ function describe(error: AppError): string {
  * The engine spike's page: a real transfer between two loopback engine clients, read through the
  * spike's DTO, binding and event. It subscribes before it asks for the snapshot, so no event is lost
  * in between, and it keeps only the transfer with the highest revision, whichever way it arrived:
- * a slow reply never puts an older state back on the screen.
+ * a slow reply never puts an older state back on the screen. A successful reply clears the last
+ * refused command.
  */
 export function SpikeApp({ bridge }: SpikeAppProps) {
   const [current, setCurrent] = useState<Transfer | null>(null)
@@ -30,8 +31,12 @@ export function SpikeApp({ bridge }: SpikeAppProps) {
 
   const settle = useCallback(
     (result: Result<Transfer>) => {
-      if (result.ok) apply(result.value)
-      else setProblem(result.error)
+      if (result.ok) {
+        setProblem(null)
+        apply(result.value)
+      } else {
+        setProblem(result.error)
+      }
     },
     [apply],
   )
@@ -64,7 +69,10 @@ export function SpikeApp({ bridge }: SpikeAppProps) {
           <p>
             {`${current.bytesCompleted} / ${current.length} bytes (${percent(current)}%)`}
           </p>
-          <p>{`${current.peers} peer${current.peers === 1 ? '' : 's'}, ${current.clientsStarted} engine clients started`}</p>
+          <p>
+            {`${current.peers} peer${current.peers === 1 ? '' : 's'}, ${current.clientsStarted} engine clients started, ` +
+              `${current.recoveries} stall${current.recoveries === 1 ? '' : 's'} woken`}
+          </p>
         </>
       )}
       <p>

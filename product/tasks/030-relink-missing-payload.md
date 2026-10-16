@@ -53,6 +53,8 @@ Locating and rechecking existing data is agreed. Do not add arbitrary moving of 
 
 **Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). Reconcile signatures and constraints with the pinned version; reading the API is not a passed integration check.
 
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): a folder handed to the engine is checked by the engine itself, which renames every file of a failing piece to `<name>.part` and later overwrites it (finding 13). "A wrongly chosen folder is not overwritten" therefore needs the application's own hash check of the candidate folder before the engine sees it.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

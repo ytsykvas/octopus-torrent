@@ -126,7 +126,9 @@ Engine limitations found and tracked by tests or handled by the harness:
    goroutine has ended, `lsof` still lists the seeder's payload as mapped in the process. The
    torrent's `Close` is a no-op for this IO. For the product this means the disk space of a file
    moved to the Trash is not freed, and an external volume cannot be ejected while the app runs.
-8. **Adding a torrent truncates existing files at its zero-length paths.**
+8. **Adding a torrent truncates existing files at its zero-length paths.** 007 found that a failed
+   piece check then also renames them, and any other existing file of that piece, to `<name>.part`
+   (finding 13 in [engine-lifecycle](engine-lifecycle.md#verified-grounds)).
    - On `AddTorrent` (or when magnet metadata arrives), the engine creates every zero-length file
      with `O_TRUNC`, before any download or confirmation.
    - It checks only that the path stays inside the save folder. One `..` level, or a component with
@@ -136,6 +138,8 @@ Engine limitations found and tracked by tests or handled by the harness:
      existing file.
    - Two levels up is refused ("is not sub path of").
    - The finding comes from the security review of 006.
+
+Findings 9–14 of 007 continue this list in the [engine-lifecycle ADR](engine-lifecycle.md#verified-grounds).
 
 **Assumption not proven here:** behavior with a real remote peer. The swarm is loopback by design,
 and real-network checks are not part of AI-08.

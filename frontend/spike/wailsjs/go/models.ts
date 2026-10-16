@@ -9,6 +9,7 @@ export namespace enginespike {
 	    payloadWritten: string;
 	    peers: number;
 	    clientsStarted: number;
+	    recoveries: number;
 	    error: string;
 	
 	    static createFrom(source: any = {}) {
@@ -25,6 +26,7 @@ export namespace enginespike {
 	        this.payloadWritten = source["payloadWritten"];
 	        this.peers = source["peers"];
 	        this.clientsStarted = source["clientsStarted"];
+	        this.recoveries = source["recoveries"];
 	        this.error = source["error"];
 	    }
 	}

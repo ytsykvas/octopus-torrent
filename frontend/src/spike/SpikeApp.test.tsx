@@ -16,6 +16,7 @@ function transfer(overrides: Partial<Transfer> = {}): Transfer {
     payloadWritten: 0n,
     peers: 0,
     clientsStarted: 0,
+    recoveries: 0,
     error: '',
     ...overrides,
   }
@@ -87,7 +88,10 @@ describe('SpikeApp', () => {
     emit(transfer({ revision: 7n, state: 'running', bytesCompleted: 1n, length: 1048576n }))
 
     expect(screen.getByText('524288 / 1048576 bytes (50%)')).toBeInTheDocument()
-    expect(screen.getByText('1 peer, 2 engine clients started')).toBeInTheDocument()
+    expect(screen.getByText('1 peer, 2 engine clients started, 0 stalls woken')).toBeInTheDocument()
+
+    emit(transfer({ revision: 9n, state: 'running', bytesCompleted: 524288n, length: 1048576n, peers: 2, clientsStarted: 2, recoveries: 1 }))
+    expect(screen.getByText('2 peers, 2 engine clients started, 1 stall woken')).toBeInTheDocument()
   })
 
   it('starts, pauses and resumes through the bridge; a reply older than the screen is ignored', async () => {
@@ -128,6 +132,23 @@ describe('SpikeApp', () => {
 
     act(() => listeners[0]?.onError({ code: 'contract.invalidDto', operationID: null, torrentID: null, params: { path: 'peers', reason: 'range' } }))
     expect(screen.getAllByRole('alert').map((a) => a.textContent)).toContain('contract.invalidDto: peers range')
+  })
+
+  it('clears a refused command once a later reply succeeds', async () => {
+    const user = userEvent.setup()
+    const { bridge } = fakeBridge()
+    bridge.start = vi
+      .fn<Command>()
+      .mockResolvedValueOnce(failed('no more peers'))
+      .mockResolvedValueOnce(ok(transfer({ revision: 2n, state: 'running', clientsStarted: 2, length: 1048576n })))
+    render(<SpikeApp bridge={bridge} />)
+    await screen.findByText('idle')
+
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('bridge.callFailed: no more peers')
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    expect(screen.getByText('running')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('shows a snapshot that failed', async () => {

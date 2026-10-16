@@ -59,6 +59,8 @@ internal/app/contracts/         bridge DTOs, AppError, strict requests, shared e
 internal/app/operations/        idempotent operation ledger (exists, 005)
 internal/torrentengine/         interface and anacrolix adapter
 internal/torrentengine/testutil/ fixture (own v1/v2/hybrid test torrents), swarm (closed loopback swarm) (exists, 006)
+internal/torrentengine/          engine contract tests on the pinned version (exist, 007); the adapter comes in 018
+cmd/engine-spike/, internal/enginespike/, frontend/src/spike/   temporary EngineSpike.app (exists, 007; deleted by 034)
 internal/library/               SQLite repositories and migrations
 internal/files/                 access, paths, folders, deletion
 internal/automation/            rules and watch folder

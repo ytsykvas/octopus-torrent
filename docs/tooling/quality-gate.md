@@ -38,15 +38,29 @@ it, so the whole gate is unit-tested with `fakeSystem`), the repository listing 
 - Exit code: 0 for `PASSED`, and for `INCOMPLETE` in a partial mode; 1 otherwise; 64 for an
   unknown command.
 - Files written: `frontend/coverage/`, `build/coverage/{go-unit,go-app}` and their `.txt` profiles,
-  `frontend/dist`, `build/bin/OctopusTorrent.app` (rebuilt as a normal release at the end). All are
+  `frontend/dist`, `cmd/engine-spike/assets`, `cmd/engine-spike/build/bin/EngineSpike.app`
+(instrumented), `build/bin/OctopusTorrent.app` (rebuilt as a normal release at the end). All are
   gitignored.
 
 ## Scenarios and TDD
 
 The steps, in order: `npm ci` (`--offline` in the partial modes), npm cooldown, go env, typecheck, lint,
 frontend tests + independent TS inventory, frontend build, gofmt, go vet, bindings, go tests with
-raw counters, `.app` coverage run, Go coverage, escape hatches, scripts, release build, docs, plan, release
-age, npm audit, govulncheck, updates, the not-yet-built tiers, single code version. The RED cases
+raw counters, `.app` coverage run, Go coverage, escape hatches, scripts, product isolation, release
+build, docs, plan, release age, npm audit, govulncheck, updates, the not-yet-built tiers, single code
+version.
+
+Since 007 the repository has more than one Wails app. Each one is a row of `wailsApps` in
+`internal/devtool/appcov.go`: the product, and the temporary [engine spike](engine-spike.md).
+- **bindings:** regenerates each app's bindings in its own directory (`env -C <dir> go tool wails
+  generate module`) and compares them.
+- **`.app` coverage run:** builds each app with `-coverpkg=octopustorrent/...`, launches it with
+  `GOCOVERDIR`, finds its pid with a `pgrep -f` pattern anchored at the start of the bundle's
+  executable path, quits it by its bundle ID, and accepts only counters that carry that pid.
+- **go coverage:** requires every app's main file in the `.app` profile.
+- **product isolation:** `go list -deps` of the product, with the release build's tags
+  (`desktop,wv2runtime.download,production`), must not contain the spike, a `testutil` package or
+  anacrolix. The anacrolix clause stays until 018. The RED cases
 for each are listed in [report 004](../verification/004-reproducible-check-commands.md).
 
 ## Implementation and reuse
@@ -57,7 +71,8 @@ for each are listed in [report 004](../verification/004-reproducible-check-comma
 | `internal/devtool/frontendcov.go` | TS inventory, raw-count check of the Vitest summary, escape hatches |
 | `internal/devtool/gocov.go` | Go inventory (`go/parser`; Go under `testdata/` is a problem), profile parsing, compatibility, merge, `go.mod` module and tools |
 | `internal/devtool/scripts.go` | the `scripts` step: a `*.sh` file may only build `devtool` and `exec` it |
-| `internal/devtool/appcov.go` | instrumented `.app` build, launch, Apple Event quit, counters |
+| `internal/devtool/appcov.go` | the `wailsApps` table; instrumented build, launch, Apple Event quit and counters of every app |
+| `internal/devtool/isolation.go` | the `product isolation` step: what the product binary must not link |
 | `internal/devtool/deps.go` | lockfile and build-list parsing, registry dates and integrity, audits, the updates report |
 | `internal/devtool/plan.go` | the task plan check used by the `plan` step |
 
@@ -67,8 +82,8 @@ The gate checks itself: `internal/devtool` is part of the Go inventory, so its o
 fail it (the first real run did exactly that). Package coverage 100.0% of statements; merged unit +
 `.app` profile without a zero block. Real boundaries checked for real: `OSSystem` methods
 (`system_test.go`, including `Get` against `httptest`), the `.app` run on the owner's Mac, the
-registries over the network. Not built yet and printed as `not_run`: real-engine integration (007,
-018), test-bridge UI tests (035). The loopback swarm tests of 006 are ordinary Go tests and run in
+registries over the network. Not built yet and printed as `not_run`: real-engine integration (018),
+test-bridge UI tests (035). The engine contract tests of 007 are ordinary Go tests. The loopback swarm tests of 006 are ordinary Go tests and run in
 the `go tests` step of every mode ([test torrents](test-torrents.md)).
 
 ## Refactoring and debt check
@@ -82,15 +97,16 @@ no TODOs.
 ## Usage and recovery
 
 - Prerequisites: Go 1.27.2, Node 26 / npm 11.20, Xcode Command Line Tools; a logged-in GUI session;
-  the terminal's Automation permission for OctopusTorrent (macOS asks once; if refused, the `.app`
-  step is `not_run` and names System Settings → Privacy & Security → Automation); the network for the
-  full gate.
-- `.app coverage run` `not_run: already running` — quit the other OctopusTorrent (another
-  workspace) and run again.
-- Ctrl-C during the `.app` step can leave the instrumented OctopusTorrent running (it is started by
-  `open`, outside the gate's process group) and the instrumented build in `build/bin`: quit it
-  (`osascript -e 'tell application id "dev.tsykvas.octopustorrent" to quit'`) and run the gate again,
-  which rebuilds the release `.app` at the end.
+  the terminal's Automation permission for OctopusTorrent and for EngineSpike (macOS asks once per
+  app; if refused, the `.app` step is `not_run` and names System Settings → Privacy & Security →
+  Automation); the network for the full gate.
+- `.app coverage run` `not_run: … is already running` — quit the named app (OctopusTorrent or
+  EngineSpike, perhaps from another workspace) and run again.
+- Ctrl-C during the `.app` step can leave an instrumented app running (it is started by `open`,
+  outside the gate's process group) and the instrumented build in its `build/bin`: quit it
+  (`osascript -e 'tell application id "dev.tsykvas.octopustorrent" to quit'`, or
+  `dev.tsykvas.octopustorrent.enginespike` for EngineSpike) and run the gate again, which rebuilds
+  the release `.app` at the end.
 - A tool that hangs (a stalled `npm ci`, the first-time Automation prompt left unanswered) hangs the
   gate: steps have no time limit yet (see the ADR); answer the prompt or interrupt and rerun.
 - `single code version` `FAIL` — something edited the files during the run (an editor, another

@@ -1,5 +1,6 @@
 {
   "event": "enginespike:transfer",
+  "states": ["idle", "running", "paused", "complete", "failed"],
   "transfer": {
     "revision": "7",
     "state": "paused",
@@ -9,6 +10,7 @@
     "payloadWritten": "0",
     "peers": 1,
     "clientsStarted": 2,
+    "recoveries": 1,
     "error": ""
   }
 }

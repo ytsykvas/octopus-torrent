@@ -3,6 +3,7 @@ package devtool
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -93,7 +94,8 @@ func (a wailsApp) coverageRun(sys System, root, dir, module string) stepResult {
 	}
 	pid := ""
 	for i := 0; i < appPolls && pid == ""; i++ {
-		out, _ := sys.Output("pgrep", "-f", app+"/Contents/MacOS/")
+		// Anchored: only a process whose command line starts with this bundle's executable.
+		out, _ := sys.Output("pgrep", "-f", "^"+regexp.QuoteMeta(app+"/Contents/MacOS/"))
 		if pid, _, _ = strings.Cut(strings.TrimSpace(out), "\n"); pid == "" {
 			sys.Sleep(appPoll)
 		}

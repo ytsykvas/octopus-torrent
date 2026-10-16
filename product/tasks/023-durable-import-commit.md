@@ -57,6 +57,8 @@ Creating the entry, the storage and the engine object passes through several sep
 
 **From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): The engine truncates existing files at zero-length paths as soon as a torrent is added; the import commit adds the torrent to the engine only after the path plan (020) is confirmed.
 
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): besides truncation at zero-length paths, a failed piece check renames existing files of that piece to `<name>.part` and the download then overwrites them (finding 13): validate the full path plan before the engine sees the torrent. The commit stores an infohash beside info bytes, and the engine would accept a mismatching pair (finding 11): verify the pair before it is stored and when it is read back.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

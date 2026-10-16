@@ -58,6 +58,8 @@ Deletion by the name of the download folder is forbidden: we work with a verifie
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): a deletion with files is confirmed by a Go-issued `deletionPlanID` bound to the exact torrents and files, single-use; quitting abandons a mutation after 5 s, so the journal must exist before any file moves and every commit phase must tolerate exit.
 
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): an incomplete torrent's files can exist on disk only as `<name>.part` (the engine's default part-file mode, finding 13). The Trash journal must list and move the part-file names too, and never a user's file the engine renamed (DEL-02, DEL-04).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

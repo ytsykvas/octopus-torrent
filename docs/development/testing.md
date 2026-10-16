@@ -35,6 +35,15 @@ Anything that needs the real torrent engine uses the [test torrents and the loca
 - Engine timing is handled in the harness (`settle`, `Refuses`); do not read piece state right after
   `VerifyDataContext` or assume a port is free right after `Client.Close`.
 - Swarm tests are not `t.Parallel`: `WaitEngineStopped` needs the only engine in the process.
+- A package that starts engine clients uses `func TestMain(m *testing.M) { os.Exit(swarm.Main(m)) }`:
+  it refuses an environment that changes the engine and fails the package if an engine goroutine is
+  left.
+- The engine contract tests of 007 (`internal/torrentengine/lifecycle_test.go`) prove the pinned
+  engine's API, lifecycle and findings with the raw client (`Peer.Client()`). When the engine is
+  upgraded, any of them that turns red means a recorded behavior changed: decide it again in the
+  [engine-lifecycle ADR](../decisions/engine-lifecycle.md).
+- A behavior that hangs the engine (finding 9) is proved in a child process of the test binary, never
+  in the test process itself.
 
 ## TypeScript
 
@@ -66,7 +75,8 @@ TypeScript reads the files through `src/test/contractExamples.ts` (`example`, `r
 
 ```sh
 go test -race ./internal/app/... -run TestName -v
-go test -race -count=1 ./internal/torrentengine/...                 # fixtures and the swarm, about 12 s
+go test -race -count=1 ./internal/torrentengine/...                 # fixtures, the swarm, the engine contract tests, about 15 s
+go test -race -count=1 ./internal/enginespike ./cmd/engine-spike     # the engine spike app's Go side
 go test ./internal/torrentengine/testutil/fixture -args -update     # rewrite the committed torrents
 npm --prefix frontend test -- src/bridge/contract/errors.test.ts -t 'unknown code'
 npm --prefix frontend run test:coverage     # all files, per-file thresholds

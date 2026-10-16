@@ -7,10 +7,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/anacrolix/torrent"
 
 	"octopustorrent/internal/app/contracts"
 	"octopustorrent/internal/torrentengine/testutil/fixture"
@@ -154,6 +157,44 @@ func TestPauseHoldsTheBytesAndResumeCompletesTheTransfer(t *testing.T) {
 	ev.await(t, transferLimit, "state complete", func(tr Transfer) bool { return tr.State == Complete })
 }
 
+// The pinned engine can leave the transfer standing still after the seeder's upload is allowed again
+// (engine finding 14). The test makes that stall certain by dropping the first "allow": the ticker
+// must notice that the running transfer stands still, switch the upload off and on again, count it,
+// and the transfer completes.
+func TestAStalledTransferIsWokenAndCounted(t *testing.T) {
+	var mu sync.Mutex
+	var calls []bool
+	dropped := false
+	replace(t, &setUpload, func(tor *torrent.Torrent, allowed bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls = append(calls, allowed)
+		if allowed && !dropped {
+			dropped = true
+			return
+		}
+		switchUpload(tor, allowed)
+	})
+	s, ev := started(t, 256<<10, swarm.NewPeer)
+	api := s.API()
+	if _, err := api.Start(); err != nil {
+		t.Fatal(err)
+	}
+	ev.await(t, transferLimit, "payload", func(tr Transfer) bool { return tr.BytesCompleted > 0 })
+	if _, err := api.Pause(); err != nil {
+		t.Fatal(err)
+	}
+	if resumed, err := api.Resume(); err != nil || resumed.State != Running || resumed.Recoveries != 0 {
+		t.Fatalf("Resume = %+v, %v", resumed, err)
+	}
+	done := ev.await(t, transferLimit, "state complete", func(tr Transfer) bool { return tr.State == Complete })
+	mu.Lock()
+	defer mu.Unlock()
+	if done.Recoveries != 1 || !slices.Equal(calls, []bool{false, true, false, true}) {
+		t.Errorf("recoveries %d, upload switched %v; want one recovery: pause, the dropped resume, off, on", done.Recoveries, calls)
+	}
+}
+
 // A repeated Pause must not reach the engine twice (engine finding 12): the transfer still completes
 // after Resume.
 func TestARepeatedPauseStillResumes(t *testing.T) {
@@ -267,6 +308,106 @@ func TestShutdownDuringATransferReleasesOnlyTheSpikesResources(t *testing.T) {
 	}
 }
 
+// Start holds the mutex while it creates the run; Shutdown ends the service's lifetime first, so
+// a Start that is still waiting gives up and the quit is not delayed by it.
+func TestShutdownDuringAStartEndsTheStartPromptly(t *testing.T) {
+	var s *Service
+	entered := make(chan struct{})
+	replace(t, &writePayload, func(fixture.Fixture, string) error {
+		close(entered)
+		<-s.life.Done()
+		return s.life.Err()
+	})
+	s, _ = started(t, oneMiB, swarm.NewPeer)
+	done := make(chan error, 1)
+	go func() { _, err := s.API().Start(); done <- err }()
+	<-entered
+	ctx, cancel := context.WithTimeout(context.Background(), closeLimit)
+	defer cancel()
+	begin := time.Now()
+	if err := s.Shutdown(ctx); err != nil || time.Since(begin) > time.Second {
+		t.Fatalf("Shutdown during Start = %v after %v, want nil within 1 s", err, time.Since(begin))
+	}
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Errorf("the interrupted Start = %v, want the cancellation", err)
+	}
+}
+
+// The spike removes its two peer folders and then its own folder, which must be empty by then:
+// nothing beside them in the parent folder is touched, after a run and after a failed Start.
+func TestReleasingRemovesNothingBesideTheSpikesFolder(t *testing.T) {
+	parent := t.TempDir()
+	t.Setenv("TMPDIR", parent)
+	sentinel, sibling := filepath.Join(parent, "keep.txt"), filepath.Join(parent, "octopus-engine-spike-other")
+	if err := os.WriteFile(sentinel, []byte("the user's"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(sibling, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	check := func(when string) {
+		t.Helper()
+		names, err := os.ReadDir(parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var left []string
+		for _, n := range names {
+			left = append(left, n.Name())
+		}
+		if !slices.Equal(left, []string{"keep.txt", "octopus-engine-spike-other"}) {
+			t.Errorf("after %s the parent holds %v, want only the two planted entries", when, left)
+		}
+	}
+
+	s, ev := started(t, oneMiB, swarm.NewPeer)
+	if _, err := s.API().Start(); err != nil {
+		t.Fatal(err)
+	}
+	ev.await(t, transferLimit, "state complete", func(tr Transfer) bool { return tr.State == Complete })
+	if err := s.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	check("a run and Shutdown")
+
+	failed, _ := started(t, oneMiB, func(string, swarm.Options) (*swarm.Peer, error) { return nil, errors.New("no peer") })
+	if _, err := failed.API().Start(); err == nil {
+		t.Fatal("Start did not fail")
+	}
+	check("a failed Start")
+}
+
+// A folder that is not empty after the peer folders are gone is kept, and the failure is reported.
+func TestAFolderWithForeignContentIsKept(t *testing.T) {
+	parent := t.TempDir()
+	t.Setenv("TMPDIR", parent)
+	replace(t, &rateLimit, oneMiB)
+	s := New((&events{}).emit, swarm.NewPeer)
+	s.Startup(context.Background())
+	if _, err := s.API().Start(); err != nil {
+		t.Fatal(err)
+	}
+	dirs, err := filepath.Glob(filepath.Join(parent, "octopus-engine-spike-*"))
+	if err != nil || len(dirs) != 1 {
+		t.Fatalf("the spike's folders: %v, %v", dirs, err)
+	}
+	foreign := filepath.Join(dirs[0], "foreign.txt")
+	if err := os.WriteFile(foreign, []byte("not the spike's"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), closeLimit)
+	defer cancel()
+	if err := s.Shutdown(ctx); err == nil {
+		t.Error("Shutdown did not report the folder it could not remove")
+	}
+	if _, err := os.Stat(foreign); err != nil {
+		t.Errorf("the foreign file is gone: %v", err)
+	}
+	if err := swarm.WaitEngineStopped(ctx); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestCommandsOutsideARunAreRefused(t *testing.T) {
 	s := New((&events{}).emit, swarm.NewPeer)
 	if _, err := s.API().Start(); !errors.Is(err, errNotStarted) {
@@ -363,21 +504,30 @@ func TestTheSharedExampleIsATransferAsGoWritesIt(t *testing.T) {
 	}
 	var example struct {
 		Event    string          `json:"event"`
+		States   []State         `json:"states"`
 		Transfer json.RawMessage `json:"transfer"`
 	}
 	if err := json.Unmarshal(data, &example); err != nil || example.Event != Event {
 		t.Fatalf("testdata/transfer.json: event %q, %v; want %q", example.Event, err, Event)
 	}
+	// The states are listed once here; the TypeScript decoder checks its list against the same file.
+	if states := []State{Idle, Running, Paused, Complete, Failed}; !slices.Equal(example.States, states) {
+		t.Errorf("testdata/transfer.json states = %v, Go has %v", example.States, states)
+	}
 	tr := Transfer{Revision: 7, State: Paused, BytesCompleted: 524288, Length: oneMiB, PayloadRead: 540672,
-		PayloadWritten: 0, Peers: 1, ClientsStarted: 2, Error: ""}
+		PayloadWritten: 0, Peers: 1, ClientsStarted: 2, Recoveries: 1, Error: ""}
 	want, err := json.Marshal(tr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var got, expected any
-	_ = json.Unmarshal(example.Transfer, &got)
-	_ = json.Unmarshal(want, &expected)
-	if gotText, _ := json.Marshal(got); string(gotText) != string(mustJSON(t, expected)) {
+	if err := json.Unmarshal(example.Transfer, &got); err != nil || got == nil {
+		t.Fatalf("testdata/transfer.json has no readable transfer: %v", err)
+	}
+	if err := json.Unmarshal(want, &expected); err != nil {
+		t.Fatal(err)
+	}
+	if string(mustJSON(t, got)) != string(mustJSON(t, expected)) {
 		t.Errorf("testdata/transfer.json transfer = %s, Go writes %s", example.Transfer, want)
 	}
 }

@@ -23,6 +23,7 @@ export const transfer = struct({
   payloadWritten: decimal,
   peers: integer(0),
   clientsStarted: integer(0),
+  recoveries: integer(0),
   error: string,
 })
 
