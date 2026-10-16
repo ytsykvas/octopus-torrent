@@ -34,8 +34,8 @@ Approved by the owner on 16 October 2026 after one self-review pass (7.5 → 9 o
 | Stage | State |
 |---|---|
 | A — gate inventory rules | done |
-| B — module and fixture generator | in progress |
-| C — swarm and scenarios | planned |
+| B — module and fixture generator | done |
+| C — swarm and scenarios | in progress |
 | D — documents, review, acceptance | planned |
 
 ## Stage A — gate inventory rules
@@ -63,3 +63,54 @@ The quality-gate ADR left two inventory rules to this task.
   `file:line` problems out).
 - **Fast gate:** `go tool devtool check fast` → every step `pass` except the expected `not_run` lines
   (the `.app` run, `main()` coverage, the network steps, the unbuilt tiers); `scripts` → pass.
+
+## Stage B — module and fixture generator
+
+- **Dependency:**
+  - `go get github.com/anacrolix/torrent@v1.61.0 golang.org/x/time@v0.16.0`, then `go mod tidy`.
+  - Release dates from the proxy: anacrolix/torrent v1.61.0, 2025-12-17 (the latest tag);
+    golang.org/x/time v0.16.0, 2026-08-19 (the latest tag, up from the transitive v0.8.0).
+  - No version already in `go.mod` changed.
+  - `go tool devtool check deps` → `DEPENDENCIES PASSED`: "327 Go modules are at least 14 days old",
+    `npm audit` pass, `govulncheck` pass.
+  - `govulncheck -show verbose` lists one module-level finding, GO-2026-5932
+    (`golang.org/x/crypto/openpgp` is unmaintained; no fix exists). It is not imported or called by
+    our code. The module was in the build list before this task.
+- **RED** `go test ./internal/torrentengine/...` failed to build: `undefined: WriteCatalog`,
+  `build`, `All`, … (the package did not exist).
+- **GREEN:** package `internal/torrentengine/testutil/fixture`.
+  - `bencode.go` holds our own bencode encoder, so every byte of a fixture is decided by us.
+  - `payload.go`: deterministic content (SHA-256 counter blocks), `WritePayload`, `FilePath`,
+    `CorruptPiece`.
+  - `generate.go`: v1 pieces over the padded stream, BEP 47 pad files for hybrids, BEP 52 file tree,
+    merkle roots and piece layers built from the engine's `merkle` package.
+  - `catalog.go`: `Fixture`, `All`, `Named`, `ParseStage`, `WriteCatalog`.
+  - `specs.go`: 7 valid fixtures (`v1-single`, `v1-tree`, `v1-large`, `v2-single`, `v2-tree`,
+    `hybrid-single`, `hybrid-tree`) and 7 invalid ones (truncated, wrong info type, short
+    `pieces`, negative length, path traversal, hybrid mismatch, corrupted piece layer).
+  - `testdata/` holds the 14 `.torrent` files and `fixtures.json`, generated with `-args -update`.
+  - Tests:
+    - two builds are equal;
+    - the committed testdata equals a fresh build;
+    - `Engine` equals the module in the build info;
+    - infohashes are SHA-1/SHA-256 of the info bytes;
+    - file checksums match;
+    - the same payload set has the same bytes in every format;
+    - the engine's piece count and length match;
+    - `v1-tree` has a piece spanning two files;
+    - hybrid files start on piece boundaries;
+    - the empty file has no pieces root, and `ValidatePieceLayers` passes;
+    - no tracker, web seed or creation data;
+    - payload writing;
+    - `CorruptPiece` changes exactly one byte, inside the named piece;
+    - every error branch.
+  - `go test -race -count=1 -cover ./internal/torrentengine/testutil/fixture` → `ok`, 100.0% of
+    statements.
+- **Deviation from the plan (recorded):** the tree set uses 32 KiB pieces instead of 16 KiB. With 16
+  KiB pieces a v2 piece is a single merkle leaf, so the piece-layer padding (`SumMinLength`,
+  `HashForPiecePad`) would never be exercised. The single and large sets keep 16 KiB.
+- **Found during GREEN:** no fixture reached the `info` parse stage, and coverage showed it. I
+  added `invalid-info-type` (`piece length` as a string), which `UnmarshalInfo` rejects. The
+  `add`/`accepted` results of the invalid fixtures are confirmed by the swarm tests in stage C.
+- **Refactoring:** none beyond the above. The generator writes its own bencode instead of using the
+  engine's `Info` struct, because that struct cannot leave out `pieces root` for an empty file.
