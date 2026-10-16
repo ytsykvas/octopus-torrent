@@ -43,7 +43,9 @@ export function RuntimeCheck({ loadRuntimeInfo }: RuntimeCheckProps) {
       <button type="button" onClick={() => void check()}>
         Check Go connection
       </button>
-      <p role="status">{statusText(state)}</p>
+      <p>
+        <output>{statusText(state)}</output>
+      </p>
       {state.kind === 'error' && <p role="alert">Go call failed: {state.message}</p>}
     </section>
   )

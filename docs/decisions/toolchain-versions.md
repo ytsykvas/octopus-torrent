@@ -24,7 +24,9 @@
 | Currency | During every task that changes dependencies, and by the regular check from [004](../../product/tasks/004-reproducible-check-commands.md) (`npm outdated`, `go list -m -u all`, release age, `npm audit`, `govulncheck`): a version that has left the 14-day quarantine is updated, not postponed. |
 | Wails v3 | Remains `beta` (`v3.0.0-beta.29` of 2026-10-13). Migration is a separate owner decision after a stable release ([requirements §1](../../product/PROJECT_REQUIREMENTS.md#chosen-stack)). |
 
-**Technical enforcement:** `frontend/.npmrc` → `min-release-age=14`: npm itself will not install a younger version of any package, including transitive ones (npm ≥ 11.20). Go has no equivalent option — module age is checked by publication time in `proxy.golang.org` (see "Verified grounds"); 004 automates this.
+**Technical enforcement:** `frontend/.npmrc` → `min-release-age=14`: npm itself will not install a younger version of any package, including transitive ones (npm ≥ 11.20). Go has no equivalent option — module age is checked by the time `proxy.golang.org` reports for the version (see "Verified grounds"); since task 004 `go tool devtool check deps` checks it for every module in the build list, and npm's and Go's effective settings on every `go tool devtool check`. **Limit:** for a tagged Go version that time is the committer time of the tagged commit, which the publisher sets, not the time the proxy first saw the version; a backdated commit looks old. The npm registry sets its `time` itself. For Go, the checksum database (`go.sum`, verified because the gate requires the default `GOSUMDB`) and `govulncheck` are the controls that do not depend on the publisher's clock.
+
+**Pre-release labels in `go.sum`:** govulncheck's own test and tool dependencies bring a few old modules whose versions carry a pre-release or pseudo-version label (`golang.org/x/tools/go/expect` and `go/packages/packagestest` at `v0.1.1-deprecated`, a 2022 pseudo-version of `github.com/google/go-cmdtest`, the `golang.org/x/telemetry` pseudo-version). We do not select them, MVS does; they are not linked into the application (`go list -deps ./...`), and the "no pre-releases" rule applies to the versions we choose.
 
 ### Current set
 
@@ -32,16 +34,18 @@
 |---|---|---|---|
 | Go | 1.27.2 | 2026-10-02 (patch of the 1.27 line from 2026-08-18) | `go.mod`: `go 1.27.2` (an older local Go will download it via `GOTOOLCHAIN=auto`) |
 | Wails v2 — library and CLI | v2.16.0 | 2026-09-14 | `go.mod` / `go.sum`; CLI as `tool github.com/wailsapp/wails/v2/cmd/wails`, invoked as `go tool wails …` |
+| govulncheck (`golang.org/x/vuln`, task 004) | v1.8.0 | 2026-09-08 | `go.mod`: `tool golang.org/x/vuln/cmd/govulncheck`, invoked as `go tool govulncheck ./...`; MVS raised the transitive `golang.org/x/{crypto,mod,net,sync,sys,telemetry,term,text,tools}` to versions from 2026-08-24 to 2026-09-08 |
 | Node.js / npm | 26.11.1 / 11.20.0 | 2026-10-07 (patch of line 26) | the version verified here; `frontend/package.json` → `engines.node >=22.12.0` (Vite 8 requirement) |
 | react, react-dom | 19.3.0 | 2026-09-09 | `frontend/package.json` + `package-lock.json` |
 | typescript | 7.0.2 | 2026-07-08 | same |
-| vite / @vitejs/plugin-react | 8.3.1 / 6.1.1 | 2026-09-24 / 2026-08-28 | same |
-| vitest / @vitest/coverage-v8 | 5.0.2 / 5.0.2 | 2026-09-25 | same |
+| vite / @vitejs/plugin-react | 8.3.2 / 6.1.1 | 2026-10-01 / 2026-08-28 | same |
+| vitest / @vitest/coverage-v8 | 5.0.3 / 5.0.3 | 2026-09-30 | same; pinned for the quality gate (O3, task 004) |
 | jsdom | 30.1.1 | 2026-09-22 | same |
 | @testing-library/react, user-event, jest-dom | 16.3.3, 14.6.7, 7.0.1 | 2026-08-27, 2026-09-02, 2026-08-09 | same |
 | @types/react, @types/react-dom | 19.3.0 | 2026-09-09 | same |
+| oxlint / oxlint-tsgolint (task 004) | 1.86.0 / 7.0.2003 | 2026-09-28 / 2026-09-24 | same; native binaries come as optional dependencies, no install scripts. ESLint is not used: every typescript-eslint release (8.71.2 included) requires `typescript <6.1.0` |
 
-Newer versions still in quarantine as of 2026-10-15: react 19.3.1, vite 8.3.4, @vitejs/plugin-react 6.1.2, vitest and @vitest/coverage-v8 5.0.4, jsdom 30.1.2, user-event 14.6.8. Update them once they are 14 days old.
+Since task 004, `go tool devtool check deps` (part of the full `go tool devtool check`) verifies the release age of every locked npm version and every Go module in the build list, and its `updates` step lists newer versions of direct dependencies and tools that have been out of quarantine for 14 days; they are taken in the next task that changes dependencies. On 2026-10-15 it listed vite 8.3.2 and vitest / @vitest/coverage-v8 5.0.3, which were adopted in 004.
 
 The release build is `go tool wails build -clean -trimpath`; `-trimpath` removes the developer's absolute paths from the binary (without it there are 142 of them).
 
@@ -73,5 +77,5 @@ Not verified: other Node.js versions within `>=22.12.0`.
 
 - The commands in the [README](../../README.md#build-and-check-commands) use `go tool wails`; a global Wails CLI is not needed.
 - Adding or updating a dependency goes together with updating the "Current set" table and rechecking age, vulnerabilities, tests and the `.app`.
-- [004](../../product/tasks/004-reproducible-check-commands.md) includes in the single local check: release age, `npm outdated` / `go list -m -u all` (report of available updates), `npm audit`, `govulncheck`.
+- [004](../../product/tasks/004-reproducible-check-commands.md) added to the single local check (`go tool devtool check`): release age, `npm outdated` / `go list -m -u all` (report of updates of direct dependencies and tools out of quarantine), `npm audit`, `govulncheck`.
 - Known linker warning `object file … built for newer 'macOS' version (13.0) than being linked (11.0)` — Wails links with minimum version 11.0, Go 1.27 builds objects for 13.0; it does not affect launch. The target system is in [macos-target.md](macos-target.md).

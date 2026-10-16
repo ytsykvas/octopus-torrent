@@ -40,7 +40,8 @@ updates this list.
 - Behavior without a test written first, or a report without RED evidence for it.
 - Own executable code below 100%: Go by raw counters in the merged profile, TypeScript on four metrics
   per file. Lowered thresholds, narrowed source lists, ignore directives for own logic, disabled or
-  skipped tests are blockers regardless of the percentage.
+  skipped tests are blockers regardless of the percentage. `go tool devtool check` must end with
+  `GATE PASSED`; a `check fast` or `check offline` run is not acceptance.
 - `frontend/wailsjs/` edited by hand, or a changed Go facade without regenerated, committed bindings.
 - A TODO, stub or workaround that defers required quality; a task marked `done` with a check that is
   `not_run` or `fail`.

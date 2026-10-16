@@ -19,6 +19,7 @@ Prepare own reproducible test torrents and a local transfer environment between 
 - [Concept](../PRODUCT_CONCEPT.md): personal limits and implementation order.
 - [Engine technical plan](../ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md): API and assumptions not confirmed by a prototype.
 - Results and ADRs of all mandatory prerequisites above; do not start the dependent part without the required evidence.
+- [Quality gate ADR](../../docs/decisions/quality-gate.md#consequences): a Go generator under `testdata/` or a script under `scripts/` needs an inventory rule in the gate before it is accepted.
 
 ## Work order
 

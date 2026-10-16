@@ -1,6 +1,6 @@
 # OctopusTorrent documentation
 
-**Current state:** requirements, mockup and plan are prepared; the first minimal `.app` exists (task 003); product features are not implemented yet. Documentation evolves together with the code through TDD, without deferred write-ups after implementation.
+**Current state:** requirements, mockup and plan are prepared; the first minimal `.app` exists (task 003) and one local quality gate checks every change (`go tool devtool check`, task 004); product features are not implemented yet. Documentation evolves together with the code through TDD, without deferred write-ups after implementation.
 
 ## Mandatory entry points
 
@@ -15,7 +15,7 @@
 
 | Location | Purpose |
 |---|---|
-| `engineering/` | Mandatory engineering rules and the actual quality commands once they are implemented. |
+| `engineering/` | Mandatory engineering rules; the command that enforces them is described in [the quality gate](features/quality-gate.md). |
 | `features/` | One current description of each feature: behavior, modules, contracts, tests, commands, state. |
 | `decisions/` | Significant decisions, alternatives and reasons following the [ADR template](decisions/_ADR_TEMPLATE.md); not a log of every cosmetic edit. |
 | `verification/` | Evidence of TDD, checks, coverage and architecture conclusions; a specific task's verification report can be reused. |
@@ -30,6 +30,7 @@
 | [Target macOS and application identity](decisions/macos-target.md) (O1) | accepted, [003](../product/tasks/003-wails-macos-build-spike.md); review — 066 |
 | [Repository language: English only](decisions/repository-language.md) | accepted, owner's decision of 15 October 2026 |
 | [Agent tooling: Claude Code, Codex, octopus and Conductor](decisions/agent-tooling.md) | accepted, owner's decision of 15 October 2026; [report](verification/agent-tooling.md) |
+| [Local quality gate](decisions/quality-gate.md) (O3) | accepted, [004](../product/tasks/004-reproducible-check-commands.md); [report](verification/004-reproducible-check-commands.md) |
 
 ## Feature index
 
@@ -39,6 +40,7 @@ Before implementing a feature, create its document from the template and add a l
 |---|---|---|
 | [Desktop shell, `.app` build and the first React → Go connection](features/desktop-shell-build.md) | `implemented` (prototype) | [003](../product/tasks/003-wails-macos-build-spike.md) |
 | [Agent tooling and the release-guard hook](features/agent-tooling.md) (developer tooling) | `implemented` | — |
+| [Local quality gate](features/quality-gate.md) (developer tooling) | `implemented` | [004](../product/tasks/004-reproducible-check-commands.md) |
 
 No product capability (import, transfer, library) is implemented yet.
 

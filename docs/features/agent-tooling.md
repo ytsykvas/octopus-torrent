@@ -2,7 +2,7 @@
 
 **Status:** `implemented`  
 **Requirements:** AI-01, AI-06, AI-07, QA-01, QA-02, QA-05  
-**Related tasks:** none (repository tooling); [004](../../product/tasks/004-reproducible-check-commands.md) will replace the `/check` step list  
+**Related tasks:** none (repository tooling); [004](../../product/tasks/004-reproducible-check-commands.md) added `check-plan`, `plan-nav` and the [quality gate](quality-gate.md)  
 **Last verified version:** see `git log -1 -- internal/devtool`
 
 ## Goal and behavior
@@ -35,6 +35,11 @@ replace the process).
 - **Doc checks:** `devtool check-docs` prints `DEAD <file>: <target>` per broken link, anchor or
   `.claude/**.md` pointer and exits 1; `devtool codex-agents` writes `.codex/agents/<name>.toml` from
   `.claude/agents/<name>.md`.
+- **Plan checks (task 004):** `devtool check-plan` prints `PLAN <problem>` per inconsistency in
+  `product/tasks` (task headers, unique IDs, links, a dependency cycle by topological sort, a `done`
+  or `in_progress` task with an unfinished dependency, unknown or uncovered requirements, the
+  coverage matrix and its primary tasks, the scenario table, a stale navigation block) and exits 1;
+  `devtool plan-nav` rewrites only the `TASKS-NAV` block from the task files.
 - **Workspace:** `devtool workspace setup`; `devtool workspace run` reads `OCTOPUS_PORT`, else
   `CONDUCTOR_PORT` (1–65535). Unknown commands exit 64 with usage.
 
@@ -68,7 +73,7 @@ instrumented binary's counters into the unit coverage directory). Results:
 ## Refactoring and debt check
 
 No open debt. The hook's known blind spots are recorded in the ADR as accepted limits of a safety net;
-the guarantee they need (the age of every locked version) is task 004's scope, written into that task.
+the guarantee they need (the age of every locked version) is the `release age` step of the [quality gate](quality-gate.md).
 
 ## Usage and recovery
 

@@ -59,6 +59,6 @@ Shared by Claude Code, Codex, octopus and Conductor: review agents, commands, an
 
 1. The next task is in the [README](README.md#current-state) and the [plan navigation](product/tasks/README.md#navigation-of-all-tasks): status `planned`, all dependencies `done`.
 2. Criteria, steps and checks are in the task file; requirement IDs are in the [requirements](product/PROJECT_REQUIREMENTS.md); open questions are in the [decision register](docs/decisions/project-baseline.md#6-open-decision-register).
-3. Change the status in the task file and in the navigation table at the same time.
+3. Change the status in the task file, then regenerate the navigation table with `go tool devtool plan-nav`; `go tool devtool check-plan` verifies the plan.
 4. Decisions: `docs/decisions/<slug>.md` following the [ADR template](docs/decisions/_ADR_TEMPLATE.md); evidence: `docs/verification/<NNN>-<task-slug>.md` (session plan, RED/GREEN commands and results `pass`/`fail`/`not_run`, refactoring, coverage, debt); features: `docs/features/<feature>.md`.
 5. Handoff: at the end of the task file, an "Execution result" section with the date, status, changes, checks, limitations and the next task. The commit explains the result and how it was verified (AI-09). Context needed by the next agent is stored in the repository, not in the chat.

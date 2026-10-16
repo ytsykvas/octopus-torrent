@@ -4,13 +4,13 @@ A personal local BitTorrent client for macOS (the owner's own Apple Silicon Mac)
 
 ## Current state
 
-**Stage P1 has started.** There are specifications, a mockup, a plan, a decision register and the **first minimal `.app`** (task 003): a Wails window with a React button that calls a Go method. There are no product features (torrents, library) yet.
+**Stage P1 has started.** There are specifications, a mockup, a plan, a decision register, the **first minimal `.app`** (task 003): a Wails window with a React button that calls a Go method, and **one local quality gate** (task 004): `go tool devtool check`. There are no product features (torrents, library) yet.
 
 | What | State |
 |---|---|
-| Tasks [001](product/tasks/001-scope-and-decision-register.md), [002](product/tasks/002-repository-and-agent-entrypoint.md), [003](product/tasks/003-wails-macos-build-spike.md) | see [navigation](product/tasks/README.md#navigation-of-all-tasks) |
-| **Next tasks** | [004 — single check command](product/tasks/004-reproducible-check-commands.md), [005 — DTO and bridge contract](product/tasks/005-domain-dto-and-bridge-contract.md) |
-| Coverage of our own code | 100% Go (statements, raw counters) and 100% TS (4 metrics per file) — [report 003](docs/verification/003-wails-macos-build-spike.md) |
+| Tasks [001](product/tasks/001-scope-and-decision-register.md), [002](product/tasks/002-repository-and-agent-entrypoint.md), [003](product/tasks/003-wails-macos-build-spike.md), [004](product/tasks/004-reproducible-check-commands.md) | see [navigation](product/tasks/README.md#navigation-of-all-tasks) |
+| **Next tasks** | [005 — DTO and bridge contract](product/tasks/005-domain-dto-and-bridge-contract.md), [006 — controlled torrents](product/tasks/006-controlled-torrent-fixtures.md), [008 — SQLite driver](product/tasks/008-sqlite-driver-durability-spike.md) |
+| Coverage of our own code | 100% Go (statements, raw counters, unit tests + `.app` run) and 100% TS (4 metrics per file), enforced by `go tool devtool check` — [report 004](docs/verification/004-reproducible-check-commands.md) |
 
 ## Stack
 
@@ -67,56 +67,77 @@ Tracing a scenario from the UI to Go: [desktop-shell-build](docs/features/deskto
 
 ## Build and check commands
 
-Verified in task 003 on Apple M4 / macOS 27.0.1 ([report](docs/verification/003-wails-macos-build-spike.md)). All commands run from the repository root and do not depend on an absolute path. A single command for all checks will be created by [004](product/tasks/004-reproducible-check-commands.md).
+All commands run from the repository root and do not depend on an absolute path; verified on Apple
+M4 / macOS 27.0.1 in tasks [003](docs/verification/003-wails-macos-build-spike.md) and
+[004](docs/verification/004-reproducible-check-commands.md), including from a clean copy at another
+path.
 
-**Development prerequisites** (the finished `.app` does not need them): Xcode Command Line Tools (`xcode-select --install`), Go ≥ 1.27 (`brew install go`; the exact 1.27.2 is pulled in by `go.mod`), Node.js ≥ 22.12 with npm ≥ 11.20 (verified 26.11.1 / 11.20.0; `frontend/.npmrc` sets `min-release-age=14`, so npm will not install a version younger than 14 days). A global Wails CLI is **not needed**: `go tool wails` takes the version from `go.mod`.
+**Development prerequisites** (the finished `.app` does not need them): Xcode Command Line Tools
+(`xcode-select --install`), Go ≥ 1.27 (`brew install go`; the exact 1.27.2 is pulled in by `go.mod`),
+Node.js ≥ 22.12 with npm ≥ 11.20 (verified 26.11.1 / 11.20.0; `frontend/.npmrc` sets
+`min-release-age=14`, so npm will not install a version younger than 14 days). A global Wails CLI is
+**not needed**: `go tool wails`, `go tool govulncheck` and `go tool devtool` take their versions from
+`go.mod`.
+
+### The gate: one command for every check
+
+```sh
+go tool devtool check            # full gate; the only one that accepts a change (~25 s)
+go tool devtool check offline    # without the network steps → at best GATE INCOMPLETE
+go tool devtool check fast       # also without the .app run (TDD loop) → at best GATE INCOMPLETE
+go tool devtool check deps       # only the network steps: release age, npm audit, govulncheck, updates
+```
+
+It runs, in order and never stopping early: `npm ci`, npm's effective cooldown, Go's effective module
+settings (default proxy and checksum database, no exemptions), typecheck, lint
+(Oxlint, type-aware), frontend tests with an **independent** 100% inventory check (all four metrics,
+every own file by raw counts), frontend build, `gofmt`, `go vet`, regenerated Wails bindings
+compared by content, `go test -race` with raw counters, an **instrumented `.app` run** (it opens an
+OctopusTorrent window for a few seconds and quits it through an Apple Event, so `main()` is covered),
+the merged Go profile with no zero block and a complete inventory, escape hatches (ignore directives,
+lint disables, `@ts-` comments, `//nolint`, skipped or conditional tests), the release build,
+documentation links, the task plan, the release age of every locked npm version and Go module (and
+that each locked npm artifact is the registry's: `resolved` and `integrity`), `npm audit`, `govulncheck`, a report of updates out of
+quarantine, and a check that no file changed during the run. Exit 0 only on `GATE PASSED` (or
+`GATE INCOMPLETE` in a partial mode). Details: [quality gate](docs/features/quality-gate.md).
+
+| The full gate needs | Why | Without it |
+|---|---|---|
+| Network | registry dates, `npm audit`, `govulncheck` | those steps are `not_run`: `check` fails, use `check offline` meanwhile |
+| A logged-in GUI session on this Mac | the `.app` coverage run opens a window | `.app coverage run` fails or is `not_run` |
+| Automation permission of the terminal for OctopusTorrent | quitting the `.app` with an Apple Event (macOS asks once) | `not_run`, naming System Settings → Privacy & Security → Automation |
+| No other OctopusTorrent running | the run quits the app by bundle ID | `not_run: already running` (one workspace at a time) |
+
+Not built yet and always printed as `not_run (not implemented yet)`: integration with the real
+engine (tasks 007, 018) and UI tests through the test bridge (task 035). Manual QA of the real `.app`
+(clicking through scenarios) stays with `/qa`.
+
+### Quick check of one changed module (TDD, never acceptance)
+
+```sh
+go test -race ./internal/app -run TestGetRuntimeInfoReportsCompiledGoRuntime -v
+npm --prefix frontend test -- src/features/runtime-check/RuntimeCheck.test.tsx
+npm --prefix frontend run lint -- src/features/runtime-check/RuntimeCheck.tsx
+```
+
+### Individual commands
 
 ```sh
 go tool wails doctor                          # environment check
-
-# Frontend: dependencies, types, tests with a 100% per-file threshold, build
-npm --prefix frontend ci
-npm --prefix frontend run typecheck
-npm --prefix frontend run test:coverage
-npm --prefix frontend run build               # required before go test: main embeds frontend/dist
-
-# Go: formatting, analyzer, tests
-gofmt -l .                                    # must be empty
-go vet ./...
-go test ./...
-
-# Bindings after a Go facade change (the result is committed)
-go tool wails generate module
-
-# Release build → build/bin/OctopusTorrent.app (arm64, ad-hoc signature)
-go tool wails build -clean -trimpath
-
-# Development with frontend hot reload
-go tool wails dev
-
-# Documentation links and agent-instruction pointers; Codex agents from .claude/agents
-go tool devtool check-docs
-go tool devtool codex-agents
-
-# Workspace preparation and dev server for octopus / Conductor (logic in cmd/devtool)
-sh .octopus/scripts/setup.sh
-OCTOPUS_PORT=34115 sh .octopus/scripts/run.sh
+go tool wails generate module                 # bindings after a Go facade change (committed)
+go tool wails build -clean -trimpath          # release build → build/bin/OctopusTorrent.app (arm64, ad-hoc)
+go tool wails dev                             # development with frontend hot reload
+go tool devtool check-docs                    # documentation links and agent-instruction pointers
+go tool devtool check-plan                    # the task plan; plan-nav regenerates its navigation table
+go tool devtool plan-nav
+go tool devtool codex-agents                  # Codex agents from .claude/agents
+sh .octopus/scripts/setup.sh                  # workspace preparation for octopus / Conductor
+OCTOPUS_PORT=34115 sh .octopus/scripts/run.sh # dev server for a workspace
 ```
 
-**100% Go coverage** is measured together with a real `.app` launch, because `main()` runs only in the real application:
-
-```sh
-C="$PWD/build/coverage"; rm -rf "$C"; mkdir -p "$C/go-unit" "$C/go-app"
-go test -cover -coverpkg=./... ./... -args -test.gocoverdir="$C/go-unit"   # includes the devtool binary
-GOFLAGS="-cover -coverpkg=./..." go tool wails build -clean -trimpath
-open -n --env GOCOVERDIR="$C/go-app" build/bin/OctopusTorrent.app
-# click "Check Go connection", then quit the application (⌘Q)
-go tool covdata textfmt -i="$C/go-unit,$C/go-app" -o "$C/go.out"
-awk 'NR>1 && $NF==0' "$C/go.out"              # must be empty: no uncovered block
-go tool wails build -clean -trimpath          # restore the normal release build
-```
-
-Rules for future scripts (AI-07): run from the root, paths relative to the root, no hidden steps; versions in `go.mod`/`go.sum` and `frontend/package-lock.json`; generated bindings are reproduced by a command, not edited.
+Rules for scripts (AI-07): run from the root, paths relative to the root, no hidden steps; versions in
+`go.mod`/`go.sum` and `frontend/package-lock.json`; generated bindings are reproduced by a command,
+not edited; new checks go into `go tool devtool check` with tests, not into shell scripts.
 
 ## Working with the repository
 

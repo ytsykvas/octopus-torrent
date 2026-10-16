@@ -222,3 +222,15 @@ func TestCodexAgentMirrorsAreUpToDate(t *testing.T) {
 		}
 	}
 }
+
+// The real plan must stay consistent: the binary checks the repository it is built from.
+func TestThePlanOfThisRepositoryIsConsistent(t *testing.T) {
+	binary, env := buildDevtool(t)
+	cmd := exec.Command(binary, "check-plan")
+	cmd.Dir = filepath.Join("..", "..")
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.HasPrefix(string(out), "pass   plan: ") {
+		t.Errorf("check-plan: %v\n%s", err, out)
+	}
+}

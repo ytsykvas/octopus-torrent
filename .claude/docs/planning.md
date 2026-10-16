@@ -32,4 +32,4 @@ placeholders.
 ## After approval
 
 The approved plan goes into the "session plan" of `docs/verification/<NNN>-<slug>.md`; the status
-becomes `in_progress` in the task file and in the navigation table in the same edit.
+becomes `in_progress` in the task file, and `go tool devtool plan-nav` regenerates the navigation table.

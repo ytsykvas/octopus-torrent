@@ -8,7 +8,7 @@ const info: RuntimeInfo = { goVersion: 'go1.27.2', os: 'darwin', arch: 'arm64' }
 
 describe('RuntimeCheck', () => {
   it('starts with an unchecked status and does not call Go', () => {
-    const load = vi.fn(() => Promise.resolve(info))
+    const load = vi.fn<() => Promise<RuntimeInfo>>(() => Promise.resolve(info))
     render(<RuntimeCheck loadRuntimeInfo={load} />)
 
     expect(screen.getByRole('status')).toHaveTextContent('Not checked yet')
@@ -16,14 +16,19 @@ describe('RuntimeCheck', () => {
   })
 
   it('shows progress, then the Go runtime answer', async () => {
-    let resolve: (value: RuntimeInfo) => void = () => undefined
-    const load = vi.fn(() => new Promise<RuntimeInfo>((r) => { resolve = r }))
+    const pending: { resolve?: (value: RuntimeInfo) => void } = {}
+    const load = vi.fn<() => Promise<RuntimeInfo>>(
+      () =>
+        new Promise((resolve) => {
+          pending.resolve = resolve
+        }),
+    )
     render(<RuntimeCheck loadRuntimeInfo={load} />)
 
     await userEvent.click(screen.getByRole('button', { name: 'Check Go connection' }))
     expect(screen.getByRole('status')).toHaveTextContent('Checking…')
 
-    resolve(info)
+    pending.resolve?.(info)
     expect(await screen.findByText('Go go1.27.2 · darwin/arm64')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })

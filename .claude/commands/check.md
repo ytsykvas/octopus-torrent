@@ -1,77 +1,33 @@
 Run every OctopusTorrent health check, report the results, and offer to fix what failed.
 
-Until task 004 replaces this list with a single local command, these checks are the gate. Run them
-from the repository root, in order, and **never stop early** — a later check often explains an earlier
-failure. All seven block a commit.
+The gate is one command (task 004, [quality gate](../../docs/features/quality-gate.md)). Run it from
+the repository root:
 
-## 1. Frontend dependencies and types
 ```bash
-npm --prefix frontend ci
-npm --prefix frontend run typecheck
+go tool devtool check
 ```
 
-## 2. Frontend tests with 100% coverage per file
-```bash
-npm --prefix frontend run test:coverage
-```
-The thresholds in `frontend/vite.config.ts` are 100 for lines, statements, functions and branches,
-per file. A failure is a missing test, never a reason to touch the thresholds.
+It runs every step in order and **never stops early**: npm ci, npm cooldown, go env, typecheck, lint,
+frontend tests with the independent 100% inventory, frontend build, gofmt, go vet, bindings, go
+tests with raw counters, the instrumented `.app` run, Go coverage, escape hatches, release build,
+docs, plan, release age, npm audit, govulncheck, updates, and a check that no file changed during
+the run. Each step prints `pass`, `FAIL` (with the tail of the tool's output) or `not_run`; the last
+line is `GATE PASSED`, `GATE FAILED` or `GATE INCOMPLETE`. Only `GATE PASSED` from the full `check`
+allows a commit.
 
-## 3. Frontend build (needed by the Go tests: `main.go` embeds `frontend/dist`)
-```bash
-npm --prefix frontend run build
-```
+The full gate opens an OctopusTorrent window for a few seconds and needs the network. If the owner is
+offline, run `go tool devtool check offline` and say plainly that the network steps are `not_run` and
+the gate is incomplete. Do not run `check fast` as `/check`: it is the TDD loop, not the gate.
 
-## 4. Go formatting, analysis and tests
-```bash
-gofmt -l .
-go vet ./...
-go test ./...
-```
-`gofmt -l .` must print nothing.
-
-## 5. Go coverage — raw counters, 100%
-```bash
-C="$PWD/build/coverage"; rm -rf "$C"; mkdir -p "$C/go-unit"
-go test -cover -coverpkg=./... ./... -args -test.gocoverdir="$C/go-unit"
-go tool covdata textfmt -i="$C/go-unit" -o "$C/go.out"
-awk 'NR>1 && $NF==0' "$C/go.out"
-```
-The `cmd/devtool` test runs its instrumented binary into the same directory. The only line allowed
-in this output is `main.go`'s `main()`, which runs only inside the real `.app`; for a full 100% run
-the merged-profile procedure in the [README](../../README.md) (it launches the instrumented app). Report
-anything else as a failure.
-
-## 6. Generated bindings in sync
-```bash
-go tool wails generate module
-git -c core.fileMode=false status --short frontend/wailsjs
-```
-No output means the committed bindings match the Go facade. `core.fileMode=false` because Wails
-itself disagrees on modes: `generate module` writes `wailsjs/runtime/*` as 755, `wails build` as 644;
-only the content matters.
-
-## 7. Documentation links and instruction pointers
-```bash
-go tool devtool check-docs
-```
-Every relative Markdown link and anchor must resolve, and every `.claude/**.md` path named in the
-agent and runner configuration must exist — runner configs and agents point at
-`.claude/docs/actions/*` by path, and a renamed file makes them read nothing, silently. The Codex
-agent mirrors are checked by `go test` in step 4 (regenerate with `go tool devtool codex-agents`).
+Two lines are always `not_run (not implemented yet)` — real-engine integration and test-bridge UI
+tests; they do not block and are not to be reported as failures.
 
 ## Report
 
-| Check | Status | Issues |
-|---|---|---|
-| Frontend deps + types | pass/FAIL | … |
-| Frontend tests + coverage | pass/FAIL | … |
-| Frontend build | pass/FAIL | … |
-| Go fmt / vet / test | pass/FAIL | … |
-| Go coverage | pass/FAIL | uncovered blocks |
-| Bindings | pass/FAIL | … |
-| Docs and pointers | pass/DEAD | … |
+Quote the step lines that are not `pass`, and the final line. For each `FAIL`: the step, the
+`file:line` or command it names, and why. A mandatory `not_run` (network, Automation permission,
+another OctopusTorrent running) names its fix; relay it. `updates` listing versions out of quarantine
+is not a failure: mention them as the next dependency update.
 
-"All checks pass" means all seven passed. For each failure: `file:line`, what, why. If something is
-fixable, ask: "Found N issue(s). Fix them? 1. Yes 2. No" and wait. Fixing follows
-[fix-checks.md](../docs/actions/fix-checks.md). If everything passes, say so in one line.
+If something is fixable, ask: "Found N issue(s). Fix them? 1. Yes 2. No" and wait. Fixing follows
+[fix-checks.md](../docs/actions/fix-checks.md). If the gate passed, say so in one line.

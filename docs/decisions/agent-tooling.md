@@ -83,14 +83,23 @@ PreToolUse on Bash, Edit, MultiEdit and Write (Codex: Bash). Three outcomes:
 
 Commands are parsed the way the shell reads them — single and double quotes, backslash escapes — and
 where the parser is unsure it fails closed: a here-document body is skipped as data only when every
-here-document in the command goes to `cat`, `git`, `gh` or `tee`, its delimiter is fully parsed and its
-terminator line exists; otherwise the body is decided as commands (so a here-document for another
-program, such as `python3 - <<EOF`, can be refused — use the Write tool for such files). `$((…))` is
+here-document in the command goes to a data sink — `cat`, `tee`, the built-in `git commit|tag|notes|apply|hash-object`
+without `-c`/`--config-env`/`--exec-path` (aliases and extensions cannot shadow built-ins), or
+`gh pr|issue|release|api|gist` — every program reading a pipe in the command is such a sink too, its
+delimiter is fully parsed and its terminator line exists; a `<<` inside a `#` comment is not a
+here-document. Otherwise the body is decided as commands (so a here-document for another program, such
+as `python3 - <<EOF`, can be refused — use the Write tool for such files). `$((…))` is
 searched for substitutions like any other text. Wrappers (`env`, `sudo`, `time`, `nice`, `command`, `exec`,
 `xargs`), `sh|bash|zsh|dash|ksh -c` (also inside combined flags such as `-lc`), `eval`, `$(…)` and
 backtick substitutions (also inside double quotes), subshells, `cd`/`pushd` and absolute program paths
-are followed. Here-document bodies are data and are skipped, and only real npm flags and real
-assignments are checked, so commit messages and greps that mention the settings are not refused. A
+are followed. A here-document body that goes to a data sink is not decided as commands, but the shell
+still expands `$(…)` and backticks in it unless the delimiter is quoted (`'EOF'`, `"EOF"`), so the
+substitutions of every unquoted body are always decided; inside such a body quotes are ordinary
+characters and only a backslash prevents an expansion. Because the substitution scan counts brackets
+and backticks without the shell's grammar, everything from the first substitution to the end of such a
+body is decided as well; and a body is decided in the starting directory and in the one after any
+`cd` in the command. Only real npm flags and real assignments are
+checked, so commit messages and greps that mention the settings are not refused. A
 command given as an argument list is joined; a guarded tool whose input cannot be read is blocked,
 while a payload that is not JSON at all is let through with a warning.
 
@@ -118,26 +127,23 @@ policy, including the ones npm suggests in its own error message. It does not se
   writes to protected files by programs it does not know (an interpreter such as `python3` writing a
   file), or a dependency added by hand to `package.json` / `go.mod` and resolved later.
 - A Go version that is explicit and full but younger than 14 days.
-- **Open gap, found after the push (15 October 2026):** a here-document with an *unquoted* delimiter
-  (`cat <<EOF`) is expanded by the shell, so `$(…)` inside its body runs; the guard skips such a body
-  when it goes to a data sink. Fix: for unquoted delimiters always check the body's substitutions, and
-  skip a body only for a quoted delimiter (`'EOF'`, `"EOF"`). It needs a change to `internal/devtool`,
-  which the hook blocks in the `auto` mode — to be done with the owner in the `default` mode, at the
-  latest in task 004.
 - Its own source when changed outside the Edit tools (see above); Edit/Write changes ask the owner. If
   devtool fails to compile, the hook exits 1 and agents continue (fail-open, so a broken hook cannot
   lock an agent out of the tools it needs to fix it).
 
 The parser is hand-written and small, so some shell constructions will always read differently from
-the real shell; two automated reviews each found a handful. Replacing it with a full shell parser
+the real shell; two automated reviews each found a handful, and the task 004 security review found
+here-document forms (a `<<` in a comment, a sink piped into an executor, a git alias, brackets inside
+a substitution, a `cd` before the body) that were closed test-first. Replacing it with a full shell parser
 (for example `mvdan.cc/sh/v3/syntax`, used by `shfmt`) would close that class of gaps — three
 automated reviews in a row each found more — at the cost of a
 new third-party dependency — the owner's decision under the dependency policy.
 
-The guarantee therefore comes from checking results: **task 004** adds a release-age check of every
-locked npm package and Go module and of npm's effective cooldown settings, implemented in
-`cmd/devtool` with the same `minReleaseAgeDays` constant. Until then, the release date is checked by
-hand ([.claude/docs/dependencies.md](../../.claude/docs/dependencies.md)).
+The guarantee therefore comes from checking results: since task 004 the [quality gate](quality-gate.md)
+checks the release age of every locked npm package and Go module and that every locked npm artifact is
+the registry's (`go tool devtool check deps`, part of the full `go tool devtool check`), and npm's and
+Go's effective settings on every run, with the same `minReleaseAgeDays` constant. Install scripts run
+before that check, which is why they stay off by default (`allowScripts`).
 
 ## Alternatives considered
 
@@ -154,14 +160,16 @@ hand ([.claude/docs/dependencies.md](../../.claude/docs/dependencies.md)).
 
 See the [verification report](../verification/agent-tooling.md): RED evidence for every rule, 100%
 raw-counter coverage, the configured hook commands executed by a test, a live block in Claude Code,
-and the runner scripts run in a fresh git worktree with a clean stop.
+and the runner scripts run in a fresh git worktree with a clean stop. The gap with unquoted
+here-documents, found after the first push, was closed test-first in task 004
+([report](../verification/004-reproducible-check-commands.md)).
 
 ## Consequences
 
 - Changing the dependency policy means changing `internal/devtool/releaseguard.go` test-first, with
   this ADR and [toolchain-versions](toolchain-versions.md).
-- Task [004](../../product/tasks/004-reproducible-check-commands.md) builds the single check command
-  and the release-age check in `cmd/devtool`, replacing the step list in `/check`.
+- Task [004](../../product/tasks/004-reproducible-check-commands.md) built the single check command
+  and the release-age check in `internal/devtool` ([quality-gate](quality-gate.md)); `/check` runs it.
 - Tasks [008](../../product/tasks/008-sqlite-driver-durability-spike.md) and
   [014](../../product/tasks/014-sqlite-schema-migrations.md) must give every workspace (and every
   test) its own library location, never the owner's real library; `workspace run` passes it.

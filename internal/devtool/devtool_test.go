@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // fakeSystem records every process it is asked to start and answers from canned values.
@@ -18,6 +20,33 @@ type fakeSystem struct {
 	writeErr  error
 	written   map[string]string
 	calls     []string
+	// results answers Output and Capture per joined command line, in order; the last answer repeats.
+	// Output falls back to output/outputErr, Capture to an empty success.
+	results   map[string][]fakeResult
+	dirs      map[string][]string
+	dirErr    error
+	mkdirErr  error
+	removeErr map[string]error
+	// gets answers Get per URL; Get runs concurrently, so it records calls under mu.
+	gets map[string]fakeResult
+	now  time.Time
+	mu   sync.Mutex
+}
+
+type fakeResult struct {
+	out string
+	err error
+}
+
+func (s *fakeSystem) answer(call string) (fakeResult, bool) {
+	queue := s.results[call]
+	if len(queue) == 0 {
+		return fakeResult{}, false
+	}
+	if len(queue) > 1 {
+		s.results[call] = queue[1:]
+	}
+	return queue[0], true
 }
 
 func (s *fakeSystem) WriteFile(name string, data []byte) error {
@@ -40,9 +69,53 @@ func (s *fakeSystem) Run(name string, args ...string) error {
 }
 
 func (s *fakeSystem) Output(name string, args ...string) (string, error) {
-	s.calls = append(s.calls, "output "+strings.Join(append([]string{name}, args...), " "))
+	call := strings.Join(append([]string{name}, args...), " ")
+	s.calls = append(s.calls, "output "+call)
+	if r, ok := s.answer(call); ok {
+		return r.out, r.err
+	}
 	return s.output, s.outputErr
 }
+
+func (s *fakeSystem) Capture(name string, args ...string) (string, error) {
+	call := strings.Join(append([]string{name}, args...), " ")
+	s.calls = append(s.calls, "capture "+call)
+	r, _ := s.answer(call)
+	return r.out, r.err
+}
+
+func (s *fakeSystem) RemoveAll(path string) error {
+	s.calls = append(s.calls, "remove "+path)
+	return s.removeErr[path]
+}
+
+func (s *fakeSystem) MkdirAll(path string) error {
+	s.calls = append(s.calls, "mkdir "+path)
+	return s.mkdirErr
+}
+
+func (s *fakeSystem) ReadDir(path string) ([]string, error) {
+	s.calls = append(s.calls, "readdir "+path)
+	if s.dirErr != nil {
+		return nil, s.dirErr
+	}
+	return s.dirs[path], nil
+}
+
+func (s *fakeSystem) Sleep(d time.Duration) { s.calls = append(s.calls, "sleep "+d.String()) }
+
+func (s *fakeSystem) Get(url string) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls = append(s.calls, "get "+url)
+	r, ok := s.gets[url]
+	if !ok {
+		return nil, errors.New("404 Not Found: " + url)
+	}
+	return []byte(r.out), r.err
+}
+
+func (s *fakeSystem) Now() time.Time { return s.now }
 
 func (s *fakeSystem) Exec(path string, argv []string) error {
 	s.calls = append(s.calls, "exec "+path+" "+strings.Join(argv, " "))
@@ -238,7 +311,7 @@ func runMainWithOutput(sys *fakeSystem, args ...string) (int, string, string) {
 
 func TestCheckDocsPassesWhenEverythingResolves(t *testing.T) {
 	sys := &fakeSystem{
-		output: "README.md\ndocs/a.md\n.conductor/settings.toml\n.claude/docs/actions/review.md\ndocs/deleted.md\n",
+		output: "README.md\x00docs/a.md\x00.conductor/settings.toml\x00.claude/docs/actions/review.md\x00docs/deleted.md\x00",
 		files: fakeFiles{
 			"README.md":                      "# R\n[a](docs/a.md#a)\n",
 			"docs/a.md":                      "# A\n",
@@ -247,14 +320,14 @@ func TestCheckDocsPassesWhenEverythingResolves(t *testing.T) {
 		},
 	}
 	code, stdout, stderr := runMainWithOutput(sys, "check-docs")
-	if code != 0 || stderr != "" || !strings.HasPrefix(stdout, "pass") || sys.calls[0] != "output git ls-files --cached --others --exclude-standard" {
+	if code != 0 || stderr != "" || !strings.HasPrefix(stdout, "pass") || sys.calls[0] != "output git ls-files -z --cached --others --exclude-standard" {
 		t.Errorf("got code %d stdout %q stderr %q calls %q", code, stdout, stderr, sys.calls)
 	}
 }
 
 func TestCheckDocsFailsAndListsEveryDeadReference(t *testing.T) {
 	sys := &fakeSystem{
-		output: "README.md\n.octopus/instructions/review.md\n",
+		output: "README.md\x00.octopus/instructions/review.md\x00",
 		files: fakeFiles{
 			"README.md":                       "# R\n[gone](docs/gone.md)\n",
 			".octopus/instructions/review.md": "Read .claude/docs/actions/gone.md",
@@ -268,7 +341,7 @@ func TestCheckDocsFailsAndListsEveryDeadReference(t *testing.T) {
 }
 
 func TestDocToolsReportAFailingFileListing(t *testing.T) {
-	for _, command := range []string{"check-docs", "codex-agents"} {
+	for _, command := range []string{"check-docs", "codex-agents", "check-plan", "plan-nav"} {
 		code, _, stderr := runMainWithOutput(&fakeSystem{outputErr: errors.New("not a git repository")}, command)
 		if code != 1 || !strings.Contains(stderr, "not a git repository") {
 			t.Errorf("%s: got code %d stderr %q", command, code, stderr)
@@ -278,7 +351,7 @@ func TestDocToolsReportAFailingFileListing(t *testing.T) {
 
 func TestCodexAgentsWritesOneMirrorPerClaudeAgent(t *testing.T) {
 	sys := &fakeSystem{
-		output: ".claude/agents/code-reviewer.md\n.claude/docs/README.md\nREADME.md\n",
+		output: ".claude/agents/code-reviewer.md\x00.claude/docs/README.md\x00README.md\x00",
 		files:  fakeFiles{".claude/agents/code-reviewer.md": reviewerAgent},
 	}
 	code, stdout, stderr := runMainWithOutput(sys, "codex-agents")
@@ -292,7 +365,7 @@ func TestCodexAgentsWritesOneMirrorPerClaudeAgent(t *testing.T) {
 }
 
 func TestCodexAgentsReportsTheAgentItCannotMirror(t *testing.T) {
-	listing := ".claude/agents/broken.md\n"
+	listing := ".claude/agents/broken.md\x00"
 	cases := map[string]*fakeSystem{
 		"unreadable": {output: listing},
 		"invalid":    {output: listing, files: fakeFiles{".claude/agents/broken.md": "no front matter"}},
@@ -303,5 +376,53 @@ func TestCodexAgentsReportsTheAgentItCannotMirror(t *testing.T) {
 		if code != 1 || !strings.Contains(stderr, "broken") {
 			t.Errorf("%s: got code %d stderr %q, want 1 naming the agent", name, code, stderr)
 		}
+	}
+}
+
+// planSystem serves a plan fixture as the repository.
+func planSystem(files map[string]string) *fakeSystem {
+	return &fakeSystem{output: strings.Join(sortedKeys(files), "\x00") + "\x00", files: fakeFiles(files)}
+}
+
+func TestCheckPlanPassesOnAConsistentPlan(t *testing.T) {
+	code, stdout, stderr := runMainWithOutput(planSystem(planFixture()), "check-plan")
+	want := "pass   plan: 3 tasks, 3 dependencies, 3 requirements, 2 scenarios; navigation up to date\n"
+	if code != 0 || stdout != want || stderr != "" {
+		t.Errorf("got code %d stdout %q stderr %q, want 0 and %q", code, stdout, stderr, want)
+	}
+}
+
+func TestCheckPlanListsEveryProblem(t *testing.T) {
+	files := edit(t, "product/tasks/003-check.md", "`planned`", "`started`")
+	code, stdout, stderr := runMainWithOutput(planSystem(files), "check-plan")
+	if code != 1 || !strings.Contains(stdout, "PLAN 003-check.md: unknown status started\n") || !strings.Contains(stderr, "plan problems") {
+		t.Errorf("got code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
+
+func TestPlanNavRewritesOnlyAStaleBlock(t *testing.T) {
+	stale := edit(t, "product/tasks/003-check.md", "Check everything", "Check every gate")
+	sys := planSystem(stale)
+	code, stdout, stderr := runMainWithOutput(sys, "plan-nav")
+	if code != 0 || stdout != "plan-nav: navigation regenerated\n" || stderr != "" || !strings.Contains(sys.written["product/tasks/README.md"], "| Check every gate |") {
+		t.Errorf("got code %d stdout %q stderr %q written %q", code, stdout, stderr, sys.written)
+	}
+	sys = planSystem(planFixture())
+	code, stdout, _ = runMainWithOutput(sys, "plan-nav")
+	if code != 0 || stdout != "plan-nav: navigation already up to date\n" || len(sys.written) != 0 {
+		t.Errorf("up to date: got code %d stdout %q written %q", code, stdout, sys.written)
+	}
+}
+
+func TestPlanNavRefusesAnUnreadablePlanOrAFailedWrite(t *testing.T) {
+	broken := planSystem(edit(t, "product/tasks/003-check.md", "**Status:** `planned`  \n", ""))
+	code, stdout, stderr := runMainWithOutput(broken, "plan-nav")
+	if code != 1 || !strings.Contains(stdout, "PLAN 003-check.md") || len(broken.written) != 0 || !strings.Contains(stderr, "plan problems") {
+		t.Errorf("unreadable: got code %d stdout %q stderr %q written %q", code, stdout, stderr, broken.written)
+	}
+	readOnly := planSystem(edit(t, "product/tasks/003-check.md", "Check everything", "Check every gate"))
+	readOnly.writeErr = errors.New("read-only file system")
+	if code, _, stderr := runMainWithOutput(readOnly, "plan-nav"); code != 1 || !strings.Contains(stderr, "read-only") {
+		t.Errorf("unwritable: got code %d stderr %q", code, stderr)
 	}
 }
