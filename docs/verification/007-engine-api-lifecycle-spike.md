@@ -44,7 +44,7 @@ The owner asked for at least 9.
   under `frontend/src`.
 
 The full approved plan, with its self-assessment, is kept in the session. Its decisions are in the
-ADR [engine-lifecycle](../decisions/engine-lifecycle.md).
+ADR `engine-lifecycle`, written in stage E.
 
 ## Stage log
 
@@ -112,3 +112,35 @@ torrentengine test packages, and later the spike, share it instead of copying th
     - The defence for 011 and 022: hash the received info bytes against the requested infohash
       before the torrent reaches the real save folder. The metadata wait must not use the user's
       folder as its storage.
+
+## Stage B — gate: multiple Wails apps, product isolation
+
+**RED:** `go test ./internal/devtool` did not compile, as expected:
+- `too many arguments in call to appCoverageRun` (the new `module` parameter);
+- `undefined: wailsApp`, `undefined: wailsApps`;
+- the old single-app `CheckGoCoverage` signature.
+
+**GREEN:**
+
+| Command | Result |
+|---|---|
+| `go test -count=1 -cover ./internal/devtool` | `pass`, 100.0% of statements |
+| `go tool devtool check fast` | `GATE INCOMPLETE`, as `check fast` always reports. The `.app` run and network steps are `not_run`. The first run failed on the stage A report's link to the not yet written ADR, and on `go.mod`, which `go mod tidy` (run by the Wails release build) changed. The lifecycle tests import `github.com/anacrolix/chansync/events` directly, so v0.7.0 moved from indirect to direct with the same version. The link now waits for stage E, and the `go.mod` change is committed. |
+| `go tool devtool check` | `GATE PASSED` in 43 s. The product's instrumented build now runs as `env -C . GOFLAGS=… -coverpkg=octopustorrent/… go tool wails build -s -trimpath`. |
+
+**What changed in the gate:**
+- **Wails apps.** Every Wails project is one row of `wailsApps`: name, directory, bundle, bundle ID,
+  main file and bindings directory. The product is the first row.
+  - The `.app` run builds, opens and quits every app in turn, with `env -C <dir>`.
+  - It accepts only counter files that carry the pid of the app it launched, so an earlier app's
+    counters cannot satisfy a later one.
+  - Every message names the app.
+- **Bindings.** The step regenerates each app's bindings in its own directory and compares them by
+  path.
+- **Coverage.** `CheckGoCoverage` requires the main file of every app in the `.app` profile.
+- **Product isolation (new step).** `go list -deps -f {{.ImportPath}} .` of the product must contain
+  no `octopustorrent/internal/enginespike`, no `/testutil/` package and no `github.com/anacrolix/`
+  package. The real product links 226 packages and none of these.
+- **"engine integration"** now names only task 018.
+- **Table check.** A test reads the committed `wails.json`, both plists, the main file and the
+  bindings directory of every row, so the table cannot drift from the projects.

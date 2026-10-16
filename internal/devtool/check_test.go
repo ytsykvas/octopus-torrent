@@ -15,7 +15,8 @@ const (
 	goTestRace   = "go test -race -count=1 -covermode=atomic -coverpkg=./... ./... -args -test.gocoverdir=/work/repo/build/coverage/go-unit"
 	typecheck    = "npm --prefix frontend run typecheck"
 	releaseBuild = "go tool wails build -clean -trimpath"
-	generate     = "go tool wails generate module"
+	generate     = "env -C . go tool wails generate module"
+	goListDeps   = "go list -deps -f {{.ImportPath}} ."
 	goEnv        = "go env -json GOFLAGS GOINSECURE GONOPROXY GONOSUMDB GOPRIVATE GOPROXY GOSUMDB"
 	goEnvDefault = `{"GOFLAGS":"","GOINSECURE":"","GONOPROXY":"","GONOSUMDB":"","GOPRIVATE":"","GOPROXY":"https://proxy.golang.org,direct","GOSUMDB":"sum.golang.org"}`
 )
@@ -51,6 +52,7 @@ func healthyRepo() *fakeSystem {
 	sys.results["git rev-parse --show-toplevel"] = []fakeResult{{out: "/work/repo\n"}}
 	sys.results[npmConfig] = []fakeResult{{out: "min-release-age=14\nbefore=null\nmin-release-age-exclude=\n"}}
 	sys.results[goEnv] = []fakeResult{{out: goEnvDefault}}
+	sys.results[goListDeps] = []fakeResult{{out: "fmt\noctopustorrent/internal/app\ngithub.com/wailsapp/wails/v2/pkg/options\noctopustorrent\n"}}
 	return withDependencies(sys)
 }
 
@@ -76,7 +78,7 @@ func TestCheckPassesTheGateWhenEveryStepPasses(t *testing.T) {
 		t.Fatalf("check exit %d, report:\n%s", code, report)
 	}
 	for _, step := range []string{"npm ci", "npm cooldown", "go env", "typecheck", "lint", "frontend tests", "frontend build", "gofmt",
-		"go vet", "bindings", "go tests", ".app coverage run", "go coverage", "escape hatches", "scripts", "release build", "docs", "plan",
+		"go vet", "bindings", "go tests", ".app coverage run", "go coverage", "escape hatches", "scripts", "product isolation", "release build", "docs", "plan",
 		"release age", "npm audit", "govulncheck", "updates", "single code version"} {
 		if l := line(report, step); !strings.HasPrefix(l, statusPass) {
 			t.Errorf("step %q: %q, want pass", step, l)
@@ -195,6 +197,17 @@ func TestCheckStepsReportTheirOwnFailures(t *testing.T) {
 			s.results[listFiles] = []fakeResult{{out: s.output}, {out: s.output}}
 			s.files["tools/x.sh"] = "#!/bin/sh\ncurl https://example.com\n"
 		}, "scripts", "tools/x.sh:2: curl https://example.com"},
+		"engine in the product": {func(s *fakeSystem) {
+			s.results[goListDeps] = []fakeResult{{out: "octopustorrent\ngithub.com/anacrolix/torrent\n"}}
+		}, "product isolation", "github.com/anacrolix/torrent"},
+		"spike in the product": {func(s *fakeSystem) {
+			s.results[goListDeps] = []fakeResult{{out: "octopustorrent\noctopustorrent/internal/enginespike\n"}}
+		}, "product isolation", "octopustorrent/internal/enginespike"},
+		"test support in the product": {func(s *fakeSystem) {
+			s.results[goListDeps] = []fakeResult{{out: "octopustorrent/internal/torrentengine/testutil/swarm\n"}}
+		}, "product isolation", "octopustorrent/internal/torrentengine/testutil/swarm"},
+		"go list fails": {func(s *fakeSystem) { s.results[goListDeps] = []fakeResult{{out: "no Go files", err: exitStatus1}} },
+			"product isolation", "exit status 1"},
 		"dead link": {func(s *fakeSystem) { s.files["README.md"] = "[x](gone.md)\n" }, "docs", "DEAD README.md: gone.md"},
 		"stale plan": {func(s *fakeSystem) {
 			s.files["product/tasks/003-check.md"] = strings.Replace(s.files["product/tasks/003-check.md"], "`planned`", "`blocked`", 1)
@@ -296,6 +309,28 @@ func TestBindingsReportARemovedFileAndAnUnreadableListing(t *testing.T) {
 		if got := c.own(check)(); got.status != statusFail || !strings.Contains(got.detail, "not a git repository") {
 			t.Errorf("%s with an unreadable listing: %+v", name, got)
 		}
+	}
+}
+
+func TestBindingsRegenerateEveryWailsApp(t *testing.T) {
+	replace(t, &wailsApps, []wailsApp{wailsApps[0], spikeApp})
+	sys := &fakeSystem{
+		output: "frontend/wailsjs/a.js\x00frontend/spike/wailsjs/s.js\x00frontend/spike/wailsjs/new.js\x00",
+		files:  fakeFiles{"frontend/wailsjs/a.js": "a", "frontend/spike/wailsjs/s.js": "s", "frontend/spike/wailsjs/new.js": "n"},
+	}
+	c := &checker{sys: sys, files: []string{"frontend/wailsjs/a.js", "frontend/spike/wailsjs/s.js"}}
+	if got := c.bindings(); got.status != statusFail || got.output != "frontend/spike/wailsjs/new.js" {
+		t.Errorf("a new spike binding: %+v, want FAIL naming it", got)
+	}
+	calls := strings.Join(sys.calls, "\n")
+	for _, want := range []string{"capture " + generate, "capture env -C cmd/spike go tool wails generate module"} {
+		if !strings.Contains(calls, want) {
+			t.Errorf("calls missing %q:\n%s", want, calls)
+		}
+	}
+	c.files = append(c.files, "frontend/spike/wailsjs/new.js")
+	if got := c.bindings(); got.status != statusPass || !strings.Contains(got.detail, "OctopusTorrent: frontend/wailsjs/ (1 files)") || !strings.Contains(got.detail, "Spike: frontend/spike/wailsjs/ (2 files)") {
+		t.Errorf("bindings in sync: %+v", got)
 	}
 }
 
