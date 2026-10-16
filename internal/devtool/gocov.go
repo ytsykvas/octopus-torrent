@@ -66,12 +66,19 @@ func parseGoProfile(module, text string) (goProfile, []string) {
 }
 
 // goInventory reports, for every own non-test Go file, whether it has a function body that coverage
-// must reach, and the line range of func main in package main files.
+// must reach, and the line range of func main in package main files. Go files under a testdata
+// directory are problems: go test ./... never builds them, so they would run unmeasured.
 func goInventory(sources map[string]string) (measured map[string]bool, mainLines map[string][2]int, problems []string) {
 	measured, mainLines = map[string]bool{}, map[string][2]int{}
 	fset := token.NewFileSet()
 	for _, name := range sortedKeys(sources) {
-		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+		switch {
+		case !strings.HasSuffix(name, ".go"):
+			continue
+		case strings.HasPrefix(name, "testdata/") || strings.Contains(name, "/testdata/"):
+			problems = append(problems, name+": Go source under testdata/ is never built or measured; put it in a package")
+			continue
+		case strings.HasSuffix(name, "_test.go"):
 			continue
 		}
 		file, err := parser.ParseFile(fset, name, sources[name], 0)

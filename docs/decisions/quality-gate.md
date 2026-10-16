@@ -62,7 +62,10 @@ silently bypasses), there was no linter, and dependency age was checked by a one
   pinned as a `go.mod` tool; a report of updates of direct dependencies and tools that have been out
   of quarantine for 14 days; a query the report could not make is `not_run`, never an empty report.
   Each locked npm package must be resolved from `https://registry.npmjs.org/` with the registry's
-  `integrity` for that version, so `npm ci` installs exactly what was dated; a Go module replaced by a
+  `integrity` for that version, so `npm ci` installs exactly what was dated. The only way past the
+  age rule is an exact version in `releaseAgeExceptions`, added on the owner's decision for a
+  security fix (task 006). The step names it ("accepted younger"), and fails once the version is
+  old enough; a Go module replaced by a
   local directory fails (no date). npm's effective cooldown (`npm config get min-release-age before
   min-release-age-exclude`) and Go's module settings (`go env -json`: default `GOPROXY` and `GOSUMDB`;
   `GOFLAGS`, `GOINSECURE`, `GONOPROXY`, `GONOSUMDB`, `GOPRIVATE` unset) are checked offline on every
@@ -120,7 +123,10 @@ absolute path passes the gate.
 - **No step time limit yet.** A tool that hangs (a stalled `npm ci`, the first-time Automation prompt)
   hangs the gate visibly; the owner interrupts it. Per-step limits through a context arrive with the
   first step that can hang unattended (engine integration, 007/018).
-- **Inventory rules still to decide:** `goInventory` counts every non-test `.go` file, including under
-  `testdata/`, which `./...` does not build, so such a file fails as "not in the coverage profile";
-  shell scripts have no inventory rule. Task 006 (synthetic torrents, possibly `scripts/`) decides
-  both under the rule above.
+- **Inventory rules for generators and scripts** (decided in
+  [006](../../product/tasks/006-controlled-torrent-fixtures.md)): a `.go` file under any `testdata/`
+  directory fails the `go coverage` step with its own message, because `go test ./...` never builds or
+  measures it; generators live in packages and `testdata/` holds only data. Shell has no coverage
+  inventory, so the `scripts` step accepts a `*.sh` file only as a hand-over: `#!/bin/sh`, comments,
+  `set -eu`, `go build -o build/bin/devtool ./cmd/devtool` and `exec build/bin/devtool …`; any other
+  line fails. Logic goes into `cmd/devtool` and `internal/devtool`.

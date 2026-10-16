@@ -157,6 +157,26 @@ func TestReleaseAgeStepChecksEveryLockedVersion(t *testing.T) {
 	}
 }
 
+// An exception lets one young version through, named in the result, and turns into a failure as
+// soon as the version is old enough, so it never outlives its reason.
+func TestReleaseAgeExceptionsAreExactAndExpire(t *testing.T) {
+	sys := healthyRepo()
+	sys.gets["https://proxy.golang.org/golang.org/x/sys/@v/v0.47.0.info"] = fakeResult{out: `{"Time":"2026-10-14T00:00:00Z"}`}
+	c := newChecker(sys, checkModes["check"])
+	c.ageExceptions = map[string]string{"golang.org/x/sys@v0.47.0": "a security fix"}
+	if got := c.releaseAges(); got.status != statusPass || !strings.Contains(got.detail, "accepted younger: golang.org/x/sys@v0.47.0") {
+		t.Errorf("releaseAges with an exception = %+v", got)
+	}
+	c = newChecker(healthyRepo(), checkModes["check"])
+	c.ageExceptions = map[string]string{"golang.org/x/sys@v0.47.0": "a security fix"}
+	if got := c.releaseAges(); got.status != statusFail || !strings.Contains(got.output, "golang.org/x/sys@v0.47.0 is at least 14 days old: remove its release-age exception") {
+		t.Errorf("releaseAges with an expired exception = %+v", got)
+	}
+	if len(newChecker(healthyRepo(), checkModes["check"]).ageExceptions) != len(releaseAgeExceptions) {
+		t.Error("the checker does not start from releaseAgeExceptions")
+	}
+}
+
 // Transitive Go modules follow MVS (toolchain-versions ADR), so only direct requirements and tools
 // are reported.
 func TestUpdatesReportsOnlyVersionsOutOfQuarantine(t *testing.T) {

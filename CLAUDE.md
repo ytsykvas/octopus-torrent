@@ -12,7 +12,7 @@ Everything written into the repository is English; replies to the owner are in U
 
 - `product/` — everything about the product: [requirements](product/PROJECT_REQUIREMENTS.md) (source of behavior, requirement IDs), concept, [architecture](product/APPLICATION_ARCHITECTURE.md), engine research, `MOCKUP.html` (visual reference only — its demo logic is not a requirement), the plan and 68 numbered tasks in [product/tasks/](product/tasks/README.md#navigation-of-all-tasks), `archive/`.
 - `docs/` — engineering policy, ADRs (`decisions/`, open questions O1–O18 in the [register](docs/decisions/project-baseline.md#6-open-decision-register)), evidence (`verification/`), and how-it-works docs by domain: `app/`, `bridge/`, `frontend/`, `tooling/`, `development/` (index: [docs/README.md](docs/README.md); start with [getting started](docs/development/getting-started.md)).
-- Code: `main.go`, `internal/app` (Wails facade), `frontend/` (React), `cmd/devtool` + `internal/devtool` (agent and workspace tooling).
+- Code: `main.go`, `internal/app` (Wails facade), `frontend/` (React), `cmd/devtool` + `internal/devtool` (agent and workspace tooling), `internal/torrentengine/testutil` (own test torrents and a closed loopback swarm for engine tests).
 - Agent tooling: [.claude/docs/README.md](.claude/docs/README.md) — agents, commands, the action instructions shared with Codex, octopus and Conductor.
 
 ## Workflow
@@ -46,6 +46,7 @@ A single test (quick module check, never acceptance):
 
 ```sh
 go test -race ./internal/app -run TestGetRuntimeInfoReportsCompiledGoRuntime -v
+go test -race -count=1 ./internal/torrentengine/...   # test torrents + loopback swarm (anacrolix), about 12 s
 npm --prefix frontend test -- src/features/runtime-check/RuntimeCheck.test.tsx -t 'Go'
 npm --prefix frontend run lint -- src/features/runtime-check/RuntimeCheck.tsx
 ```
@@ -65,6 +66,7 @@ TS: the gate derives the inventory from the repository listing (`frontend/src/**
 - Implemented: the shell from task 003 (`frontend/src/features/runtime-check` → `frontend/src/bridge/runtimeInfo.ts` → `frontend/wailsjs/go/app/App.js` → `internal/app.App.GetRuntimeInfo`) and the contract from task 005 ([ADR api-contract](docs/decisions/api-contract.md)).
 - The template for every new UI → Go command: a request DTO in `internal/app/contracts` with JSON examples in its `testdata/manifest.json`, `Validate()`, a facade method that starts the mutation through `internal/app/operations.Ledger` (idempotent `operationID`), regenerated bindings, a wrapper in `frontend/src/bridge` built on `callGo` + a decoder from `bridge/contract`, returning `Result<T>`. 64-bit values are decimal strings with `ts_type:"string"` in Go and `bigint` in TS; errors are `AppError`, sent as JSON text by `app.ErrorFormatter`; enumerations and error codes are listed once in `internal/app/contracts/testdata/vocabulary.json`, checked by both test suites.
 - `main.go` keeps `main()` free of branches: `run(start, stderr, ledger)` takes the Wails start function, so tests substitute a fake instead of a window; `OnShutdown` stops the ledger. New facade dependencies are passed explicitly through `app.New(...)` and `options.App.Bind`; lifecycle hooks never become exported `App` methods (Wails binds them all to JavaScript). `cmd/devtool` follows the same pattern with the `devtool.System` interface.
+- Engine tests (task 006, [ADR controlled-swarm](docs/decisions/controlled-swarm.md)) use `internal/torrentengine/testutil/fixture` (deterministic v1/v2/hybrid torrents committed in `testdata/`, rewritten with `go test ./internal/torrentengine/testutil/fixture -args -update`) and `.../swarm` (anacrolix clients on 127.0.0.1 only, every discovery path off, every wait bounded by a context). anacrolix/torrent v1.61.0 has tracked defects: v2-only torrents panic on add, the default mmap IO fails a chunk spanning a zero-length file, `Client.Close` closes listeners asynchronously, and `VerifyDataContext` returns before the completion is stored.
 - React components receive their bridge dependencies as props (see `RuntimeCheck`), so they are tested without Wails. `App.tsx` wires them to the real bridge.
 - The target structure (`internal/torrentengine`, `internal/library`, `internal/files`, `internal/platform`, `frontend/src/state`, etc.) is in [architecture §3](product/APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first). Those directories are created by numbered tasks, not invented in advance.
 

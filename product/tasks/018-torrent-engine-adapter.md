@@ -55,6 +55,8 @@ Services receive the adapter through our own contract and do not access library 
 
 **Basis for technical decisions:** [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, reconcile signatures and constraints with the pinned version. Reading the API documentation does not replace a performed integration check.
 
+**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): adapter tests use `internal/torrentengine/testutil/{fixture,swarm}`; do not write another harness. Engine facts to handle in the adapter: v2-only torrents panic on add (recover or reject before calling the engine); `VerifyDataContext` returns before completion is stored (wait until no piece is queued, hashing or marking); `Client.Close` returns before listeners close; payload counters are `BytesReadData`/`BytesWrittenData`, protocol bytes are `BytesRead`/`BytesWritten`. `IncompleteError.Completed` is the engine's `BytesCompleted`, which counts unverified chunks; use piece states for verified progress. Payload files stay mapped after `Close` with the default mmap IO. Never add a metainfo the parser (019) and path plan (020) have not accepted: `AddTorrent` truncates existing files at zero-length paths before anything is downloaded.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

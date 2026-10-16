@@ -69,10 +69,12 @@ type checker struct {
 	files   []string
 	appRan  bool
 	npmDocs map[string]npmDocument
+	// ageExceptions are the versions the release-age step lets through younger than the minimum.
+	ageExceptions map[string]string
 }
 
 func newChecker(sys System, mode checkMode) *checker {
-	return &checker{sys: sys, mode: mode, npmDocs: map[string]npmDocument{}}
+	return &checker{sys: sys, mode: mode, npmDocs: map[string]npmDocument{}, ageExceptions: releaseAgeExceptions}
 }
 
 // runCheck runs every step of the mode in order, never stopping early, prints one line per step and
@@ -175,6 +177,7 @@ func (c *checker) steps() []checkStep {
 		{".app coverage run", c.appRun},
 		{"go coverage", c.goCoverage},
 		{"escape hatches", c.escapeHatches},
+		{"scripts", c.scripts},
 		{"release build", c.tool("go", "tool", "wails", "build", "-clean", "-trimpath")},
 		{"docs", c.own(docsCheck)},
 		{"plan", c.own(planCheck)},
@@ -377,6 +380,13 @@ func (c *checker) escapeHatches() stepResult {
 		return fail("ignore directives, lint disables or switched-off tests", strings.Join(found, "\n"))
 	}
 	return pass("no ignore directives, lint disables or switched-off tests")
+}
+
+func (c *checker) scripts() stepResult {
+	if found := CheckScripts(c.contents(c.files, "")); len(found) > 0 {
+		return fail("shell scripts may only hand over to devtool; write the logic in Go", strings.Join(found, "\n"))
+	}
+	return pass("every shell script only hands over to devtool")
 }
 
 func (c *checker) sameSources(before map[string]string) stepResult {

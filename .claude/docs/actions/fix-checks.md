@@ -34,6 +34,10 @@ finish with the full `go tool devtool check`.
   narrow the inventory.
 - **`escape hatches` fails.** An ignore directive, a lint disable, a `@ts-` comment, a `//nolint` or a
   skipped or conditional test; remove it and fix the code or the test.
+- **`scripts` fails.** A `*.sh` file does more than build `devtool` and `exec` it. Move the logic into
+  `cmd/devtool`/`internal/devtool`, where it is tested and measured.
+- **`go coverage` names a file under `testdata/`.** `go test ./...` never builds Go code there; move the
+  generator into a package with its own tests and keep only data in `testdata/`.
 - **`npm cooldown` or `go env` fails.** A setting outside the repository (user `.npmrc`, environment,
   `go env -w`) weakens the cooldown or checksum verification. Name it to the owner; never change the
   check.

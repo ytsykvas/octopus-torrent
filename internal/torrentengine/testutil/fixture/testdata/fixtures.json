@@ -1,0 +1,368 @@
+{
+  "engine": "github.com/anacrolix/torrent v1.61.0",
+  "fixtures": [
+    {
+      "name": "v1-single",
+      "purpose": "single v1 file of 3.5 pieces",
+      "format": "v1",
+      "pieceLength": 16384,
+      "pieces": 4,
+      "infohashV1": "a651e10ee8c58168c352910f5e2207155ef54f8a",
+      "files": [
+        {
+          "path": [
+            "single.bin"
+          ],
+          "length": 57344,
+          "sha256": "e36a1ef34ecd553219d4bc8491934bac5b58a6742a09f078b99aadb30b1501f7"
+        }
+      ],
+      "engine": "accepted"
+    },
+    {
+      "name": "v1-tree",
+      "purpose": "v1 tree: nested folders, repeated names, an empty file, a Unicode name, pieces across files",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "dc7e9f7e98930e882203aba95fcf88d61a937f5e",
+      "files": [
+        {
+          "path": [
+            "docs",
+            "readme.txt"
+          ],
+          "length": 10000,
+          "sha256": "ac7daee8d67be494a71e6d795ad8d93f9f2c2ab9a1ccca5d48301b2cbdf978b3"
+        },
+        {
+          "path": [
+            "empty.dat"
+          ],
+          "length": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": [
+            "media",
+            "clips",
+            "clip.bin"
+          ],
+          "length": 40000,
+          "sha256": "e99fae9f574f5655b9d1d679e6bd494d42c7f93a85079f288127aadba4d9520e"
+        },
+        {
+          "path": [
+            "media",
+            "readme.txt"
+          ],
+          "length": 20000,
+          "sha256": "9117439f23798faee80d0bacf4939f934f753dd1747c2ba6b07c086ae2598237"
+        },
+        {
+          "path": [
+            "Ünïcode",
+            "файл.bin"
+          ],
+          "length": 5000,
+          "sha256": "a3c1adc1c9d20e89f382220b981f25065528d7877c7dab1319bbc45eb512d649"
+        }
+      ],
+      "engine": "accepted"
+    },
+    {
+      "name": "v1-tree-no-empty",
+      "purpose": "v1-tree without the empty file: the control for the pinned engine's empty-file chunk failure",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "690d517572d061b6546308120dce5d181f4cbccc",
+      "files": [
+        {
+          "path": [
+            "docs",
+            "readme.txt"
+          ],
+          "length": 10000,
+          "sha256": "ac7daee8d67be494a71e6d795ad8d93f9f2c2ab9a1ccca5d48301b2cbdf978b3"
+        },
+        {
+          "path": [
+            "media",
+            "clips",
+            "clip.bin"
+          ],
+          "length": 40000,
+          "sha256": "e99fae9f574f5655b9d1d679e6bd494d42c7f93a85079f288127aadba4d9520e"
+        },
+        {
+          "path": [
+            "media",
+            "readme.txt"
+          ],
+          "length": 20000,
+          "sha256": "9117439f23798faee80d0bacf4939f934f753dd1747c2ba6b07c086ae2598237"
+        },
+        {
+          "path": [
+            "Ünïcode",
+            "файл.bin"
+          ],
+          "length": 5000,
+          "sha256": "a3c1adc1c9d20e89f382220b981f25065528d7877c7dab1319bbc45eb512d649"
+        }
+      ],
+      "engine": "accepted"
+    },
+    {
+      "name": "v1-large",
+      "purpose": "1 MiB v1 file for rate-limited transfers, measurement and cancellation",
+      "format": "v1",
+      "pieceLength": 16384,
+      "pieces": 64,
+      "infohashV1": "6eba3b3f53b5ece64148087f802f54bc71fdc8ef",
+      "files": [
+        {
+          "path": [
+            "large.bin"
+          ],
+          "length": 1048576,
+          "sha256": "461807d68fa3bf5f09255dbe5e3ad8c788c7b72c7b345c8f10c8ec0e2e9993f5"
+        }
+      ],
+      "engine": "accepted"
+    },
+    {
+      "name": "v2-single",
+      "purpose": "v2-only single file; the pinned engine panics when it is added",
+      "format": "v2",
+      "pieceLength": 16384,
+      "pieces": 4,
+      "infohashV2": "9674fec3392325fa2969638a45083dbcc85d73a40160e3abf0aff093c8e87b15",
+      "files": [
+        {
+          "path": [
+            "single.bin"
+          ],
+          "length": 57344,
+          "sha256": "e36a1ef34ecd553219d4bc8491934bac5b58a6742a09f078b99aadb30b1501f7"
+        }
+      ],
+      "engine": "add"
+    },
+    {
+      "name": "v2-tree",
+      "purpose": "v2-only tree; the pinned engine panics when it is added",
+      "format": "v2",
+      "pieceLength": 32768,
+      "pieces": 5,
+      "infohashV2": "92c9496082565f7f5c3d0ab86d039856db17bde99ab7bc2734ec8786682c627b",
+      "files": [
+        {
+          "path": [
+            "docs",
+            "readme.txt"
+          ],
+          "length": 10000,
+          "sha256": "ac7daee8d67be494a71e6d795ad8d93f9f2c2ab9a1ccca5d48301b2cbdf978b3"
+        },
+        {
+          "path": [
+            "empty.dat"
+          ],
+          "length": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": [
+            "media",
+            "clips",
+            "clip.bin"
+          ],
+          "length": 40000,
+          "sha256": "e99fae9f574f5655b9d1d679e6bd494d42c7f93a85079f288127aadba4d9520e"
+        },
+        {
+          "path": [
+            "media",
+            "readme.txt"
+          ],
+          "length": 20000,
+          "sha256": "9117439f23798faee80d0bacf4939f934f753dd1747c2ba6b07c086ae2598237"
+        },
+        {
+          "path": [
+            "Ünïcode",
+            "файл.bin"
+          ],
+          "length": 5000,
+          "sha256": "a3c1adc1c9d20e89f382220b981f25065528d7877c7dab1319bbc45eb512d649"
+        }
+      ],
+      "engine": "add"
+    },
+    {
+      "name": "hybrid-single",
+      "purpose": "hybrid single file",
+      "format": "hybrid",
+      "pieceLength": 16384,
+      "pieces": 4,
+      "infohashV1": "fa935fc1dd0d9dbd6934811513bea2abee525aa2",
+      "infohashV2": "fc31bf94b331dbfdfcb1476f913828c3992be8adda3d2eb1cb964ca1dd8f0eff",
+      "files": [
+        {
+          "path": [
+            "single.bin"
+          ],
+          "length": 57344,
+          "sha256": "e36a1ef34ecd553219d4bc8491934bac5b58a6742a09f078b99aadb30b1501f7"
+        }
+      ],
+      "engine": "accepted"
+    },
+    {
+      "name": "hybrid-tree",
+      "purpose": "hybrid tree with BEP 47 pad files, an empty file and a piece layer",
+      "format": "hybrid",
+      "pieceLength": 32768,
+      "pieces": 5,
+      "infohashV1": "73b474dacd6e096a55fe85eae8447da46fcc9acd",
+      "infohashV2": "e5d79adb8ee19825ff459d1c3782364179e029676f310857c3dc546551e9171d",
+      "files": [
+        {
+          "path": [
+            "docs",
+            "readme.txt"
+          ],
+          "length": 10000,
+          "sha256": "ac7daee8d67be494a71e6d795ad8d93f9f2c2ab9a1ccca5d48301b2cbdf978b3"
+        },
+        {
+          "path": [
+            "empty.dat"
+          ],
+          "length": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": [
+            "media",
+            "clips",
+            "clip.bin"
+          ],
+          "length": 40000,
+          "sha256": "e99fae9f574f5655b9d1d679e6bd494d42c7f93a85079f288127aadba4d9520e"
+        },
+        {
+          "path": [
+            "media",
+            "readme.txt"
+          ],
+          "length": 20000,
+          "sha256": "9117439f23798faee80d0bacf4939f934f753dd1747c2ba6b07c086ae2598237"
+        },
+        {
+          "path": [
+            "Ünïcode",
+            "файл.bin"
+          ],
+          "length": 5000,
+          "sha256": "a3c1adc1c9d20e89f382220b981f25065528d7877c7dab1319bbc45eb512d649"
+        }
+      ],
+      "engine": "accepted"
+    },
+    {
+      "name": "invalid-truncated",
+      "purpose": "v1-single cut in the middle of the info dictionary",
+      "format": "v1",
+      "pieceLength": 16384,
+      "pieces": 4,
+      "infohashV1": "a651e10ee8c58168c352910f5e2207155ef54f8a",
+      "engine": "load"
+    },
+    {
+      "name": "invalid-info-type",
+      "purpose": "piece length is a string, not an integer",
+      "format": "v1",
+      "pieceLength": 16384,
+      "pieces": 4,
+      "infohashV1": "c2265c2faf8d05b7438550fc62e246ee99af9edf",
+      "engine": "info"
+    },
+    {
+      "name": "invalid-pieces-length",
+      "purpose": "pieces is not a multiple of 20 bytes",
+      "format": "v1",
+      "pieceLength": 16384,
+      "pieces": 4,
+      "infohashV1": "181197b361eb39ca763baf71ef4953afbe639b6b",
+      "engine": "add"
+    },
+    {
+      "name": "invalid-negative-length",
+      "purpose": "a file with length -1",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "37b191e91ab7bec229734a177b9b9542c5b7ed91",
+      "engine": "add"
+    },
+    {
+      "name": "invalid-path-traversal",
+      "purpose": "a path component \"..\" that leaves the save folder; the engine accepts it",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "fb851bf516628e9b91a08786d7d7c983105cb85c",
+      "engine": "accepted"
+    },
+    {
+      "name": "invalid-empty-traversal",
+      "purpose": "the empty file's path is [\"..\", \"victim.txt\"]: one level above the torrent folder; the engine accepts it and truncates an existing file there on add",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "e6fa089f89fbef1300e15f4d8e6de6334bf59129",
+      "engine": "accepted"
+    },
+    {
+      "name": "invalid-embedded-separator",
+      "purpose": "the empty file's path is one component \"a/../../x\", which resolves to the save folder",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "ec4a692f28860a7ea305c659d4ef8773c4f6f57b",
+      "engine": "accepted"
+    },
+    {
+      "name": "invalid-dot-components",
+      "purpose": "path components \".\" and \"\" in the empty file's path",
+      "format": "v1",
+      "pieceLength": 32768,
+      "pieces": 3,
+      "infohashV1": "ea4cdb730f54b387251adb8098412ef0a7f1883e",
+      "engine": "accepted"
+    },
+    {
+      "name": "invalid-hybrid-mismatch",
+      "purpose": "a hybrid whose v1 file list disagrees with its file tree; the engine accepts it",
+      "format": "hybrid",
+      "pieceLength": 32768,
+      "pieces": 5,
+      "infohashV1": "2c194636c8f14b34a48bbdac623f285578fcc638",
+      "infohashV2": "44615594c95aad0cad1c6bdaf2bbd3f9064354bf053b6c467c700b6fb4f1ff36",
+      "engine": "accepted"
+    },
+    {
+      "name": "invalid-piece-layer",
+      "purpose": "a hybrid whose piece layer does not hash to its pieces root",
+      "format": "hybrid",
+      "pieceLength": 32768,
+      "pieces": 5,
+      "infohashV1": "73b474dacd6e096a55fe85eae8447da46fcc9acd",
+      "infohashV2": "e5d79adb8ee19825ff459d1c3782364179e029676f310857c3dc546551e9171d",
+      "engine": "pieceLayers"
+    }
+  ]
+}
