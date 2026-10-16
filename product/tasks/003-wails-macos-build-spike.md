@@ -1,6 +1,6 @@
 # 003 — Build the first Wails .app on the owner's Mac
 
-**Status:** `in_progress`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** Gate/spike with a recorded result  
@@ -36,11 +36,11 @@ Build a small real macOS application with Wails v2, React and TypeScript and ver
 
 ## Acceptance criteria
 
-- [ ] The built `.app` opens from Finder after the development server is stopped and shows the local UI without internet.
-- [ ] A click in the real Wails window calls the Go method and displays the expected response.
-- [ ] Launching the finished package does not invoke Go, Node.js or Wails CLI and does not require the user to install them.
-- [ ] The build can be repeated from a clean copy of the pinned sources and dependencies using the recorded commands.
-- [ ] The report contains the actual Mac configuration, system dependencies, signing state and the limits of the compatibility check; unverified macOS versions are not called supported.
+- [x] The built `.app` opens from Finder after the development server is stopped and shows the local UI without internet.
+- [x] A click in the real Wails window calls the Go method and displays the expected response.
+- [x] Launching the finished package does not invoke Go, Node.js or Wails CLI and does not require the user to install them.
+- [x] The build can be repeated from a clean copy of the pinned sources and dependencies using the recorded commands.
+- [x] The report contains the actual Mac configuration, system dependencies, signing state and the limits of the compatibility check; unverified macOS versions are not called supported.
 
 ## Checks
 
@@ -74,3 +74,11 @@ At the start of each session, follow the [agent rules](../../AGENTS.md): read th
 - Record a short result: what was changed, exact checks with pass/fail/not_run, ADRs, actual code paths and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+### Execution result (15 October 2026)
+
+- **Status:** `done`. Evidence: [report 003](../../docs/verification/003-wails-macos-build-spike.md); feature: [desktop-shell-build](../../docs/features/desktop-shell-build.md); ADRs: [toolchain-versions](../../docs/decisions/toolchain-versions.md) (O2), [macos-target](../../docs/decisions/macos-target.md) (O1).
+- **Created:** `main.go` (`run(start, stderr)`), `internal/app` (`App.GetRuntimeInfo`), `frontend/` (React + TypeScript strict, Vite, Vitest with a 100% per-file threshold), `frontend/src/bridge/runtimeInfo.ts`, `frontend/src/features/runtime-check`, generated `frontend/wailsjs/`, `wails.json`, `build/darwin/Info.plist`, `frontend/.npmrc` (`min-release-age=14`).
+- **Checks:** report items 1–22 `pass`: RED → GREEN for Go and TS; 100% coverage of own code (TS 4 metrics per file; Go raw counters of unit tests + the instrumented `.app`, 0 zero-count blocks); the release `.app` from Finder, twice via LaunchServices and twice **without internet** (no sockets, no child processes, clean quit); build from a clean copy (identical binary SHA-256); dependency age ≥ 14 days, `npm audit` and `govulncheck` clean; `check-docs`.
+- **Limitations:** verified only on Apple M4 / macOS 27.0.1 arm64; ad-hoc signature (Gatekeeper `spctl` rejects; transfer to another Mac is 066). The manual QA scripts (`click.applescript`, `offline_check.sh`) lived in the session scratchpad; the repeatable method is in the `macos-qa` agent, the permanent check commands are 004.
+- **Next task:** [004](004-reproducible-check-commands.md) (single check command) or [005](005-domain-dto-and-bridge-contract.md) (Go–TS contracts); both now have all dependencies `done`.
