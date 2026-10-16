@@ -1,0 +1,18 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "EngineSpike",
+  "outputfilename": "EngineSpike",
+  "frontend:dir": "../../frontend",
+  "wailsjsdir": "../../frontend/spike",
+  "frontend:install": "npm ci",
+  "frontend:build": "npm run build",
+  "author": {
+    "name": "Yurii Tsykvas"
+  },
+  "info": {
+    "productName": "EngineSpike",
+    "productVersion": "0.0.1",
+    "copyright": "Personal use",
+    "comments": "Temporary engine spike of OctopusTorrent (task 007); deleted by task 034"
+  }
+}

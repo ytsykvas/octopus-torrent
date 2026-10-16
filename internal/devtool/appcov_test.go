@@ -22,16 +22,29 @@ const (
 
 var exitStatus1 = errors.New("exit status 1")
 
-// appRun is a fake .app that starts on the second poll and quits after the first quit request.
+// The committed engine spike, the second row of wailsApps.
+const (
+	engineSpikeRunning = `osascript -e application id "dev.tsykvas.octopustorrent.enginespike" is running`
+	engineSpikePgrep   = "pgrep -f /work/repo/cmd/engine-spike/build/bin/EngineSpike.app/Contents/MacOS/"
+	engineSpikeQuit    = `osascript -e tell application id "dev.tsykvas.octopustorrent.enginespike" to quit`
+	engineSpikeAlive   = "ps -p 6363"
+)
+
+// appRun is a fake run of the committed apps: the product starts on the second poll and quits after
+// the first quit request; the engine spike starts at once and quits on request.
 func appRun() *fakeSystem {
 	return &fakeSystem{
 		results: map[string][]fakeResult{
-			isRunning: {{out: "false\n"}},
-			appPgrep:  {{err: exitStatus1}, {out: "4242\n"}},
-			appQuit:   {{out: cancelled, err: exitStatus1}},
-			appAlive:  {{out: "4242 OctopusTorrent\n"}, {err: exitStatus1}},
+			isRunning:          {{out: "false\n"}},
+			appPgrep:           {{err: exitStatus1}, {out: "4242\n"}},
+			appQuit:            {{out: cancelled, err: exitStatus1}},
+			appAlive:           {{out: "4242 OctopusTorrent\n"}, {err: exitStatus1}},
+			engineSpikeRunning: {{out: "false\n"}},
+			engineSpikePgrep:   {{out: "6363\n"}},
+			engineSpikeQuit:    {{out: cancelled, err: exitStatus1}},
+			engineSpikeAlive:   {{err: exitStatus1}},
 		},
-		dirs: map[string][]string{appDir: {"covcounters.abc.4242.1", "covmeta.abc"}},
+		dirs: map[string][]string{appDir: {"covcounters.abc.4242.1", "covmeta.abc", "covcounters.ghi.6363.1"}},
 	}
 }
 

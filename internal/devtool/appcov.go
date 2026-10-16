@@ -32,6 +32,9 @@ type wailsApp struct {
 var wailsApps = []wailsApp{
 	{Name: "OctopusTorrent", Dir: ".", Bundle: "build/bin/OctopusTorrent.app", BundleID: "dev.tsykvas.octopustorrent",
 		Main: "main.go", Bindings: "frontend/wailsjs/"},
+	// The engine spike of task 007; task 034 deletes it.
+	{Name: "EngineSpike", Dir: "cmd/engine-spike", Bundle: "build/bin/EngineSpike.app", BundleID: "dev.tsykvas.octopustorrent.enginespike",
+		Main: "cmd/engine-spike/main.go", Bindings: "frontend/spike/wailsjs/"},
 }
 
 func appMains() []string {

@@ -366,6 +366,36 @@ func TestPinnedEngineIgnoresTheUploadSwitchOfTheAddOptions(t *testing.T) {
 	}
 }
 
+// Allowing download right after disallowing it, while the cancelled requests are still on the wire,
+// leaves the pinned engine with no request for good: the transfer never moves again (20 of 20 runs
+// while 007 was written; with 5 ms between the two calls, 0 of 20). The cause inside the engine is
+// not established; 010 owns the product's remedy, and our code must not resume right after a pause.
+func TestPinnedEngineStallsWhenDownloadIsAllowedRightAfterDisallowing(t *testing.T) {
+	fx := named(t, "v1-large")
+	opts := swarm.Options{RateLimit: 256 << 10}
+	seeder := seed(t, fx, opts)
+	lt, err := peer(t, opts).Leech(metaInfo(t, fx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	swarm.Connect(lt, seeder)
+	if err := firstPayload(deadline(t, transferLimit), lt); err != nil {
+		t.Fatal(err)
+	}
+	lt.DisallowDataDownload()
+	lt.AllowDataDownload()
+	err = swarm.WaitComplete(deadline(t, 3*time.Second), lt) // 1 MiB at 256 KiB/s needs at most 4 s
+	var incomplete *swarm.IncompleteError
+	if !errors.As(err, &incomplete) {
+		t.Fatalf("WaitComplete = %v; the transfer resumed, so the engine no longer stalls: re-check 010, 018 and 025's notes", err)
+	}
+	before := incomplete.Completed
+	time.Sleep(time.Second)
+	if now := lt.BytesCompleted(); now != before {
+		t.Fatalf("the transfer moved from %d to %d bytes: the engine no longer stalls: re-check 010, 018 and 025's notes", before, now)
+	}
+}
+
 // childDirEnv runs TestPinnedEngineDeadlocksOnVerifyAfterDrop as the child process that deadlocks.
 const childDirEnv = "OCTOPUS_ENGINE_DEADLOCK_CHILD_DIR"
 

@@ -16,5 +16,5 @@
     "typescript/no-non-null-assertion": "error",
     "import/no-unassigned-import": ["error", { "allow": ["@testing-library/jest-dom/vitest"] }]
   },
-  "ignorePatterns": ["dist/**", "coverage/**", "wailsjs/**"]
+  "ignorePatterns": ["dist/**", "coverage/**", "wailsjs/**", "spike/wailsjs/**"]
 }

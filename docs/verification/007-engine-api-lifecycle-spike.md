@@ -144,3 +144,96 @@ torrentengine test packages, and later the spike, share it instead of copying th
 - **"engine integration"** now names only task 018.
 - **Table check.** A test reads the committed `wails.json`, both plists, the main file and the
   bindings directory of every row, so the table cannot drift from the projects.
+
+## Stages C and D — the spike app (Go and TypeScript)
+
+The two stages land in one commit. `cmd/engine-spike` embeds the page that the TypeScript stage
+builds, so neither half passes the gate alone.
+
+### First step: a Wails project in a subdirectory
+
+`cmd/engine-spike` had a `wails.json` with `frontend:dir: ../../frontend` and
+`wailsjsdir: ../../frontend/spike`, and a probe `main.go` that bound an empty `API`.
+`go tool wails build -s -trimpath` in that directory gave `pass`:
+- `EngineSpike.app` was built in 3 s;
+- the bindings appeared only in `frontend/spike/wailsjs/`, with no file of the product changed.
+
+The probe `main.go` was then deleted, and the real code was written test-first.
+
+### RED
+
+| Command | Result |
+|---|---|
+| `go test ./internal/enginespike/` | `fail` as expected: `undefined: Transfer`, `undefined: Event`, … |
+| `npm --prefix frontend test -- src/spike` | `fail` as expected: the modules `./bridge`, `./SpikeApp` and `./main` do not exist |
+| first `go test -race -count=1 -cover ./internal/enginespike` | `pass`, but only 98.1%. The two uncovered blocks pointed at design faults, not missing tests: an ignored `fixture.Named` error, and a `Leech` error that could not be reached. The fixture name became a seam. The leecher now adds the torrent before the seeder seeds. Each error branch now has a real cause: an unknown fixture, an unreadable metainfo, and the v2-only fixture the engine panics on. |
+
+### GREEN
+
+| Command | Result |
+|---|---|
+| `go test -race -count=2 -cover ./internal/enginespike` | `pass`, 100.0% of statements |
+| `go test -race -count=1 -cover ./cmd/engine-spike` | `pass`. The only uncovered block is `main()`, which the `.app` run covers. |
+| `npm --prefix frontend test -- src/spike` | `pass`, 20 tests |
+| `npm --prefix frontend run typecheck`, `npm --prefix frontend run lint` | `pass` (after typing the mocks and turning the bridge's members into properties for `unbound-method`) |
+| `go tool devtool check` | `GATE PASSED`. The `.app` run launched and quit OctopusTorrent and EngineSpike. Bindings match for both apps (6 files each). 22 own TypeScript files are at 100%, and every Go block is covered. Product isolation passed with 226 packages. |
+
+### Two more engine findings, made while the spike was tested
+
+12. **Allowing download right after disallowing it stalls the transfer for good.**
+    - **How it showed up:** the spike's command-order test hung in 3 of 10 runs, with the leecher at
+      0 bytes and one peer connected.
+    - **Reproduced on the bare engine** (`v1-large` at 256 KiB/s, after the first payload, 20 runs
+      each; temporary scratch tests, not committed):
+
+      | Sequence | Stalled |
+      |---|---|
+      | `DisallowDataDownload` then `AllowDataDownload` at once | 20 of 20 |
+      | the same with 1 s between them | 2 of 20 |
+      | the same with 5 ms between them | 0 of 20 |
+      | a later disallow/allow pair 50 ms apart, after a stall | 0 of 20 (it wakes the transfer up) |
+      | the seeder's `DisallowDataUpload` / `AllowDataUpload`, at once, 1 s apart, or twice | 0 of 60 |
+
+    - **The cause inside the engine is not established.** 010 owns the product's remedy.
+    - `TestPinnedEngineStallsWhenDownloadIsAllowedRightAfterDisallowing` asserts the deterministic
+      case.
+    - **What the spike does instead:** its Pause and Resume switch the seeder's upload, never the
+      leecher's download. They call the engine only when the state changes.
+13. **When a piece fails its check, the engine renames each existing file of that piece to
+    `<name>.part`.** This is its default part-file mode.
+    - **How it showed up:** the 006 test `…TruncatesExistingFilesAtZeroLengthPaths…` failed once in
+      the gate. The victim file was gone instead of empty: `MarkNotComplete` → `onFileNotComplete` →
+      rename (`storage/file-piece.go:288`) raced the assertion.
+    - **After the piece checks settle, the outcome is deterministic** (5 of 5):
+      - every zero-length victim is truncated and renamed to `.part`, beside the torrent folder too;
+      - an unrelated, non-empty file of the user at a torrent path (`tree/docs/readme.txt`) loses its
+        name. It becomes `readme.txt.part` with its bytes kept.
+    - The 006 test now waits for the checks (`settle`) and asserts exactly this. It is renamed
+      `TestPinnedEngineTruncatesAndRenamesExistingFilesAtTorrentPathsOnAdd`.
+    - **For 020/023:** the collision check must cover every file of the torrent, not only the
+      zero-length ones, and must run before the add.
+
+### What the spike is
+
+- **`internal/enginespike`.**
+  - `Service` owns the lifecycle: `Startup`, `Shutdown`, two swarm peers, the spike's own temporary
+    folder, and a 250 ms ticker.
+  - `API` is the only bound type: `Start`, `Pause`, `Resume`, `Snapshot`.
+  - One mutex orders the commands, the ticks and `Shutdown`. Every published `Transfer` takes the
+    next revision.
+  - `Shutdown` runs once. It stops the ticker, closes both peers (their addresses refuse
+    connections) and removes only the folder this service created.
+- **`cmd/engine-spike`.** `run(start, stderr, svc)` binds only the API and wires `OnStartup` and
+  `OnShutdown` (5 s). `main` is one line.
+- **The `wails.json` and plists** carry the bundle ID `dev.tsykvas.octopustorrent.enginespike`. The
+  app icon is a copy of the product's.
+- **`frontend/src/spike`.**
+  - `bridge.ts` is the only caller of `frontend/spike/wailsjs`. It decodes every answer and event with
+    the contract decoders.
+  - `SpikeApp.tsx` subscribes before it takes the snapshot and keeps only the highest revision.
+  - `main.tsx` is the entry point.
+- **Build.** `vite.spike.config.ts` builds `frontend/spike/index.html` into
+  `cmd/engine-spike/assets` (ignored by Git). `npm run build` builds both pages. The product's
+  `dist` has one bundle and nothing of the spike.
+- **Shared example.** `internal/enginespike/testdata/transfer.json` holds the event name and one
+  Transfer. The Go and TypeScript suites both check against it.

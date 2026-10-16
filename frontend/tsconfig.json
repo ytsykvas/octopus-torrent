@@ -16,5 +16,5 @@
     "skipLibCheck": true,
     "types": ["vite/client", "@testing-library/jest-dom/vitest"]
   },
-  "include": ["src", "wailsjs", "vite.config.ts"]
+  "include": ["src", "wailsjs", "spike/wailsjs", "vite.config.ts", "vite.spike.config.ts"]
 }

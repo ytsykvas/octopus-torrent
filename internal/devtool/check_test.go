@@ -21,6 +21,9 @@ const (
 	goEnvDefault = `{"GOFLAGS":"","GOINSECURE":"","GONOPROXY":"","GONOSUMDB":"","GOPRIVATE":"","GOPROXY":"https://proxy.golang.org,direct","GOSUMDB":"sum.golang.org"}`
 )
 
+// spikeMain stands for the engine spike's main file: only its .app run covers it.
+const spikeMain = "package main\n\nfunc main() {\n\tprintln(\"spike\")\n}\n"
+
 // healthyRepo is a fake repository on which every check step passes, including the .app run.
 func healthyRepo() *fakeSystem {
 	sys := appRun()
@@ -35,8 +38,9 @@ func healthyRepo() *fakeSystem {
 		"frontend/wailsjs/go/app/App.js":          "// generated\n",
 		"README.md":                               "# Repository\n",
 		"frontend/coverage/coverage-summary.json": string(summary(entry("frontend/src/App.tsx", metrics(3, 3)))),
-		"build/coverage/go-unit.txt":              unitProfile,
-		"build/coverage/go-app.txt":               appProfile,
+		"cmd/engine-spike/main.go":                spikeMain,
+		"build/coverage/go-unit.txt":              unitProfile + "octopustorrent/cmd/engine-spike/main.go:3.13,5.2 1 0\n",
+		"build/coverage/go-app.txt":               appProfile + "octopustorrent/cmd/engine-spike/main.go:3.13,5.2 1 1\n",
 	} {
 		files[name] = content
 	}
