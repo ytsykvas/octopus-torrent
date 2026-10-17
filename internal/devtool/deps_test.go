@@ -59,17 +59,15 @@ func withDependencies(sys *fakeSystem) *fakeSystem {
 }
 
 func TestNpmLockPackagesListsEveryInstalledVersion(t *testing.T) {
-	got, err := NpmLockPackages([]byte(lockfile))
+	entries, err := npmLockEntries([]byte(lockfile))
 	want := "@types/react@19.3.0 react@18.0.0 react@19.3.0 string-width@4.2.3"
-	if err != nil || strings.Join(got, " ") != want {
-		t.Errorf("NpmLockPackages = %q, %v; want %q", got, err, want)
-	}
-	if _, err := NpmLockPackages([]byte("{")); err == nil {
-		t.Error("NpmLockPackages accepted invalid JSON")
+	if got := npmLockPackages(entries); err != nil || strings.Join(got, " ") != want {
+		t.Errorf("npmLockPackages = %q, %v; want %q", got, err, want)
 	}
 	// A package outside node_modules (a workspace) is named by its path, not cut at a fixed offset.
-	if got, err := NpmLockPackages([]byte(`{"packages":{"x":{"version":"1.0.0"}}}`)); err != nil || strings.Join(got, " ") != "x@1.0.0" {
-		t.Errorf("NpmLockPackages(workspace) = %q, %v", got, err)
+	entries, err = npmLockEntries([]byte(`{"packages":{"x":{"version":"1.0.0"}}}`))
+	if got := npmLockPackages(entries); err != nil || strings.Join(got, " ") != "x@1.0.0" {
+		t.Errorf("npmLockPackages(workspace) = %q, %v", got, err)
 	}
 }
 

@@ -11,8 +11,8 @@ import (
 // main.go embeds, and the Go module cache.
 func workspaceSetup(sys System) error {
 	steps := [][]string{
-		{"npm", "--prefix", "frontend", "ci"},
-		{"npm", "--prefix", "frontend", "run", "build"},
+		npm("ci"),
+		npm("run", "build"),
 		{"go", "mod", "download"},
 	}
 	for _, step := range steps {

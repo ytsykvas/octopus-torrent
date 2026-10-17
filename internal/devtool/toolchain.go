@@ -33,7 +33,8 @@ func CheckNpmCooldown(config string) []string {
 }
 
 func (c *checker) npmCooldown() stepResult {
-	out, err := c.sys.Capture("npm", "--prefix", "frontend", "config", "get", "min-release-age", "before", "min-release-age-exclude")
+	get := npm("config", "get", "min-release-age", "before", "min-release-age-exclude")
+	out, err := c.sys.Capture(get[0], get[1:]...)
 	if err != nil {
 		return fail("npm config get: "+err.Error(), out)
 	}

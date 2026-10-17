@@ -102,17 +102,7 @@ func slug(heading string) string {
 // runner configuration.
 func checkDocs(stdout io.Writer, sys System) error {
 	summary, dead, err := docsCheck(sys)
-	if err != nil {
-		return err
-	}
-	for _, line := range dead {
-		fmt.Fprintln(stdout, line)
-	}
-	if len(dead) > 0 {
-		return fmt.Errorf("%d dead links or pointers", len(dead))
-	}
-	fmt.Fprintln(stdout, "pass   "+summary)
-	return nil
+	return printOwn(stdout, summary, dead, err, "dead links or pointers")
 }
 
 // docsCheck returns the dead links and pointers, and the summary printed when there are none.

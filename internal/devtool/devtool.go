@@ -86,6 +86,22 @@ func listedPath(files []string) func(string) bool {
 	}
 }
 
+// printOwn prints the outcome of one of devtool's own checks for its command: every problem on its
+// own line and an error that counts them, or the summary.
+func printOwn(stdout io.Writer, summary string, problems []string, err error, noun string) error {
+	switch {
+	case err != nil:
+		return err
+	case len(problems) > 0:
+		for _, p := range problems {
+			fmt.Fprintln(stdout, p)
+		}
+		return fmt.Errorf("%d %s", len(problems), noun)
+	}
+	fmt.Fprintln(stdout, "pass   "+summary)
+	return nil
+}
+
 // sortedKeys returns the keys of m in order, so every report lists files the same way.
 func sortedKeys[V any](m map[string]V) []string {
 	return slices.Sorted(maps.Keys(m))

@@ -63,9 +63,8 @@ func TestCheckPlanAcceptsAConsistentPlan(t *testing.T) {
 	if got := checkPlanFixture(files); len(got) != 0 {
 		t.Errorf("CheckPlan = %q, want no problems", got)
 	}
-	summary, problems := PlanSummary(files)
-	if len(problems) != 0 || summary != "3 tasks, 3 dependencies, 3 requirements, 2 scenarios" {
-		t.Errorf("PlanSummary = %q %q", summary, problems)
+	if summary := PlanSummary(files); summary != "3 tasks, 3 dependencies, 3 requirements, 2 scenarios" {
+		t.Errorf("PlanSummary = %q", summary)
 	}
 }
 
