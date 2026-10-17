@@ -32,7 +32,7 @@ Anything that needs the real torrent engine uses the [test torrents and the loca
   `IncompleteError` listing the missing pieces instead of hanging. `t.Skip` is forbidden, so these
   tests run in every gate mode, offline included (loopback is not the network).
 - Close every peer in `t.Cleanup`; on a failure the helper prints both engines' logs.
-- Engine timing is handled in the harness (`settle`, `Refuses`); do not read piece state right after
+- Engine timing is handled in the harness (`swarm.Settle`, `Refuses`); do not read piece state right after
   `VerifyDataContext` or assume a port is free right after `Client.Close`.
 - Swarm tests are not `t.Parallel`: `WaitEngineStopped` needs the only engine in the process.
 - A package that starts engine clients uses `func TestMain(m *testing.M) { os.Exit(swarm.Main(m)) }`:

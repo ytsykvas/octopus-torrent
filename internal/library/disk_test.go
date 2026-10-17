@@ -10,17 +10,10 @@ import (
 	"octopustorrent/internal/testutil/volume"
 )
 
-func TestMain(m *testing.M) {
-	// The child processes of process_test.go run this binary too; only the parent checks the images.
-	parent := os.Getenv(lockChildEnv) == "" && os.Getenv(commitChildEnv) == ""
-	os.Exit(volume.Main(m, parent))
-}
-
 func TestAFullDiskFailsTheWriteAndKeepsWhatWasCommitted(t *testing.T) {
-	mount := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctopusLibraryTest"}).Mount
+	mount := smallVolume(t)
 	path := filepath.Join(mount, "library.sqlite")
-	s := openStore(t, path)
-	must(t, s, "CREATE TABLE rows(id INTEGER PRIMARY KEY, n INTEGER, data BLOB)")
+	s := tableAt(t, path, defaults)
 	for i := range 20 {
 		must(t, s, "INSERT INTO rows(n) VALUES (?)", i)
 	}

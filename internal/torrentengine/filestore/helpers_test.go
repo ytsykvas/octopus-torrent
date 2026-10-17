@@ -3,16 +3,99 @@ package filestore
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 
 	"octopustorrent/internal/library"
+	"octopustorrent/internal/torrentengine/testutil/swarm"
 )
+
+// eventually waits until cond holds and fails the test with what once limit has passed. The deadline
+// is taken once, before the first poll.
+func eventually(t *testing.T, limit time.Duration, what string, cond func() bool) {
+	t.Helper()
+	ctx := deadline(t, limit)
+	for !cond() {
+		select {
+		case <-ctx.Done():
+			t.Fatal(what)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+// newPeer starts a swarm peer in a temporary folder and closes it when the test ends; a failed close
+// fails the test.
+func newPeer(t *testing.T, opts swarm.Options) *swarm.Peer {
+	t.Helper()
+	p, err := swarm.NewPeer(t.TempDir(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := p.Close(deadline(t, closeLimit)); err != nil {
+			t.Error(err)
+		}
+	})
+	return p
+}
+
+// plainTorrent adds mi with the given engine storage, with none of our guard, and starts the download;
+// the caller connects it. plain is closed after the peer: its cleanup is registered first.
+func plainTorrent(t *testing.T, mi *metainfo.MetaInfo, plain storage.ClientImplCloser) (*swarm.Peer, *torrent.Torrent) {
+	t.Helper()
+	t.Cleanup(func() { _ = plain.Close() })
+	p := newPeer(t, swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
+	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
+	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
+		t.Fatal(err)
+	}
+	tor.DownloadAll()
+	return p, tor
+}
+
+// assertDownloadedAtMost fails the test when tor fetched more payload than its missing pieces hold.
+// Errorf, so the checks of the payload and the library that follow still run.
+func assertDownloadedAtMost(t *testing.T, tor *torrent.Torrent, missing int) {
+	t.Helper()
+	if got, want := swarm.Count(tor).PayloadRead, int64(missing)*tor.Info().PieceLength; got > want {
+		t.Errorf("downloaded %d payload bytes, want at most the %d of the %d missing pieces", got, want, missing)
+	}
+}
+
+// assertMarksKept fails the test when a mark of pieces is no longer complete in r's completion.
+func assertMarksKept(t *testing.T, r *run, mi *metainfo.MetaInfo, pieces []int) {
+	t.Helper()
+	for _, p := range pieces {
+		if c, err := r.completion.Get(key(mi.HashInfoBytes(), p)); err != nil || !c.Ok || !c.Complete {
+			t.Errorf("the mark of piece %d was lost: %+v %v", p, c, err)
+		}
+	}
+}
+
+// assertRootLost ends r, which lost its save folder, and requires the loss to be the first problem, the
+// record to be unclean and Seal to report it.
+func assertRootLost(t *testing.T, r *run) {
+	t.Helper()
+	problems, err := r.end()
+	if len(problems) == 0 || !errors.Is(problems[0], ErrRootChanged) {
+		t.Fatalf("problems %v, want ErrRootChanged first", problems)
+	}
+	if r.record.Clean {
+		t.Error("the record of a run that lost its save folder is clean")
+	}
+	if err == nil {
+		t.Error("Seal did not report the lost save folder")
+	}
+}
 
 // writeFile returns the path of a regular file, for tests that need a path that is not a folder.
 func writeFile(t *testing.T) string {
@@ -30,11 +113,6 @@ func plainStorage(dir string, completion storage.PieceCompletion) storage.Client
 	opts := storage.NewFileClientOpts{ClientBaseDir: dir, PieceCompletion: completion}
 	opts.UsePartFiles.Set(false)
 	return storage.NewFileOpts(opts)
-}
-
-// metaKey is the key of a piece of the torrent in the marks.
-func metaKey(mi *metainfo.MetaInfo, piece int) metainfo.PieceKey {
-	return metainfo.PieceKey{InfoHash: mi.HashInfoBytes(), Index: piece}
 }
 
 func mustMkdir(t *testing.T, path string) {

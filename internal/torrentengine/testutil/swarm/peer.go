@@ -203,7 +203,7 @@ func (p *Peer) Seed(ctx context.Context, mi *metainfo.MetaInfo) (*torrent.Torren
 	if err := t.VerifyDataContext(ctx); err != nil {
 		return t, err
 	}
-	if err := settle(ctx, t); err != nil {
+	if err := Settle(ctx, t); err != nil {
 		return t, err
 	}
 	if missing := missingPieces(t); len(missing) > 0 {

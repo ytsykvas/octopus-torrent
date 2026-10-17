@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
@@ -40,10 +39,7 @@ func (p *fakePiece) record(call string) {
 func (p *fakePiece) ReadAt(b []byte, off int64) (int, error) {
 	p.record("ReadAt")
 	n := copy(b, p.data[off:])
-	if p.err != nil {
-		return n, p.err
-	}
-	return n, nil
+	return n, p.err
 }
 
 func (p *fakePiece) WriteAt(b []byte, off int64) (int, error) {
@@ -327,38 +323,6 @@ func TestOnceTheSaveFolderIsGoneNoOperationReachesTheEngineAndTheLossIsRecordedO
 				t.Fatalf("problems %v, want exactly one ErrRootChanged", p)
 			}
 		})
-	}
-}
-
-func TestStopWaitsForOperationsInFlightAndRefusesNewOnes(t *testing.T) {
-	f := newFake()
-	f.piece.entered, f.piece.release = make(chan struct{}), make(chan struct{})
-	s, piece, session, _ := guarded(t, f)
-	done := make(chan error, 1)
-	go func() { _, err := piece.WriteAt([]byte("x"), 0); done <- err }()
-	<-f.piece.entered // the write is inside the engine now
-
-	short, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	if err := s.Stop(short); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Stop with a write in flight = %v, want the context's deadline", err)
-	}
-	// the write is still allowed to finish; a new one is refused
-	if _, err := piece.WriteAt([]byte("y"), 0); !errors.Is(err, ErrStopped) {
-		t.Fatalf("a write after Stop = %v, want ErrStopped", err)
-	}
-	close(f.piece.release)
-	if err := <-done; err != nil {
-		t.Fatalf("the write in flight = %v", err)
-	}
-	if err := s.Stop(context.Background()); err != nil {
-		t.Fatalf("Stop after the write finished = %v", err)
-	}
-	if err := s.Stop(context.Background()); err != nil {
-		t.Fatalf("a second Stop = %v", err)
-	}
-	if session.Clean() {
-		t.Fatal("a write after Stop left the session clean")
 	}
 }
 

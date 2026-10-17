@@ -39,17 +39,8 @@ func sealed(t *testing.T) (s *TorrentStorage, pieces [3]storage.PieceImpl, sessi
 	for i := range pieces {
 		pieces[i] = impl.Piece(multiInfo.Piece(i))
 	}
-	if err := os.MkdirAll(filepath.Join(root, "m"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdir(t, filepath.Join(root, "m"))
 	return s, pieces, session, root, f
-}
-
-func put(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func fileState(t *testing.T, rec files.Record, path string) files.FileState {
@@ -73,7 +64,7 @@ func TestSealNeedsTheStorageToBeStoppedFirst(t *testing.T) {
 func TestTheRecordDescribesEveryFileWithItsPiecesAndOnlyTheOnesTheRunLeftArePresent(t *testing.T) {
 	s, pieces, _, root, _ := sealed(t)
 	a, b := filepath.Join(root, "m", "a"), filepath.Join(root, "m", "b")
-	put(t, a, "0123456789012345678?")
+	mustWrite(t, a, "0123456789012345678?")
 	if _, err := pieces[0].WriteAt([]byte("x"), 0); err != nil { // piece 0 is inside file a
 		t.Fatal(err)
 	}
@@ -105,8 +96,8 @@ func TestTheRecordDescribesEveryFileWithItsPiecesAndOnlyTheOnesTheRunLeftArePres
 func TestAWriteOrAVerificationRecordsTheFilesItTouchedAsTheRunLeftThem(t *testing.T) {
 	s, pieces, _, root, _ := sealed(t)
 	a, b := filepath.Join(root, "m", "a"), filepath.Join(root, "m", "b")
-	put(t, a, "aaaaaaaaaaaaaaaaaaaa")
-	put(t, b, "bbbbbbbbbbbbbbbbbbbb")
+	mustWrite(t, a, "aaaaaaaaaaaaaaaaaaaa")
+	mustWrite(t, b, "bbbbbbbbbbbbbbbbbbbb")
 	// piece 1 spans the end of a and the start of b: a write into it touches both
 	if _, err := pieces[1].WriteAt([]byte("zz"), 3); err != nil {
 		t.Fatal(err)
@@ -114,13 +105,13 @@ func TestAWriteOrAVerificationRecordsTheFilesItTouchedAsTheRunLeftThem(t *testin
 	// piece 2 is inside b: marking it complete (the engine verified its bytes) touches b only
 	later := "bbbbbbbbbbbbbbbbbbb!"
 	time.Sleep(20 * time.Millisecond)
-	put(t, b, later)
+	mustWrite(t, b, later)
 	if err := pieces[2].MarkComplete(); err != nil {
 		t.Fatal(err)
 	}
 	// an edit made after the run's last operation is not recorded: it must show at the next start
 	time.Sleep(20 * time.Millisecond)
-	put(t, a, "aaaaaaaaaaaaaaaaaaa!")
+	mustWrite(t, a, "aaaaaaaaaaaaaaaaaaa!")
 	if err := s.Stop(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -142,8 +133,8 @@ func TestAWriteOrAVerificationRecordsTheFilesItTouchedAsTheRunLeftThem(t *testin
 func TestAFileTheRunNeverTouchedKeepsTheFingerprintTheEarlierRunLeftIfItWasTrusted(t *testing.T) {
 	s, pieces, _, root, _ := sealed(t)
 	a, b := filepath.Join(root, "m", "a"), filepath.Join(root, "m", "b")
-	put(t, a, "aaaaaaaaaaaaaaaaaaaa")
-	put(t, b, "bbbbbbbbbbbbbbbbbbbb")
+	mustWrite(t, a, "aaaaaaaaaaaaaaaaaaaa")
+	mustWrite(t, b, "bbbbbbbbbbbbbbbbbbbb")
 	fa, _ := files.Stat(a)
 	fb, _ := files.Stat(b)
 	earlier := &files.Record{Clean: true, Files: []files.FileState{
@@ -153,7 +144,7 @@ func TestAFileTheRunNeverTouchedKeepsTheFingerprintTheEarlierRunLeftIfItWasTrust
 	// b is trusted and kept; a is not trusted (it is to be verified), so it is not carried over
 	s.Baseline(earlier, files.Decision{Trusted: []string{b}})
 	time.Sleep(20 * time.Millisecond)
-	put(t, b, "bbbbbbbbbbbbbbbbbbb!") // an outside edit during the run: the carried fingerprint is the old one
+	mustWrite(t, b, "bbbbbbbbbbbbbbbbbbb!") // an outside edit during the run: the carried fingerprint is the old one
 	if _, err := pieces[0].WriteAt([]byte("x"), 0); err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +179,7 @@ func TestARunWithAStorageProblemIsNotACleanRecord(t *testing.T) {
 func TestAFileThatVanishedBeforeTheSyncMakesTheRunUncleanAndSealReportsIt(t *testing.T) {
 	s, pieces, session, root, _ := sealed(t)
 	a := filepath.Join(root, "m", "a")
-	put(t, a, "aaaaaaaaaaaaaaaaaaaa")
+	mustWrite(t, a, "aaaaaaaaaaaaaaaaaaaa")
 	if _, err := pieces[0].WriteAt([]byte("x"), 0); err != nil {
 		t.Fatal(err)
 	}

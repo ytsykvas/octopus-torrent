@@ -200,13 +200,7 @@ func TestAFailedWriteIsStickyAndReportedByEveryLaterCall(t *testing.T) {
 	if err := c.Set(key(hashA, 0), true); err != nil {
 		t.Fatalf("the first Set cannot know about the write yet: %v", err)
 	}
-	noticed := time.Now().Add(5 * time.Second)
-	for c.Err() == nil {
-		if time.Now().After(noticed) {
-			t.Fatal("the failed write was not reported")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	eventually(t, 5*time.Second, "the failed write was not reported", func() bool { return c.Err() != nil })
 	if !errors.Is(c.Err(), failure) {
 		t.Fatalf("Err = %v", c.Err())
 	}

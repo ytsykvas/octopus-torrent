@@ -463,6 +463,11 @@ const childDirEnv = "OCTOPUS_ENGINE_DEADLOCK_CHILD_DIR"
 
 func TestPinnedEngineDeadlocksOnVerifyAfterDrop(t *testing.T) {
 	if dir := os.Getenv(childDirEnv); dir != "" {
+		// a folder outside the temporary folder (a variable left in the developer's shell) is refused
+		// before the child writes anything into it
+		if !strings.HasPrefix(dir, filepath.Clean(os.TempDir())+string(filepath.Separator)) {
+			t.Fatalf("%s=%q is not under the temporary folder %s", childDirEnv, dir, os.TempDir())
+		}
 		verifyAfterDrop(t, dir)
 		return
 	}

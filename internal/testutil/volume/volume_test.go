@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -69,13 +70,16 @@ func newRecorder(t *testing.T) *recorder {
 	return &recorder{TB: t, dir: t.TempDir()}
 }
 
-// fake replaces the hdiutil runner for the duration of the test.
-func fake(t *testing.T, f func(args []string) ([]byte, error)) {
+// override sets a package variable for the duration of the test.
+func override[T any](t *testing.T, target *T, v T) {
 	t.Helper()
-	old := run
-	run = f
-	t.Cleanup(func() { run = old })
+	old := *target
+	*target = v
+	t.Cleanup(func() { *target = old })
 }
+
+// noTool is an hdiutil that succeeds and prints nothing.
+func noTool([]string) ([]byte, error) { return nil, nil }
 
 func TestMain(m *testing.M) {
 	os.Exit(Main(m, true))
@@ -127,7 +131,7 @@ func TestEveryFailureOfTheSystemToolFailsTheTest(t *testing.T) {
 		}
 	}
 	for _, verb := range []string{"create", "attach"} {
-		fake(t, fail(verb))
+		override(t, &run, fail(verb))
 		r := newRecorder(t)
 		if !r.attempt(func() { New(r, Options{Size: "8m", FS: "HFS+", Name: "X"}) }) {
 			t.Fatalf("New with a failing %s did not stop the test", verb)
@@ -138,18 +142,18 @@ func TestEveryFailureOfTheSystemToolFailsTheTest(t *testing.T) {
 		r.finish()
 	}
 
-	// A failing mount point folder: the temporary folder is a plain file.
-	fake(t, func([]string) ([]byte, error) { return nil, nil })
+	// A failing mount point folder: the temporary folder does not exist.
+	override(t, &run, noTool)
 	r := &recorder{TB: t, dir: filepath.Join(t.TempDir(), "missing", "folder")}
 	if !r.attempt(func() { New(r, Options{Size: "8m", FS: "HFS+", Name: "X"}) }) {
 		t.Fatal("New with an unusable temporary folder did not stop the test")
 	}
 
 	// Detach and Attach report their failures; the cleanup of an attached volume reports its own.
-	fake(t, func([]string) ([]byte, error) { return nil, nil })
+	override(t, &run, noTool)
 	r = newRecorder(t)
 	v := New(r, Options{Size: "8m", FS: "HFS+", Name: "X"})
-	fake(t, fail("detach"))
+	override(t, &run, fail("detach"))
 	if !r.attempt(v.Detach) || !r.said("hdiutil detach") {
 		t.Fatalf("a failing detach = %v", r.failures)
 	}
@@ -158,9 +162,8 @@ func TestEveryFailureOfTheSystemToolFailsTheTest(t *testing.T) {
 	if !r.said("hdiutil detach") {
 		t.Fatalf("a failing cleanup detach = %v", r.failures)
 	}
-	fake(t, func([]string) ([]byte, error) { return nil, nil })
 	v.attached = false
-	fake(t, fail("attach"))
+	override(t, &run, fail("attach"))
 	if !r.attempt(v.Attach) || !r.said("hdiutil attach") {
 		t.Fatalf("a failing re-attach = %v", r.failures)
 	}
@@ -168,7 +171,7 @@ func TestEveryFailureOfTheSystemToolFailsTheTest(t *testing.T) {
 
 func TestADetachedVolumeNeedsNoDetachAtTheEndOfTheTest(t *testing.T) {
 	var calls []string
-	fake(t, func(args []string) ([]byte, error) {
+	override(t, &run, func(args []string) ([]byte, error) {
 		calls = append(calls, args[0])
 		return nil, nil
 	})
@@ -189,12 +192,9 @@ func TestFillFailsOnAFolderItCannotWriteTo(t *testing.T) {
 }
 
 func TestFillStopsOnAnyErrorButAFullVolume(t *testing.T) {
-	// /dev/full-like: a file whose writes fail with a different error than "no space left".
-	old := chunkWrite
-	chunkWrite = func(f *os.File, b []byte) (int, error) { return 0, errors.New("input/output error") }
-	oldLimit := fillLimit
-	fillLimit = 1 << 62
-	t.Cleanup(func() { chunkWrite, fillLimit = old, oldLimit })
+	// writes that fail with an error other than "no space left"
+	override(t, &chunkWrite, func(f *os.File, b []byte) (int, error) { return 0, errors.New("input/output error") })
+	override(t, &fillLimit, 1<<62)
 	r := newRecorder(t)
 	if !r.attempt(func() { Fill(r, t.TempDir()) }) || !r.said("filling the volume") {
 		t.Fatalf("Fill = %v", r.failures)
@@ -203,13 +203,11 @@ func TestFillStopsOnAnyErrorButAFullVolume(t *testing.T) {
 
 func TestMainFailsOnAnImageOfAnEndedRunAndOnImagesTheRunLeft(t *testing.T) {
 	var out bytes.Buffer
-	oldOut := output
-	output = &out
-	t.Cleanup(func() { output = oldOut })
+	override[io.Writer](t, &output, &out)
 	runner := runnerFunc(func() int { return 0 })
 
 	// An image whose process is gone (pid 1 << 30 does not exist).
-	fake(t, func([]string) ([]byte, error) {
+	override(t, &run, func([]string) ([]byte, error) {
 		return []byte("image-path : /x/" + imagePrefix + "1073741824.dmg\nimage-path : /x/other.dmg\n"), nil
 	})
 	if code := Main(runner, true); code != 1 || !strings.Contains(out.String(), "ended run") {
@@ -221,7 +219,7 @@ func TestMainFailsOnAnImageOfAnEndedRunAndOnImagesTheRunLeft(t *testing.T) {
 	}
 
 	// An image of a running process that is not this one is not a leftover; this process's own is.
-	fake(t, func([]string) ([]byte, error) {
+	override(t, &run, func([]string) ([]byte, error) {
 		return []byte("image-path : /x/" + imagePrefix + "1.dmg\nbad : /x/" + imagePrefix + "notanumber.dmg\n"), nil
 	})
 	out.Reset()
@@ -231,19 +229,19 @@ func TestMainFailsOnAnImageOfAnEndedRunAndOnImagesTheRunLeft(t *testing.T) {
 
 	out.Reset()
 	mine := imagePrefix + strconv.Itoa(os.Getpid()) + ".dmg"
-	fake(t, func([]string) ([]byte, error) { return []byte("image-path : /x/" + mine + "\n"), nil })
+	override(t, &run, func([]string) ([]byte, error) { return []byte("image-path : /x/" + mine + "\n"), nil })
 	// pid is this process, so it is not "ended"; after the run it is a left-over of this run.
 	if code := Main(runner, true); code != 1 || !strings.Contains(out.String(), "left a disk image attached") {
 		t.Fatalf("Main with this run's image = %d %q", code, out.String())
 	}
 
 	out.Reset()
-	fake(t, func([]string) ([]byte, error) { return []byte("hdiutil trouble"), errors.New("exit status 1") })
+	override(t, &run, func([]string) ([]byte, error) { return []byte("hdiutil trouble"), errors.New("exit status 1") })
 	if code := Main(runner, true); code != 1 || !strings.Contains(out.String(), "hdiutil info") {
 		t.Fatalf("Main when hdiutil info fails = %d %q", code, out.String())
 	}
 	out.Reset()
-	fake(t, func([]string) ([]byte, error) { return nil, nil })
+	override(t, &run, noTool)
 	failing := runnerFunc(func() int { return 3 })
 	if code := Main(failing, true); code != 3 {
 		t.Fatalf("Main must pass the run's code through, got %d", code)
@@ -262,7 +260,7 @@ func TestFillRefusesAFolderOnABigFileSystem(t *testing.T) {
 }
 
 func TestADetachedVolumeCannotBeDetachedAgain(t *testing.T) {
-	fake(t, func([]string) ([]byte, error) { return nil, nil })
+	override(t, &run, noTool)
 	r := newRecorder(t)
 	v := New(r, Options{Size: "8m", FS: "HFS+", Name: "X"})
 	v.Detach()
@@ -273,7 +271,7 @@ func TestADetachedVolumeCannotBeDetachedAgain(t *testing.T) {
 
 func TestAVolumeCanBeMountedAtAnotherFolder(t *testing.T) {
 	var mounts []string
-	fake(t, func(args []string) ([]byte, error) {
+	override(t, &run, func(args []string) ([]byte, error) {
 		if args[0] == "attach" {
 			mounts = append(mounts, args[len(args)-2])
 		}
@@ -294,9 +292,7 @@ func TestAVolumeCanBeMountedAtAnotherFolder(t *testing.T) {
 }
 
 func TestFillFailsInAFolderItCannotCreateTheFillerIn(t *testing.T) {
-	oldLimit := fillLimit
-	fillLimit = 1 << 62
-	t.Cleanup(func() { fillLimit = oldLimit })
+	override(t, &fillLimit, 1<<62)
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0o500); err != nil {
 		t.Fatal(err)

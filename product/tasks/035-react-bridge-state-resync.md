@@ -63,6 +63,8 @@ The test bridge and browser checks speed up the UI, but do not prove system call
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): the ordering rules are `frontend/src/bridge/contract/ordering.ts`; while `needsFetch(state)` is true (no state, nothing fetched — e.g. after a failed first fetch) the store fetches with its own back-off; restoring operations after a reload needs the addition named in 027.
 
+**From the 009 checkpoint** ([refactor after 009](../../docs/verification/refactor-after-009.md)): the gate has two pending steps, `engine integration` (018) and `test-bridge UI tests` (yours). Whichever of 018 and 035 replaces the last of them deletes the helper that builds pending steps and `notBuiltYet` in `internal/devtool/check.go` with it: uncalled code has zero-count blocks and fails the gate.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

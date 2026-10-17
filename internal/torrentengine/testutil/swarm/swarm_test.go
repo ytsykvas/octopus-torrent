@@ -239,7 +239,7 @@ func TestPinnedEngineTruncatesAndRenamesExistingFilesAtTorrentPathsOnAdd(t *test
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if err := settle(deadline(t, closeLimit), tor); err != nil {
+		if err := Settle(deadline(t, closeLimit), tor); err != nil {
 			t.Fatal(err)
 		}
 		tor.Drop()
@@ -631,5 +631,12 @@ func TestAPeerCanTakeItsDefaultStorageAndItsDataDirFromTheCaller(t *testing.T) {
 	// The engine opens the storage once per call that sets the info; how often is its own business.
 	if len(rec.opened) == 0 || rec.opened[0] == "" {
 		t.Fatalf("the recording storage saw %v", rec.opened)
+	}
+}
+
+func TestClientIsTheEngineClientOfThePeer(t *testing.T) {
+	p := peer(t, Options{})
+	if p.Client() == nil || p.Client() != p.client {
+		t.Fatal("Client does not return the peer's engine client")
 	}
 }

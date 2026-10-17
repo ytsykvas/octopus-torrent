@@ -35,13 +35,7 @@ func TestRefusedMarkWritesAreReportedWhileTheEngineGoesOnAndTheNextStartVerifies
 
 	first := start(t, mi, saveRoot, dataDir, runOptions{marks: refusingMarks{}, completion: Options{FlushRows: 4}})
 	first.download(seed) // the engine only logs a failed mark and completes the torrent
-	for first.completion.Err() == nil {
-		select {
-		case <-deadline(t, transferLimit).Done():
-			t.Fatal("the refused write was never reported")
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
+	eventually(t, transferLimit, "the refused write was never reported", func() bool { return first.completion.Err() != nil })
 	if !errors.Is(first.completion.Err(), errDiskFull) {
 		t.Fatalf("Err = %v", first.completion.Err())
 	}
@@ -64,7 +58,7 @@ func TestRefusedMarkWritesAreReportedWhileTheEngineGoesOnAndTheNextStartVerifies
 		t.Fatalf("complete %d of %d pieces with %d reads, want all verified by reading", len(got), n, second.storage.Reads())
 	}
 	second.connect(seed)
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(idleWindow)
 	if payload := swarm.Count(second.torrent).PayloadRead; payload != 0 {
 		t.Fatalf("%d payload bytes downloaded again", payload)
 	}
@@ -92,22 +86,20 @@ func TestAMarksFolderOnAFullVolumeIsAnErrorBeforeAnythingIsWritten(t *testing.T)
 	lib.intact()
 }
 
-// onVolume makes a run on an APFS volume: the payload goes into <volume>/Downloads and the marks into
-// a data folder on the internal disk.
-func onVolume(t *testing.T, label string) (vol *volume.Volume, saveRoot, dataDir string) {
+// onVolume makes a run on a new volume: the payload goes into <volume>/Downloads and the marks into a
+// data folder on the internal disk.
+func onVolume(t *testing.T, o volume.Options) (vol *volume.Volume, saveRoot, dataDir string) {
 	t.Helper()
-	vol = volume.New(t, volume.Options{Size: "32m", FS: "APFS", Name: label})
+	vol = volume.New(t, o)
 	saveRoot = filepath.Join(vol.Mount, "Downloads")
-	if err := os.Mkdir(saveRoot, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdir(t, saveRoot)
 	return vol, saveRoot, t.TempDir()
 }
 
 func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothingValid(t *testing.T) {
 	fx, mi := named(t, "v1-large")
 	seed := seeder(t, fx, mi, swarm.Options{RateLimit: slowRate})
-	vol, saveRoot, dataDir := onVolume(t, "OctoLeech")
+	vol, saveRoot, dataDir := onVolume(t, volume.Options{Size: "32m", FS: "APFS", Name: "OctoLeech"})
 	lib := libraryIn(t, dataDir)
 
 	first := start(t, mi, saveRoot, dataDir, runOptions{})
@@ -116,26 +108,13 @@ func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothing
 	have := completePieces(first.torrent)
 
 	vol.Detach()
-	noticed := time.Now().Add(5 * time.Second)
-	for first.session.Clean() {
-		if time.Now().After(noticed) {
-			t.Fatal("the pulled volume was not noticed")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	time.Sleep(300 * time.Millisecond)
+	eventually(t, 5*time.Second, "the pulled volume was not noticed", func() bool { return !first.session.Clean() })
+	time.Sleep(drainWait)
 	if entries, err := os.ReadDir(vol.Mount); err != nil || len(entries) != 0 {
 		t.Fatalf("the mount point on the internal disk holds %v (%v): the engine wrote beside the pulled volume", entries, err)
 	}
-	for _, p := range have {
-		if c, err := first.completion.Get(metaKey(mi, p)); err != nil || !c.Ok || !c.Complete {
-			t.Fatalf("the mark of piece %d was lost: %+v %v", p, c, err)
-		}
-	}
-	problems, err := first.end()
-	if len(problems) == 0 || !errors.Is(problems[0], ErrRootChanged) || err == nil || first.record.Clean {
-		t.Fatalf("end = %v, %v, clean %v; want ErrRootChanged and an unclean record", problems, err, first.record.Clean)
-	}
+	assertMarksKept(t, first, mi, have)
+	assertRootLost(t, first)
 	if got := storedMarks(t, dataDir, mi); len(got) < len(have) {
 		t.Fatalf("%d marks survived in the store, want at least the %d seen complete", len(got), len(have))
 	}
@@ -153,9 +132,7 @@ func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothing
 		}
 	}
 	second.download(seed)
-	if payload, want := swarm.Count(second.torrent).PayloadRead, int64(second.torrent.NumPieces()-len(got))*16<<10; payload > want {
-		t.Errorf("downloaded %d payload bytes, want at most the %d missing", payload, want)
-	}
+	assertDownloadedAtMost(t, second.torrent, second.torrent.NumPieces()-len(got))
 	second.quitCleanly()
 	assertPayload(t, fx, saveRoot)
 	lib.intact()
@@ -164,7 +141,7 @@ func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothing
 func TestAVolumePulledWhileSeedingIsNotRecreatedAndTheMarksSurvive(t *testing.T) {
 	fx, mi := named(t, "v1-large")
 	source := seeder(t, fx, mi, swarm.Options{})
-	vol, saveRoot, dataDir := onVolume(t, "OctoSeed")
+	vol, saveRoot, dataDir := onVolume(t, volume.Options{Size: "32m", FS: "APFS", Name: "OctoSeed"})
 	lib := libraryIn(t, dataDir)
 	first := start(t, mi, saveRoot, dataDir, runOptions{})
 	first.download(source)
@@ -175,45 +152,22 @@ func TestAVolumePulledWhileSeedingIsNotRecreatedAndTheMarksSurvive(t *testing.T)
 	if second.decision.VerifyAll {
 		t.Fatalf("decision %+v, want the complete payload trusted", second.decision)
 	}
-	leecher, err := swarm.NewPeer(t.TempDir(), swarm.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = leecher.Close(deadline(t, closeLimit)) })
+	leecher := newPeer(t, swarm.Options{})
 	lt, err := leecher.Leech(mi)
 	if err != nil {
 		t.Fatal(err)
 	}
 	swarm.Connect(lt, second.peer)
 	keepMoving(t, second.peer, mi.HashInfoBytes())
-	for swarm.Count(lt).PayloadRead == 0 {
-		select {
-		case <-deadline(t, transferLimit).Done():
-			t.Fatal("nothing was uploaded from the volume")
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
+	eventually(t, transferLimit, "nothing was uploaded from the volume", func() bool { return swarm.Count(lt).PayloadRead > 0 })
 
 	vol.Detach()
-	for second.session.Clean() {
-		select {
-		case <-deadline(t, transferLimit).Done():
-			t.Fatal("the pulled volume was not noticed while seeding")
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
+	eventually(t, transferLimit, "the pulled volume was not noticed while seeding", func() bool { return !second.session.Clean() })
 	if entries, err := os.ReadDir(vol.Mount); err != nil || len(entries) != 0 {
 		t.Fatalf("the mount point holds %v (%v)", entries, err)
 	}
-	for p := range second.torrent.NumPieces() {
-		if c, err := second.completion.Get(metaKey(mi, p)); err != nil || !c.Ok || !c.Complete {
-			t.Fatalf("the mark of piece %d was wiped by the failed reads: %+v %v", p, c, err)
-		}
-	}
-	problems, _ := second.end()
-	if len(problems) == 0 || !errors.Is(problems[0], ErrRootChanged) || second.record.Clean {
-		t.Fatalf("problems %v, clean %v; want ErrRootChanged and an unclean record", problems, second.record.Clean)
-	}
+	assertMarksKept(t, second, mi, all(second.torrent.NumPieces())) // the failed reads wiped none
+	assertRootLost(t, second)
 
 	vol.Attach()
 	third := start(t, mi, saveRoot, dataDir, runOptions{prev: &second.record})

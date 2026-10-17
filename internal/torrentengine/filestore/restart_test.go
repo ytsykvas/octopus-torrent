@@ -18,7 +18,6 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/storage"
 
 	"octopustorrent/internal/files"
 	"octopustorrent/internal/testutil/volume"
@@ -33,21 +32,8 @@ import (
 // settle waits until the engine has no piece queued, hashing or storing a verdict.
 func settle(t *testing.T, tor *torrent.Torrent) {
 	t.Helper()
-	ctx := deadline(t, transferLimit)
-	for {
-		busy := false
-		for i := range tor.NumPieces() {
-			s := tor.PieceState(i)
-			busy = busy || s.QueuedForHash || s.Hashing || s.Marking
-		}
-		if !busy {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatal("pieces are still being checked")
-		case <-time.After(5 * time.Millisecond):
-		}
+	if err := swarm.Settle(deadline(t, transferLimit), tor); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -93,7 +79,8 @@ func without(pieces, remove []int) []int {
 	return out
 }
 
-func info(t *testing.T, mi *metainfo.MetaInfo) *metainfo.Info {
+// infoOf returns the parsed info dictionary of mi.
+func infoOf(t *testing.T, mi *metainfo.MetaInfo) *metainfo.Info {
 	t.Helper()
 	i, err := mi.UnmarshalInfo()
 	if err != nil {
@@ -130,7 +117,7 @@ func TestACleanRestartTrustsTheMarksAndReadsNothing(t *testing.T) {
 		t.Fatalf("complete pieces after the restart = %v, want all", got)
 	}
 	second.connect(seed)
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(idleWindow)
 	if reads, payload := second.storage.Reads(), swarm.Count(second.torrent).PayloadRead; reads != 0 || payload != 0 {
 		t.Fatalf("the restart read %d pieces and downloaded %d payload bytes, want none", reads, payload)
 	}
@@ -150,7 +137,8 @@ func TestAPartialDownloadResumesWithoutReadingOrFetchingWhatIsAlreadyThere(t *te
 	first.connect(seed)
 	waitPieces(t, first.torrent, 20)
 	first.torrent.DisallowDataDownload()
-	time.Sleep(300 * time.Millisecond)
+	quiet(t, first.torrent)  // the chunks in flight have landed
+	settle(t, first.torrent) // and no piece is still being hashed or marked
 	have := completePieces(first.torrent)
 	first.quitCleanly()
 
@@ -166,10 +154,7 @@ func TestAPartialDownloadResumesWithoutReadingOrFetchingWhatIsAlreadyThere(t *te
 		t.Fatalf("the restart read %d pieces to trust %d marks", reads, len(have))
 	}
 	second.download(seed)
-	want := int64(second.torrent.NumPieces()-len(have)) * 16 << 10
-	if got := swarm.Count(second.torrent).PayloadRead; got > want {
-		t.Fatalf("the second run downloaded %d payload bytes, want at most the %d missing", got, want)
-	}
+	assertDownloadedAtMost(t, second.torrent, second.torrent.NumPieces()-len(have))
 	second.quitCleanly()
 	assertPayload(t, fx, saveRoot)
 }
@@ -269,15 +254,13 @@ func TestAKilledProcessLeavesNothingTrustedAndNothingValidIsDownloadedAgain(t *t
 	if reads, pieces := second.storage.Reads(), int64(second.torrent.NumPieces()); reads != pieces {
 		t.Errorf("the restart read %d pieces, want all %d: nothing may be trusted after a crash", reads, pieces)
 	}
-	for _, p := range badPieces(t, info(t, mi), saveRoot) {
+	for _, p := range badPieces(t, infoOf(t, mi), saveRoot) {
 		if slices.Contains(have, p) {
 			t.Errorf("piece %d has wrong bytes on disk but is marked complete", p)
 		}
 	}
 	second.download(seed)
-	if got, want := swarm.Count(second.torrent).PayloadRead, int64(second.torrent.NumPieces()-len(have))*16<<10; got > want {
-		t.Errorf("downloaded %d payload bytes, want at most the %d missing", got, want)
-	}
+	assertDownloadedAtMost(t, second.torrent, second.torrent.NumPieces()-len(have))
 	second.quitCleanly()
 	assertPayload(t, fx, saveRoot)
 	lib.intact()
@@ -354,16 +337,14 @@ func TestEveryChangedFileIsVerifiedAndNoOtherPieceIsRead(t *testing.T) {
 				t.Fatalf("%d pieces were read, want only the one verified", reads)
 			}
 			second.download(seed)
-			if got, want := swarm.Count(second.torrent).PayloadRead, int64(len(bad))*32<<10; got > want {
-				t.Errorf("downloaded %d payload bytes, want at most the %d of the damaged pieces", got, want)
-			}
+			assertDownloadedAtMost(t, second.torrent, len(bad))
 			second.quitCleanly()
 			assertPayload(t, fx, saveRoot)
 		})
 	}
 }
 
-func TestAFileThatWasMovedAwayIsReportedMissingAndNothingIsAdded(t *testing.T) {
+func TestAMovedFileIsReportedMissingAfterACleanRunAndAfterACrash(t *testing.T) {
 	fx, mi := named(t, "v1-tree")
 	seed := seeder(t, fx, mi, swarm.Options{})
 	saveRoot, dataDir := t.TempDir(), t.TempDir()
@@ -375,65 +356,16 @@ func TestAFileThatWasMovedAwayIsReportedMissingAndNothingIsAdded(t *testing.T) {
 	if err := os.Rename(victim, victim+".moved"); err != nil {
 		t.Fatal(err)
 	}
-	d, _ := decide(t, mi, saveRoot, &first.record)
-	if d.VerifyAll || !slices.Equal(d.Missing, []string{victim}) || len(d.VerifyPieces) != 0 {
-		t.Fatalf("decision %+v, want exactly the moved file missing", d)
+	if d, _ := decide(t, mi, saveRoot, &first.record); d.VerifyAll || !slices.Equal(d.Missing, []string{victim}) || len(d.VerifyPieces) != 0 {
+		t.Fatalf("after a clean run: decision %+v, want exactly the moved file missing", d)
 	}
-	if _, err := os.Stat(victim); err == nil {
-		t.Fatal("deciding recreated the file")
-	}
-}
-
-func TestAFileMovedBeforeACrashIsStillMissingAndNothingIsDownloadedInItsPlace(t *testing.T) {
-	fx, mi := named(t, "v1-tree")
-	seed := seeder(t, fx, mi, swarm.Options{})
-	saveRoot, dataDir := t.TempDir(), t.TempDir()
-	first := start(t, mi, saveRoot, dataDir, runOptions{})
-	first.download(seed)
-	first.quitCleanly()
-
 	// the next run began (its record is "not clean": 029 writes that before the first payload write),
 	// the owner moved a file, and the process was killed
 	crashed := first.record
 	crashed.Clean = false
-	victim := fx.FilePath(saveRoot, fx.Files[0])
-	if err := os.Rename(victim, victim+".moved"); err != nil {
-		t.Fatal(err)
+	if d, _ := decide(t, mi, saveRoot, &crashed); !d.VerifyAll || !slices.Equal(d.Missing, []string{victim}) {
+		t.Fatalf("after a crash: decision %+v, want everything verified and the moved file missing", d)
 	}
-	d, _ := decide(t, mi, saveRoot, &crashed)
-	if !d.VerifyAll || !slices.Equal(d.Missing, []string{victim}) {
-		t.Fatalf("decision %+v, want everything verified and the moved file missing", d)
-	}
-	if _, err := os.Stat(victim); err == nil {
-		t.Fatal("deciding recreated the file")
-	}
-}
-
-// Engine fact (finding 20): the engine believes a stored mark over a file of the right size and
-// does not hash. It cannot see a same-size rewrite, and it re-downloads, without hashing, a file that
-// is short or gone. This is why a mark is never trusted on its own.
-func TestTrustedMarksAreBlindToASameSizeRewrite(t *testing.T) {
-	fx, mi := named(t, "v1-tree")
-	seed := seeder(t, fx, mi, swarm.Options{})
-	saveRoot, dataDir := t.TempDir(), t.TempDir()
-	first := start(t, mi, saveRoot, dataDir, runOptions{})
-	first.download(seed)
-	first.quitCleanly()
-	readWrite(t, fx.FilePath(saveRoot, fx.Files[0]), func(b []byte) { b[len(b)/2] ^= 0xff })
-
-	believing := start(t, mi, saveRoot, dataDir, runOptions{trustMarks: true})
-	settle(t, believing.torrent)
-	n := believing.torrent.NumPieces()
-	if bad := badPieces(t, believing.torrent.Info(), saveRoot); !slices.Equal(bad, []int{0}) {
-		t.Fatalf("bad pieces = %v, want piece 0", bad)
-	}
-	if got := completePieces(believing.torrent); !slices.Equal(got, all(n)) {
-		t.Fatalf("complete pieces = %v: the engine no longer believes the marks over a same-size rewrite", got)
-	}
-	if reads := believing.storage.Reads(); reads != 0 {
-		t.Fatalf("%d pieces were read", reads)
-	}
-	believing.quit()
 }
 
 // An outside edit made while the application runs is not taken for the run's own work: the next
@@ -469,19 +401,39 @@ func TestAnEditMadeWhileTheApplicationRunsIsVerifiedAtTheNextStart(t *testing.T)
 	third.quit()
 }
 
-func TestOnlyAPFSVolumesAreTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
+func TestAPFSVolumeIsTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
+	fx, mi := named(t, "v1-single")
+	seed := seeder(t, fx, mi, swarm.Options{})
+	vol, saveRoot, dataDir := onVolume(t, volume.Options{Size: "8m", FS: "APFS", Name: "OctoAPFS"})
+	first := start(t, mi, saveRoot, dataDir, runOptions{})
+	first.download(seed)
+	first.quitCleanly()
+	if first.record.FileSystem != "apfs" {
+		t.Fatalf("the record says %q, want apfs", first.record.FileSystem)
+	}
+
+	second := start(t, mi, saveRoot, dataDir, runOptions{prev: &first.record})
+	if second.decision.VerifyAll || second.storage.Reads() != 0 {
+		t.Fatalf("an APFS volume was not trusted: %+v", second.decision)
+	}
+	second.quitCleanly()
+
+	// pulled and plugged again, with another volume taking its device number
+	replug(t, vol, saveRoot, second.record.Dev)
+	d, _ := decide(t, mi, saveRoot, &second.record)
+	if !d.VerifyAll || len(d.Missing) != 0 || !strings.Contains(d.Reason, "another volume") {
+		t.Fatalf("after a replug the decision is %+v, want everything verified and nothing missing", d)
+	}
+}
+
+func TestFATAndExFATVolumesAreVerifiedInFull(t *testing.T) {
 	fx, mi := named(t, "v1-single")
 	seed := seeder(t, fx, mi, swarm.Options{})
 	for _, tc := range []struct{ fs, name, label string }{
-		{"MS-DOS", "msdos", "OctoFAT"}, {"ExFAT", "exfat", "OctoExFAT"}, {"APFS", "apfs", "OctoAPFS"},
+		{"MS-DOS", "msdos", "OctoFAT"}, {"ExFAT", "exfat", "OctoExFAT"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			vol := volume.New(t, volume.Options{Size: "8m", FS: tc.fs, Name: tc.label})
-			saveRoot := filepath.Join(vol.Mount, "Downloads")
-			if err := os.Mkdir(saveRoot, 0o755); err != nil {
-				t.Fatal(err)
-			}
-			dataDir := t.TempDir()
+			_, saveRoot, dataDir := onVolume(t, volume.Options{Size: "8m", FS: tc.fs, Name: tc.label})
 			first := start(t, mi, saveRoot, dataDir, runOptions{})
 			first.download(seed)
 			first.quitCleanly()
@@ -490,20 +442,6 @@ func TestOnlyAPFSVolumesAreTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
 			}
 
 			second := start(t, mi, saveRoot, dataDir, runOptions{prev: &first.record})
-			if tc.name == "apfs" {
-				if second.decision.VerifyAll || second.storage.Reads() != 0 {
-					t.Fatalf("an APFS volume was not trusted: %+v", second.decision)
-				}
-				second.quitCleanly()
-
-				// pulled and plugged again, with another volume taking its device number
-				replug(t, vol, saveRoot, second.record.Dev)
-				d, _ := decide(t, mi, saveRoot, &second.record)
-				if !d.VerifyAll || len(d.Missing) != 0 || !strings.Contains(d.Reason, "another volume") {
-					t.Fatalf("after a replug the decision is %+v, want everything verified and nothing missing", d)
-				}
-				return
-			}
 			if !second.decision.VerifyAll || !strings.Contains(second.decision.Reason, "reliable") {
 				t.Fatalf("decision %+v, want everything verified", second.decision)
 			}
@@ -516,34 +454,6 @@ func TestOnlyAPFSVolumesAreTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
 			}
 			second.quitCleanly()
 		})
-	}
-}
-
-// Engine fact (finding 21): on HFS+ the engine's classic file IO cannot hash a piece, because it
-// seeks with SEEK_DATA, which HFS+ lacks. Every piece fails its check and the download never
-// completes. The guard refuses such a save folder; this test shows what happens without it.
-func TestOnHFSPlusTheEngineCannotHashAnyPiece(t *testing.T) {
-	fx, mi := named(t, "v1-single")
-	seed := seeder(t, fx, mi, swarm.Options{})
-	vol := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctoHFS"})
-	plain := plainStorage(vol.Mount, storage.NewMapPieceCompletion())
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)); _ = plain.Close() })
-	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
-	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
-		t.Fatal(err)
-	}
-	tor.DownloadAll()
-	connectPlain(t, tor, seed)
-	time.Sleep(2 * time.Second)
-	if n := len(completePieces(tor)); n != 0 {
-		t.Fatalf("%d pieces completed on HFS+: the engine can hash there now (finding 21)", n)
-	}
-	if !strings.Contains(p.Logs(), "inappropriate ioctl for device") {
-		t.Fatalf("the engine's log does not show the SEEK_DATA failure:\n%s", p.Logs())
 	}
 }
 

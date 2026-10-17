@@ -15,7 +15,7 @@ Engine tests get our own torrents and a swarm closed to the internet:
 fixture.Named("hybrid-tree")                 deterministic payload + metainfo bytes
   └─ fx.WritePayload(seeder.Dir)             files exactly where the engine expects them
 swarm.NewPeer(dir, Options{RateLimit})       anacrolix client: 127.0.0.1, TCP, no DHT/trackers/PEX/…
-  ├─ seeder.Seed(ctx, mi)                    add + verify + settle → missing pieces as IncompleteError
+  ├─ seeder.Seed(ctx, mi)                    add + verify + Settle → missing pieces as IncompleteError
   ├─ leecher.Leech(mi); swarm.Connect(lt, seeder)
   ├─ swarm.WaitComplete(ctx, lt)             nil, or IncompleteError{Completed, Length, MissingPieces}
   ├─ swarm.Count(t) / swarm.Record(…)        payload vs all bytes; samples, marks, residual traffic
@@ -85,6 +85,7 @@ bytes in every format.
 | `Peer.Add(mi)` | Adds the torrent; an engine panic is returned as an error. A metainfo that names a tracker, web seed or DHT node is refused. |
 | `Connect(t, peers...)` | The only peer source. Peers are trusted: they share 127.0.0.1 and the engine bans by IP, so a peer that sends bad data has its piece re-requested instead of being banned. |
 | `WaitInfo`, `WaitComplete` | Bounded by `ctx`. On expiry: `"no metainfo: …"`, or an `*IncompleteError` wrapping `ctx.Err()`. |
+| `Settle(ctx, t)` | Waits until no piece is queued, hashing or storing its verdict; bounded by `ctx`. Read piece state only after it: `VerifyDataContext` returns before the verdict is stored. `Peer.Seed` uses it, and so do the 009 storage tests. |
 | `Count(t)` | `PayloadRead`, `PayloadWritten`, `Read`, `Written`. Payload is piece data; the other two include protocol messages. |
 | `Record(interval, torrents)`, `Mark`, `Stop` | Sample counters. `Log.FirstPayload`, `LastPayload`, `MarkAt` and `PayloadAfter(mark, name)` give the start, the stop and the residual traffic. |
 | `Peer.Settings`, `ListenAddrs`, `SeenAddrs`, `Logs` | What the configuration allows, where the peer listens, the address of every peer it saw, and its engine log. |
@@ -159,7 +160,7 @@ They need no `.app` run, because the application does not import them.
 ## Refactoring and debt check
 
 Engine timing is handled in the harness, not in the tests:
-- `settle` waits until piece checks finish;
+- `Settle` waits until piece checks finish;
 - `Refuses` polls until the address refuses connections.
 
 Each engine limitation is a named test, not a skipped one. The tracked items are listed in the
