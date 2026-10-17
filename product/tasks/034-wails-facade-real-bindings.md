@@ -55,6 +55,8 @@ The facade grows together with the services. This task closes the base connectio
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): accept a `destination` only if it equals a folder Go got from the native dialog in this run or the saved default.
 
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): delete the temporary engine spike: `cmd/engine-spike`, `internal/enginespike`, `frontend/src/spike`, `frontend/spike`, `frontend/vite.spike.config.ts` and the second half of `npm run build`, its `tsconfig`/`.oxlintrc`/`.gitignore` entries, its `wailsApps` row in `internal/devtool/appcov.go`, and [docs/tooling/engine-spike.md](../../docs/tooling/engine-spike.md). Keep the gate's `product isolation` step. The spike's page shows the pattern to reuse: subscribe before the snapshot, keep the highest revision.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

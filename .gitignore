@@ -5,6 +5,9 @@
 # Wails and Vite build output
 /build/bin/
 /frontend/dist/
+# The engine spike app (task 007; deleted by 034): its .app and its Vite build
+/cmd/engine-spike/build/bin/
+/cmd/engine-spike/assets/
 
 # Frontend dependencies (reproduced from the lockfile)
 node_modules/

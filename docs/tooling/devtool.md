@@ -35,14 +35,16 @@ A command that fails prints `devtool: <reason>` on stderr and exits 1.
 
 - `check` writes:
   - `frontend/node_modules` (`npm ci`), `frontend/coverage/`, `frontend/dist`;
-  - `frontend/wailsjs/` (`go tool wails generate module`, **tracked**): when the bindings had drifted,
-    the regenerated files stay in the working tree, and both `bindings` and `single code version`
-    fail — commit them with the Go change;
+  - `frontend/wailsjs/` and `frontend/spike/wailsjs/` (`go tool wails generate module` in each app's
+    directory, **tracked**): when the bindings had drifted, the regenerated files stay in the working
+    tree, and both `bindings` and `single code version` fail — commit them with the Go change;
+  - `cmd/engine-spike/assets` (the spike's page) and the instrumented
+    `cmd/engine-spike/build/bin/EngineSpike.app`;
   - `build/coverage/{go-unit,go-app}` and their profiles;
   - `build/bin/OctopusTorrent.app`, rebuilt as a normal release build at the end.
 - The runner scripts build `build/bin/devtool`.
 
-Everything except `frontend/wailsjs/` is gitignored.
+Everything except the two `wailsjs/` directories is gitignored.
 
 ## Code map
 
@@ -50,7 +52,8 @@ Everything except `frontend/wailsjs/` is gitignored.
 |---|---|
 | `devtool.go` | `Main` dispatch, workspace, docs and plan commands |
 | `check.go` | gate modes, the step runner, the report, npm cooldown, go env, tool steps |
-| `frontendcov.go`, `gocov.go`, `appcov.go` | coverage inventories, profiles, the escape-hatch scan, the instrumented `.app` run |
+| `frontendcov.go`, `gocov.go`, `appcov.go` | coverage inventories, profiles, the escape-hatch scan, the `wailsApps` table and the instrumented run of every app |
+| `isolation.go` | the `product isolation` step |
 | `scripts.go` | the `scripts` step: shell scripts only hand over to `devtool` |
 | `deps.go` | lockfile and build list, registry dates and integrity, audits, updates |
 | `docs.go`, `plan.go`, `codexagents.go` | link and pointer checks, the plan check and navigation, Codex mirrors |

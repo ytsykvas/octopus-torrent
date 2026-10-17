@@ -178,11 +178,12 @@ func (c *checker) steps() []checkStep {
 		{"go coverage", c.goCoverage},
 		{"escape hatches", c.escapeHatches},
 		{"scripts", c.scripts},
+		{"product isolation", c.isolation},
 		{"release build", c.tool("go", "tool", "wails", "build", "-clean", "-trimpath")},
 		{"docs", c.own(docsCheck)},
 		{"plan", c.own(planCheck)},
 	}, append(network,
-		checkStep{"engine integration", func() stepResult { return notBuiltYet("not implemented yet: tasks 007, 018") }},
+		checkStep{"engine integration", func() stepResult { return notBuiltYet("not implemented yet: task 018") }},
 		checkStep{"test-bridge UI tests", func() stepResult { return notBuiltYet("not implemented yet: task 035") }},
 	)...)
 }
@@ -310,22 +311,33 @@ func (c *checker) gofmt() stepResult {
 	return pass("every Go file is formatted")
 }
 
-// bindings regenerates the Wails bindings and compares the contents (not the file modes, which
-// Wails itself changes) with what was there before.
+// bindings regenerates the bindings of every Wails app and compares the contents (not the file
+// modes, which Wails itself changes) with what was there before. Each app has its own bindings
+// directory: generation deletes the go/ part of the directory it writes.
 func (c *checker) bindings() stepResult {
-	before := c.contents(c.files, "frontend/wailsjs/")
-	if out, err := c.sys.Capture("go", "tool", "wails", "generate", "module"); err != nil {
-		return fail("go tool wails generate module: "+err.Error(), out)
+	before := map[string]map[string]string{}
+	for _, a := range wailsApps {
+		before[a.Name] = c.contents(c.files, a.Bindings)
+	}
+	for _, a := range wailsApps {
+		if out, err := c.sys.Capture("env", "-C", a.Dir, "go", "tool", "wails", "generate", "module"); err != nil {
+			return fail(a.Name+": go tool wails generate module: "+err.Error(), out)
+		}
 	}
 	files, err := repositoryFiles(c.sys)
 	if err != nil {
 		return fail(err.Error(), "")
 	}
-	after := c.contents(files, "frontend/wailsjs/")
-	if changed := changedNames(before, after); len(changed) > 0 {
+	var changed, matched []string
+	for _, a := range wailsApps {
+		after := c.contents(files, a.Bindings)
+		changed = append(changed, changedNames(before[a.Name], after)...)
+		matched = append(matched, fmt.Sprintf("%s: %s (%d files)", a.Name, a.Bindings, len(after)))
+	}
+	if len(changed) > 0 {
 		return fail("the committed bindings differ from the Go facade; commit the regenerated files", strings.Join(changed, "\n"))
 	}
-	return pass(fmt.Sprintf("frontend/wailsjs matches the Go facade (%d files)", len(after)))
+	return pass("bindings match the Go facades: " + strings.Join(matched, ", "))
 }
 
 func (c *checker) goTests() stepResult {
@@ -343,7 +355,8 @@ func (c *checker) appRun() stepResult {
 	if !c.mode.app {
 		return notRun("skipped by check fast")
 	}
-	r := appCoverageRun(c.sys, c.root, filepath.Join(c.root, appCoverDir))
+	gomod, _ := c.sys.ReadFile("go.mod")
+	r := appCoverageRun(c.sys, c.root, filepath.Join(c.root, appCoverDir), GoModulePath(string(gomod)))
 	c.appRan = r.status == statusPass
 	return r
 }
@@ -365,7 +378,7 @@ func (c *checker) goCoverage() stepResult {
 	}
 	gomod, _ := c.sys.ReadFile("go.mod")
 	sources := c.contents(c.files, "")
-	problems, deferred := CheckGoCoverage(GoModulePath(string(gomod)), sources, unit, app, c.appRan)
+	problems, deferred := CheckGoCoverage(GoModulePath(string(gomod)), sources, unit, app, c.appRan, appMains())
 	switch {
 	case len(problems) > 0:
 		return fail(fmt.Sprintf("%d coverage problems", len(problems)), strings.Join(problems, "\n"))

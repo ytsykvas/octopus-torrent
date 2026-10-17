@@ -55,6 +55,8 @@ Commands are passed through our own DTOs and applied sequentially by the service
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): pause/resume start through the single acceptance path `accept(kind, request, mutation)` added by the first command (024 or this task, whichever lands first).
 
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): do not resume download right after disallowing it — the pinned engine stalls the transfer for good (finding 12); 010 owns the remedy. Call a switch only when its state changes.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

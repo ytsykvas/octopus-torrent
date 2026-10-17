@@ -213,32 +213,43 @@ func TestPinnedEngineKeepsPayloadFilesMappedAfterClose(t *testing.T) {
 	}
 }
 
-// The pinned engine creates every zero-length file of a torrent as soon as it is added, truncating
-// whatever is there, and only checks that the path stays inside the save folder. An existing file
-// loses its content: on a name collision inside the torrent folder, one level up through "..", and
-// through a component with embedded separators. Our parser (019) and path plan (020) must reject
-// such metainfo before the engine sees it. This test turns red when the engine stops truncating.
-func TestPinnedEngineTruncatesExistingFilesAtZeroLengthPathsOnAdd(t *testing.T) {
+// On add the pinned engine creates every zero-length file with O_TRUNC, and when a piece fails its
+// check it renames each existing file of that piece to "<name>.part" (the default part-file mode).
+// An existing file at a torrent path therefore loses its name, and at a zero-length path its data
+// too, beside the torrent folder as well (one ".." level, an embedded separator). The waits for the
+// piece checks make the outcome deterministic; without them the rename races the assertions.
+func TestPinnedEngineTruncatesAndRenamesExistingFilesAtTorrentPathsOnAdd(t *testing.T) {
 	p := peer(t, Options{})
+	unrelated := filepath.Join(p.Dir, "tree", "docs", "readme.txt") // a file of v1-tree, not zero-length
 	for name, victim := range map[string]string{
 		"v1-tree":                    filepath.Join(p.Dir, "tree", "empty.dat"),
 		"invalid-empty-traversal":    filepath.Join(p.Dir, "victim.txt"),
 		"invalid-embedded-separator": filepath.Join(p.Dir, "x"),
 	} {
-		if err := os.MkdirAll(filepath.Dir(victim), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(victim, []byte("synthetic data that must survive"), 0o644); err != nil {
-			t.Fatal(err)
+		for _, path := range []string{victim, unrelated} {
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte("synthetic data that must survive"), 0o644); err != nil {
+				t.Fatal(err)
+			}
 		}
 		tor, err := p.Add(metaInfo(t, named(t, name)))
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		tor.Drop()
-		if info, err := os.Stat(victim); err != nil || info.Size() != 0 {
-			t.Errorf("%s: %s is %v (%v), want it truncated to 0 bytes by the pinned engine", name, victim, info, err)
+		if err := settle(deadline(t, closeLimit), tor); err != nil {
+			t.Fatal(err)
 		}
+		tor.Drop()
+		_, gone := os.Stat(victim)
+		if info, err := os.Stat(victim + ".part"); !errors.Is(gone, os.ErrNotExist) || err != nil || info.Size() != 0 {
+			t.Errorf("%s: %s should be gone (%v) and %s.part empty (%v, %v): the engine changed, re-check 019, 020 and 023's notes", name, victim, gone, victim, info, err)
+		}
+	}
+	_, gone := os.Stat(unrelated)
+	if data, err := os.ReadFile(unrelated + ".part"); !errors.Is(gone, os.ErrNotExist) || err != nil || string(data) != "synthetic data that must survive" {
+		t.Errorf("%s should be renamed to .part with its bytes (%v): %q, %v; the engine changed, re-check 020 and 023's notes", unrelated, gone, data, err)
 	}
 }
 

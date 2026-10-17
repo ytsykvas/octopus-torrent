@@ -1,6 +1,6 @@
 # 007 — Check the anacrolix API and lifecycle on a single version
 
-**Status:** `planned`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** Gate/spike with a recorded result  
@@ -38,12 +38,12 @@ Pin a single version of anacrolix/torrent and verify the creation, operation and
 
 ## Acceptance criteria
 
-- [ ] All required calls compile and run on a single pinned engine version.
-- [ ] The client and the metadata-waiting tasks shut down without hanging and without leftover background tasks.
-- [ ] The report separates the verified lifecycle from the not-yet-proven stopping of upload and data restore.
-- [ ] All checks listed below have been performed at the appropriate level; checks that were not run or failed are not marked as successful.
+- [x] All required calls compile and run on a single pinned engine version.
+- [x] The client and the metadata-waiting tasks shut down without hanging and without leftover background tasks.
+- [x] The report separates the verified lifecycle from the not-yet-proven stopping of upload and data restore.
+- [x] All checks listed below have been performed at the appropriate level; checks that were not run or failed are not marked as successful.
 
-- [ ] The early prototype shows a real transfer through Go → Wails → React; static data or a browser substitute does not count. Closing the prototype shuts down its own torrent client and leaves no active transfer.
+- [x] The early prototype shows a real transfer through Go → Wails → React; static data or a browser substitute does not count. Closing the prototype shuts down its own torrent client and leaves no active transfer.
 
 ## Checks
 
@@ -79,3 +79,30 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Record a short result: what was changed, the exact checks with the statuses `pass`, `fail` or `not_run`, ADRs, actual code change locations and known limitations.
 - For `blocked`, state the concrete reason, the missing evidence/decision, how to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+### Execution result (17 October 2026)
+
+- **Status:** `done`. Evidence: [report 007](../../docs/verification/007-engine-api-lifecycle-spike.md). ADR: [engine-lifecycle](../../docs/decisions/engine-lifecycle.md) (O2 accepted). Feature: [engine spike](../../docs/tooling/engine-spike.md).
+- **Created:**
+  - **Engine contract tests** (`internal/torrentengine/lifecycle_test.go`): compile-time signatures, the full lifecycle, `new=false`, failed adds, the metadata wait, three close cycles during transfers, and one test per finding 9–13. `swarm.Main` and `swarm.Peer.Client` serve them.
+  - **Gate:** a `wailsApps` table; every app is built, run with coverage and quit, and its bindings regenerated; a `product isolation` step with the release tags.
+  - **`EngineSpike.app`** (`cmd/engine-spike`, `internal/enginespike`, `frontend/src/spike`): a real loopback transfer read through Go's own DTO, binding and event, with Start, Pause, Resume, Reload and a counted wake-up of stalls. Task 034 deletes it.
+- **Checks:**
+  - RED → GREEN for each stage and each review fix (report).
+  - Every own Go file is at 100% (unit + both `.app` runs), and every TypeScript file at 100%.
+  - The `.app` QA: six scenarios `pass`.
+  - `/branch-review` ran three agents, and every finding was fixed or answered in the report.
+  - The full `go tool devtool check` result is in the report.
+- **Engine findings 9–14** (pinned v1.61.0):
+  9. `VerifyDataContext` after `Drop` hangs the client.
+  10. The `AddTorrentOpts` upload and download fields are ignored.
+  11. Info bytes that do not match a v1 infohash are accepted, also from a peer for a magnet.
+  12. Allowing download right after disallowing it stalls the transfer.
+  13. A failed piece check renames existing files to `<name>.part`, and a download then overwrites them.
+  14. The upload switch can stall too, rarely and under CPU load.
+- **Limitations:**
+  - Every lifecycle check ran with discovery off (018 proves shutdown with it on).
+  - Stopping upload and pausing download as product policies are not proven (010). Restore across a restart is not proven (009, 029).
+  - The causes of findings 12 and 14 inside the engine are not established.
+  - `golang.org/x/net` v0.60.0 stays a release-age exception until 2026-10-22; on that date the gate fails until the entry is removed.
+- **Next task:** [008](008-sqlite-driver-durability-spike.md), [010](010-upload-stop-and-pause-spike.md), [012](012-macos-trash-and-path-spike.md), [013](013-transfer-policy-state-machine.md), [017](017-local-diagnostics-privacy.md) or [035](035-react-bridge-state-resync.md); 009 after 008, 018 after 013.

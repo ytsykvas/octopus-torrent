@@ -1,0 +1,16 @@
+{
+  "event": "enginespike:transfer",
+  "states": ["idle", "running", "paused", "complete", "failed"],
+  "transfer": {
+    "revision": "7",
+    "state": "paused",
+    "bytesCompleted": "524288",
+    "length": "1048576",
+    "payloadRead": "540672",
+    "payloadWritten": "0",
+    "peers": 1,
+    "clientsStarted": 2,
+    "recoveries": 1,
+    "error": ""
+  }
+}

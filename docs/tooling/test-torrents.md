@@ -2,9 +2,9 @@
 
 **Status:** `implemented`  
 **Requirements:** `AI-08`, `TR-02`  
-**Related tasks:** [006](../../product/tasks/006-controlled-torrent-fixtures.md); used by 007, 009, 010, 011, 018, 019  
+**Related tasks:** [006](../../product/tasks/006-controlled-torrent-fixtures.md); used by [007](../../product/tasks/007-engine-api-lifecycle-spike.md) (engine contract tests, the spike app), 009, 010, 011, 018, 019  
 **Last verified version:** task 006 ([report](../verification/006-controlled-torrent-fixtures.md))  
-**Last updated:** 2026-10-16  
+**Last updated:** 2026-10-17  
 **See also:** [ADR controlled-swarm](../decisions/controlled-swarm.md), [testing](../development/testing.md)
 
 ## Goal and behavior
@@ -88,6 +88,8 @@ bytes in every format.
 | `Count(t)` | `PayloadRead`, `PayloadWritten`, `Read`, `Written`. Payload is piece data; the other two include protocol messages. |
 | `Record(interval, torrents)`, `Mark`, `Stop` | Sample counters. `Log.FirstPayload`, `LastPayload`, `MarkAt` and `PayloadAfter(mark, name)` give the start, the stop and the residual traffic. |
 | `Peer.Settings`, `ListenAddrs`, `SeenAddrs`, `Logs` | What the configuration allows, where the peer listens, the address of every peer it saw, and its engine log. |
+| `Peer.Client()` | The raw engine client, for tests of the engine's own API (007). The peer still owns it: close it only through `Peer.Close`. |
+| `Main(m)` | The `TestMain` body of every package that starts engine clients (see below). |
 | `Peer.Close(ctx)`, `Refuses(ctx, addr)` | Stop the client and storage; wait until the address refuses connections. |
 | `NonLoopback(text)`, `WaitEngineStopped(ctx)` | Find non-loopback IP addresses; prove no engine goroutine is left. |
 
@@ -108,11 +110,15 @@ The scenarios are in `swarm_test.go`:
 - error branches;
 - a corrupted piece arriving over the wire;
 - payload files still mapped after `Close`;
-- zero-length paths truncating existing files on add;
+- zero-length paths truncating existing files on add, and a failed piece check renaming every
+  existing file of that piece to `<name>.part` (the test waits for the checks, so the outcome is
+  deterministic);
 - the tripwires.
 
-A `TestMain` refuses `TORRENT_STORAGE_DEFAULT_FILE_IO` and `GOPPROF`, which change what the engine
-does, and after all tests it fails the package if any engine goroutine is left.
+`swarm.Main(m)` is the `TestMain` body of every package that starts engine clients: the swarm, the
+engine contract tests of 007 (`internal/torrentengine`), the engine spike and its app. It refuses
+`TORRENT_STORAGE_DEFAULT_FILE_IO` and `GOPPROF`, which change what the engine does, and after all
+tests it fails the package if any engine goroutine is left.
 
 Each wait has its own limit:
 - a transfer: 20 s;
@@ -132,9 +138,11 @@ Each wait has its own limit:
 - `peer.go`;
 - `wait.go`;
 - `counters.go`;
-- `diagnostics.go`.
+- `diagnostics.go`;
+- `testmain.go` (`Main`).
 
-There are two test seams, unexported package variables: `newClient` and `pieceBusy`.
+The test seams are unexported package variables: `newClient`, `pieceBusy`, and `mainOutput` and
+`mainLimit` for `Main`.
 
 ## Checks and 100% coverage
 
@@ -171,5 +179,8 @@ Each engine limitation is a named test, not a skipped one. The tracked items are
 
 ## Change history and evidence
 
+- 2026-10-17, task 007: `Peer.Client`, `swarm.Main`; the truncation test waits for the piece checks
+  and asserts the rename to `.part` (finding 13). The engine contract tests and the spike app use the
+  package ([report](../verification/007-engine-api-lifecycle-spike.md)).
 - 2026-10-16, task 006: the fixture catalog, the swarm and eight engine findings
   ([report](../verification/006-controlled-torrent-fixtures.md), [ADR](../decisions/controlled-swarm.md)).

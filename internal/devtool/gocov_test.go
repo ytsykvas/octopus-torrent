@@ -27,15 +27,30 @@ const (
 		"octopustorrent/internal/app/app.go:7.18,7.33 1 0\n"
 )
 
+// productMains is the main file of every Wails app in these tests: the product only.
+var productMains = []string{"main.go"}
+
+func TestCheckGoCoverageRequiresTheMainOfEveryWailsApp(t *testing.T) {
+	mains := []string{"main.go", "cmd/tool/main.go"}
+	problems, _ := CheckGoCoverage("octopustorrent", goSources, unitProfile, appProfile, true, mains)
+	if got := strings.Join(problems, "\n"); !strings.Contains(got, "the .app profile does not contain cmd/tool/main.go") {
+		t.Errorf("CheckGoCoverage =\n%s\nwant the missing app main named", got)
+	}
+	app := appProfile + "octopustorrent/cmd/tool/main.go:3.13,5.2 1 1\n"
+	if problems, _ := CheckGoCoverage("octopustorrent", goSources, unitProfile, app, true, mains); len(problems) != 0 {
+		t.Errorf("CheckGoCoverage = %q, want both mains accepted", problems)
+	}
+}
+
 func TestCheckGoCoverageMergesTheUnitAndAppProfiles(t *testing.T) {
-	problems, deferred := CheckGoCoverage("octopustorrent", goSources, unitProfile, appProfile, true)
+	problems, deferred := CheckGoCoverage("octopustorrent", goSources, unitProfile, appProfile, true, productMains)
 	if len(problems) != 0 || len(deferred) != 0 {
 		t.Errorf("CheckGoCoverage = %q deferred %q, want nothing", problems, deferred)
 	}
 }
 
 func TestCheckGoCoverageDefersOnlyMainToTheAppRun(t *testing.T) {
-	problems, deferred := CheckGoCoverage("octopustorrent", goSources, unitProfile, "", false)
+	problems, deferred := CheckGoCoverage("octopustorrent", goSources, unitProfile, "", false, productMains)
 	if len(problems) != 0 || strings.Join(deferred, " ") != "main.go:5.13,5.31" {
 		t.Errorf("CheckGoCoverage = %q deferred %q, want only main() deferred", problems, deferred)
 	}
@@ -76,7 +91,7 @@ func TestCheckGoCoverageRejectsEveryWayAroundFullCoverage(t *testing.T) {
 			"internal/x/testdata/gen_test.go: Go source under testdata/ is never built or measured; put it in a package"},
 	}
 	for name, c := range cases {
-		problems, _ := CheckGoCoverage("octopustorrent", c.sources, c.unit, c.app, c.withApp)
+		problems, _ := CheckGoCoverage("octopustorrent", c.sources, c.unit, c.app, c.withApp, productMains)
 		if got := strings.Join(problems, "\n"); !strings.Contains(got, c.want) {
 			t.Errorf("%s: CheckGoCoverage =\n%s\nwant a problem containing %q", name, got, c.want)
 		}
@@ -97,7 +112,7 @@ func TestCheckGoCoverageTakesFilesOnlyTheAppMeasured(t *testing.T) {
 	unit := "mode: atomic\noctopustorrent/main.go:5.13,5.31 1 0\noctopustorrent/main.go:7.16,9.2 1 1\n"
 	app := "mode: atomic\noctopustorrent/main.go:5.13,5.31 1 1\noctopustorrent/main.go:7.16,9.2 1 1\n" +
 		"octopustorrent/internal/platform/menu.go:3.13,3.15 0 1\n"
-	if problems, _ := CheckGoCoverage("octopustorrent", sources, unit, app, true); len(problems) != 0 {
+	if problems, _ := CheckGoCoverage("octopustorrent", sources, unit, app, true, productMains); len(problems) != 0 {
 		t.Errorf("CheckGoCoverage = %q, want the .app-only file merged", problems)
 	}
 }

@@ -53,6 +53,8 @@ Checking the disk after a crash does not mean downloading again from the network
 
 **Basis for technical decisions:** [Storage API](https://pkg.go.dev/github.com/anacrolix/torrent/storage). Cross-check signatures and limitations against the pinned version; reading the API is not a passed integration check.
 
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): restore re-adds torrents from stored info bytes, and the engine accepts bytes that do not match the stored infohash (finding 11): verify the pair before the add. A recheck of a file whose bytes changed makes the engine rename that file to `<name>.part` and later overwrite it (finding 13): check existing bytes with the application's own hashing before the engine sees the folder.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.
