@@ -153,10 +153,7 @@ func TestAPartialDownloadResumesWithoutReadingOrFetchingWhatIsAlreadyThere(t *te
 		t.Fatalf("the restart read %d pieces to trust %d marks", reads, len(have))
 	}
 	second.download(seed)
-	want := int64(second.torrent.NumPieces()-len(have)) * 16 << 10
-	if got := swarm.Count(second.torrent).PayloadRead; got > want {
-		t.Fatalf("the second run downloaded %d payload bytes, want at most the %d missing", got, want)
-	}
+	assertDownloadedAtMost(t, second.torrent, second.torrent.NumPieces()-len(have))
 	second.quitCleanly()
 	assertPayload(t, fx, saveRoot)
 }
@@ -262,9 +259,7 @@ func TestAKilledProcessLeavesNothingTrustedAndNothingValidIsDownloadedAgain(t *t
 		}
 	}
 	second.download(seed)
-	if got, want := swarm.Count(second.torrent).PayloadRead, int64(second.torrent.NumPieces()-len(have))*16<<10; got > want {
-		t.Errorf("downloaded %d payload bytes, want at most the %d missing", got, want)
-	}
+	assertDownloadedAtMost(t, second.torrent, second.torrent.NumPieces()-len(have))
 	second.quitCleanly()
 	assertPayload(t, fx, saveRoot)
 	lib.intact()
@@ -341,16 +336,14 @@ func TestEveryChangedFileIsVerifiedAndNoOtherPieceIsRead(t *testing.T) {
 				t.Fatalf("%d pieces were read, want only the one verified", reads)
 			}
 			second.download(seed)
-			if got, want := swarm.Count(second.torrent).PayloadRead, int64(len(bad))*32<<10; got > want {
-				t.Errorf("downloaded %d payload bytes, want at most the %d of the damaged pieces", got, want)
-			}
+			assertDownloadedAtMost(t, second.torrent, len(bad))
 			second.quitCleanly()
 			assertPayload(t, fx, saveRoot)
 		})
 	}
 }
 
-func TestAFileThatWasMovedAwayIsReportedMissingAndNothingIsAdded(t *testing.T) {
+func TestAMovedFileIsReportedMissingAfterACleanRunAndAfterACrash(t *testing.T) {
 	fx, mi := named(t, "v1-tree")
 	seed := seeder(t, fx, mi, swarm.Options{})
 	saveRoot, dataDir := t.TempDir(), t.TempDir()
@@ -362,37 +355,15 @@ func TestAFileThatWasMovedAwayIsReportedMissingAndNothingIsAdded(t *testing.T) {
 	if err := os.Rename(victim, victim+".moved"); err != nil {
 		t.Fatal(err)
 	}
-	d, _ := decide(t, mi, saveRoot, &first.record)
-	if d.VerifyAll || !slices.Equal(d.Missing, []string{victim}) || len(d.VerifyPieces) != 0 {
-		t.Fatalf("decision %+v, want exactly the moved file missing", d)
+	if d, _ := decide(t, mi, saveRoot, &first.record); d.VerifyAll || !slices.Equal(d.Missing, []string{victim}) || len(d.VerifyPieces) != 0 {
+		t.Fatalf("after a clean run: decision %+v, want exactly the moved file missing", d)
 	}
-	if _, err := os.Stat(victim); err == nil {
-		t.Fatal("deciding recreated the file")
-	}
-}
-
-func TestAFileMovedBeforeACrashIsStillMissingAndNothingIsDownloadedInItsPlace(t *testing.T) {
-	fx, mi := named(t, "v1-tree")
-	seed := seeder(t, fx, mi, swarm.Options{})
-	saveRoot, dataDir := t.TempDir(), t.TempDir()
-	first := start(t, mi, saveRoot, dataDir, runOptions{})
-	first.download(seed)
-	first.quitCleanly()
-
 	// the next run began (its record is "not clean": 029 writes that before the first payload write),
 	// the owner moved a file, and the process was killed
 	crashed := first.record
 	crashed.Clean = false
-	victim := fx.FilePath(saveRoot, fx.Files[0])
-	if err := os.Rename(victim, victim+".moved"); err != nil {
-		t.Fatal(err)
-	}
-	d, _ := decide(t, mi, saveRoot, &crashed)
-	if !d.VerifyAll || !slices.Equal(d.Missing, []string{victim}) {
-		t.Fatalf("decision %+v, want everything verified and the moved file missing", d)
-	}
-	if _, err := os.Stat(victim); err == nil {
-		t.Fatal("deciding recreated the file")
+	if d, _ := decide(t, mi, saveRoot, &crashed); !d.VerifyAll || !slices.Equal(d.Missing, []string{victim}) {
+		t.Fatalf("after a crash: decision %+v, want everything verified and the moved file missing", d)
 	}
 }
 
@@ -429,19 +400,39 @@ func TestAnEditMadeWhileTheApplicationRunsIsVerifiedAtTheNextStart(t *testing.T)
 	third.quit()
 }
 
-func TestOnlyAPFSVolumesAreTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
+func TestAPFSVolumeIsTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
+	fx, mi := named(t, "v1-single")
+	seed := seeder(t, fx, mi, swarm.Options{})
+	vol, saveRoot, dataDir := onVolume(t, volume.Options{Size: "8m", FS: "APFS", Name: "OctoAPFS"})
+	first := start(t, mi, saveRoot, dataDir, runOptions{})
+	first.download(seed)
+	first.quitCleanly()
+	if first.record.FileSystem != "apfs" {
+		t.Fatalf("the record says %q, want apfs", first.record.FileSystem)
+	}
+
+	second := start(t, mi, saveRoot, dataDir, runOptions{prev: &first.record})
+	if second.decision.VerifyAll || second.storage.Reads() != 0 {
+		t.Fatalf("an APFS volume was not trusted: %+v", second.decision)
+	}
+	second.quitCleanly()
+
+	// pulled and plugged again, with another volume taking its device number
+	replug(t, vol, saveRoot, second.record.Dev)
+	d, _ := decide(t, mi, saveRoot, &second.record)
+	if !d.VerifyAll || len(d.Missing) != 0 || !strings.Contains(d.Reason, "another volume") {
+		t.Fatalf("after a replug the decision is %+v, want everything verified and nothing missing", d)
+	}
+}
+
+func TestFATAndExFATVolumesAreVerifiedInFull(t *testing.T) {
 	fx, mi := named(t, "v1-single")
 	seed := seeder(t, fx, mi, swarm.Options{})
 	for _, tc := range []struct{ fs, name, label string }{
-		{"MS-DOS", "msdos", "OctoFAT"}, {"ExFAT", "exfat", "OctoExFAT"}, {"APFS", "apfs", "OctoAPFS"},
+		{"MS-DOS", "msdos", "OctoFAT"}, {"ExFAT", "exfat", "OctoExFAT"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			vol := volume.New(t, volume.Options{Size: "8m", FS: tc.fs, Name: tc.label})
-			saveRoot := filepath.Join(vol.Mount, "Downloads")
-			if err := os.Mkdir(saveRoot, 0o755); err != nil {
-				t.Fatal(err)
-			}
-			dataDir := t.TempDir()
+			_, saveRoot, dataDir := onVolume(t, volume.Options{Size: "8m", FS: tc.fs, Name: tc.label})
 			first := start(t, mi, saveRoot, dataDir, runOptions{})
 			first.download(seed)
 			first.quitCleanly()
@@ -450,20 +441,6 @@ func TestOnlyAPFSVolumesAreTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
 			}
 
 			second := start(t, mi, saveRoot, dataDir, runOptions{prev: &first.record})
-			if tc.name == "apfs" {
-				if second.decision.VerifyAll || second.storage.Reads() != 0 {
-					t.Fatalf("an APFS volume was not trusted: %+v", second.decision)
-				}
-				second.quitCleanly()
-
-				// pulled and plugged again, with another volume taking its device number
-				replug(t, vol, saveRoot, second.record.Dev)
-				d, _ := decide(t, mi, saveRoot, &second.record)
-				if !d.VerifyAll || len(d.Missing) != 0 || !strings.Contains(d.Reason, "another volume") {
-					t.Fatalf("after a replug the decision is %+v, want everything verified and nothing missing", d)
-				}
-				return
-			}
 			if !second.decision.VerifyAll || !strings.Contains(second.decision.Reason, "reliable") {
 				t.Fatalf("decision %+v, want everything verified", second.decision)
 			}

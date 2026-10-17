@@ -49,15 +49,7 @@ func named(t *testing.T, name string) (fixture.Fixture, *metainfo.MetaInfo) {
 // seeder starts a peer that seeds the fixture's complete payload.
 func seeder(t *testing.T, fx fixture.Fixture, mi *metainfo.MetaInfo, opts swarm.Options) *swarm.Peer {
 	t.Helper()
-	p, err := swarm.NewPeer(t.TempDir(), opts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := p.Close(deadline(t, closeLimit)); err != nil {
-			t.Error(err)
-		}
-	})
+	p := newPeer(t, opts)
 	if err := fx.WritePayload(p.Dir); err != nil {
 		t.Fatal(err)
 	}

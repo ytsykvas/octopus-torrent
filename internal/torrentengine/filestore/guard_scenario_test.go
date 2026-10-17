@@ -128,21 +128,8 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 				t.Errorf("the replacement folder holds %v (%v), want it empty", entries, err)
 			}
 			kept := completePieces(r.torrent)
-			for _, piece := range kept {
-				if c, err := r.completion.Get(metainfo.PieceKey{InfoHash: mi.HashInfoBytes(), Index: piece}); err != nil || !c.Ok || !c.Complete {
-					t.Errorf("the mark of piece %d was lost: %+v %v", piece, c, err)
-				}
-			}
-			problems, endErr := r.end()
-			if len(problems) == 0 || !errors.Is(problems[0], ErrRootChanged) {
-				t.Fatalf("problems %v, want ErrRootChanged first", problems)
-			}
-			if r.record.Clean {
-				t.Error("the record of a run that lost its save folder is clean")
-			}
-			if endErr == nil {
-				t.Error("Seal did not report the lost save folder")
-			}
+			assertMarksKept(t, r, mi, kept)
+			assertRootLost(t, r)
 			marks := storedMarks(t, dataDir, mi)
 			for _, piece := range kept {
 				if !marks[piece] {

@@ -92,11 +92,7 @@ func TestEveryFormatLandsExactlyWhereLayoutSaysAndNothingElseIsWritten(t *testin
 func TestATorrentAddedWithoutStorageOfItsOwnIsRefusedAndWritesNothing(t *testing.T) {
 	_, mi := named(t, "v1-single")
 	dataDir := t.TempDir()
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: dataDir})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)) })
+	p := newPeer(t, swarm.Options{DefaultStorage: Refusing(), DataDir: dataDir})
 	if _, err := p.Add(mi); err == nil {
 		t.Fatal("a torrent without storage of its own was added")
 	} else if !strings.Contains(err.Error(), ErrNoSaveFolder.Error()) {

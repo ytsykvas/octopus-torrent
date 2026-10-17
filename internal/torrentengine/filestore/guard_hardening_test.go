@@ -16,31 +16,38 @@ import (
 	"octopustorrent/internal/files"
 )
 
-func TestSealRefusesWhileOperationsAreStillRunningAndAcceptsOnceTheyHaveFinished(t *testing.T) {
+func TestStopWaitsForOperationsInFlightRefusesNewOnesAndSealWaitsForThem(t *testing.T) {
 	s, pieces, session, root, f := sealed(t)
 	put(t, filepath.Join(root, "m", "a"), "aaaaaaaaaaaaaaaaaaaa")
 	f.piece.entered, f.piece.release = make(chan struct{}, 1), make(chan struct{})
 	done := make(chan error, 1)
 	go func() { _, err := pieces[0].WriteAt([]byte("x"), 0); done <- err }()
-	<-f.piece.entered
+	<-f.piece.entered // the write is inside the engine now
 
 	short, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
 	if err := s.Stop(short); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Stop = %v", err)
+		t.Fatalf("Stop with a write in flight = %v, want the context's deadline", err)
 	}
 	if session.Clean() {
 		t.Fatal("a Stop that gave up left the session clean")
+	}
+	// the write is still allowed to finish; a new one is refused
+	if _, err := pieces[0].WriteAt([]byte("y"), 0); !errors.Is(err, ErrStopped) {
+		t.Fatalf("a write after Stop = %v, want ErrStopped", err)
 	}
 	if _, err := s.Seal(); !errors.Is(err, ErrNotStopped) {
 		t.Fatalf("Seal while a write runs = %v, want ErrNotStopped", err)
 	}
 	close(f.piece.release)
 	if err := <-done; err != nil {
-		t.Fatal(err)
+		t.Fatalf("the write in flight = %v", err)
 	}
 	if err := s.Stop(context.Background()); err != nil {
-		t.Fatalf("Stop after the write = %v", err)
+		t.Fatalf("Stop after the write finished = %v", err)
+	}
+	if err := s.Stop(context.Background()); err != nil {
+		t.Fatalf("a second Stop = %v", err)
 	}
 	if rec, err := s.Seal(); err != nil || rec.Clean {
 		t.Fatalf("Seal = %+v, %v; want a record that is not clean, because Stop had given up", rec, err)

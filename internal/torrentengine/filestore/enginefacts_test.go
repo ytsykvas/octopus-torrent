@@ -26,11 +26,7 @@ import (
 // The adapter must use SetInfoBytes (finding 15).
 func TestTheEngineReportsAStorageErrorOnlyThroughSetInfoBytes(t *testing.T) {
 	_, mi := named(t, "v1-single")
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)) })
+	p := newPeer(t, swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
 	tor, isNew := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes()})
 	if !isNew || tor == nil {
 		t.Fatal("AddTorrentOpt did not add the torrent")
@@ -72,11 +68,7 @@ func TestTheEngineOpensAWorkingStorageOnceAndARefusingOneTwice(t *testing.T) {
 	working := &countingStorage{inner: plainStorage(t.TempDir(), storage.NewMapPieceCompletion())}
 	refusing := &countingStorage{inner: Refusing()}
 
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: working, DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)) })
+	p := newPeer(t, swarm.Options{DefaultStorage: working, DataDir: t.TempDir()})
 	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: explicit})
 	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
 		t.Fatal(err)
@@ -84,11 +76,7 @@ func TestTheEngineOpensAWorkingStorageOnceAndARefusingOneTwice(t *testing.T) {
 	if _, err := p.Add(otherMI); err != nil {
 		t.Fatal(err)
 	}
-	q, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: refusing, DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = q.Close(deadline(t, closeLimit)) })
+	q := newPeer(t, swarm.Options{DefaultStorage: refusing, DataDir: t.TempDir()})
 	if _, err := q.Add(mi); err == nil {
 		t.Fatal("a refusing storage accepted a torrent")
 	}
@@ -119,16 +107,7 @@ func TestAnUnreadableCompletionStopsTheEnginesDownload(t *testing.T) {
 	fx, mi := named(t, "v1-single")
 	seed := seeder(t, fx, mi, swarm.Options{})
 	plain := plainStorage(t.TempDir(), unreadableMarks{})
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)); _ = plain.Close() })
-	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
-	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
-		t.Fatal(err)
-	}
-	tor.DownloadAll()
+	p, tor := plainTorrent(t, mi, plain)
 	swarm.Connect(tor, seed)
 	time.Sleep(1500 * time.Millisecond)
 	if got := swarm.Count(tor).PayloadRead; got != 0 || len(completePieces(tor)) != 0 {
@@ -167,16 +146,7 @@ func TestAnEngineWithoutTheGuardWritesThroughASymlinkAtTheTorrentPath(t *testing
 		t.Fatal(err)
 	}
 	plain := plainStorage(saveRoot, storage.NewMapPieceCompletion())
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)); _ = plain.Close() })
-	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
-	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
-		t.Fatal(err)
-	}
-	tor.DownloadAll()
+	_, tor := plainTorrent(t, mi, plain)
 	connectPlain(t, tor, seed)
 	if err := swarm.WaitComplete(deadline(t, transferLimit), tor); err != nil {
 		t.Fatal(err)
@@ -254,16 +224,7 @@ func TestOnHFSPlusTheEngineCannotHashAnyPiece(t *testing.T) {
 	seed := seeder(t, fx, mi, swarm.Options{})
 	vol := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctoHFS"})
 	plain := plainStorage(vol.Mount, storage.NewMapPieceCompletion())
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)); _ = plain.Close() })
-	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
-	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
-		t.Fatal(err)
-	}
-	tor.DownloadAll()
+	p, tor := plainTorrent(t, mi, plain)
 	connectPlain(t, tor, seed)
 	time.Sleep(2 * time.Second)
 	if n := len(completePieces(tor)); n != 0 {
@@ -285,16 +246,7 @@ func TestWithoutTheGuardTheEngineRecreatesADeletedSaveFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	plain := plainStorage(saveRoot, storage.NewMapPieceCompletion())
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)); _ = plain.Close() })
-	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
-	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
-		t.Fatal(err)
-	}
-	tor.DownloadAll()
+	_, tor := plainTorrent(t, mi, plain)
 	connectPlain(t, tor, seed)
 	waitPieces(t, tor, 8)
 	if err := os.RemoveAll(saveRoot); err != nil {
