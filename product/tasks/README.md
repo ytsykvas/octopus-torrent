@@ -153,7 +153,7 @@ This is a way of organizing work, not a requirement to run additional agents. Co
 | [006](006-controlled-torrent-fixtures.md) | Create controlled torrents and a local swarm | P1 | [004](004-reproducible-check-commands.md) | AI-08, TR-02 | `done` |
 | [007](007-engine-api-lifecycle-spike.md) | Check the anacrolix API and lifecycle on a single version | P1 | [006](006-controlled-torrent-fixtures.md), [005](005-domain-dto-and-bridge-contract.md) | AI-05, AI-07, STACK-03 | `done` |
 | [008](008-sqlite-driver-durability-spike.md) | Choose the SQLite driver and data durability mode | P1 | [004](004-reproducible-check-commands.md) | STACK-04, SET-02, AI-07 | `done` |
-| [009](009-storage-and-completion-spike.md) | Check file placement and persistence of verified-piece state | P1 | [007](007-engine-api-lifecycle-spike.md), [008](008-sqlite-driver-durability-spike.md) | SET-02, TR-05, ADD-04 | `planned` |
+| [009](009-storage-and-completion-spike.md) | Check file placement and persistence of verified-piece state | P1 | [007](007-engine-api-lifecycle-spike.md), [008](008-sqlite-driver-durability-spike.md) | SET-02, TR-05, ADD-04 | `done` |
 | [010](010-upload-stop-and-pause-spike.md) | Measure stopping upload without stopping download | P1 | [007](007-engine-api-lifecycle-spike.md) | TR-01, TR-08, SET-08 | `planned` |
 | [011](011-magnet-metadata-storage-spike.md) | Check magnet metadata retrieval and the final file folder | P1 | [009](009-storage-and-completion-spike.md) | ADD-02, ADD-04, ADD-07 | `planned` |
 | [012](012-macos-trash-and-path-spike.md) | Check the macOS Trash and file path protection | P1 | [003](003-wails-macos-build-spike.md), [007](007-engine-api-lifecycle-spike.md) | DEL-02, DEL-04, STACK-01 | `planned` |

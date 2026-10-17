@@ -21,6 +21,7 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 
 	"octopustorrent/internal/torrentengine/testutil/fixture"
 )
@@ -602,5 +603,33 @@ func assertOnlyPayload(t *testing.T, dir string, fx fixture.Fixture) {
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Errorf("%s holds %q, want exactly %q", dir, got, want)
+	}
+}
+
+// recordingStorage is a storage that only records which torrents were opened in it, and refuses
+// them: the engine's own error is the proof that the peer used it.
+type recordingStorage struct{ opened []string }
+
+func (r *recordingStorage) OpenTorrent(_ context.Context, info *metainfo.Info, _ metainfo.Hash) (storage.TorrentImpl, error) {
+	r.opened = append(r.opened, info.BestName())
+	return storage.TorrentImpl{}, errors.New("the recording storage stores nothing")
+}
+
+func TestAPeerCanTakeItsDefaultStorageAndItsDataDirFromTheCaller(t *testing.T) {
+	data := t.TempDir()
+	rec := &recordingStorage{}
+	p := peer(t, Options{DefaultStorage: rec, DataDir: data})
+	if p.config.DataDir != data {
+		t.Fatalf("DataDir = %q, want %q", p.config.DataDir, data)
+	}
+	if got := p.Settings().Storage; !strings.Contains(got, "given by the caller") {
+		t.Fatalf("Settings.Storage = %q", got)
+	}
+	if _, err := p.Add(metaInfo(t, named(t, "v1-single"))); err == nil {
+		t.Fatal("a torrent added to a refusing default storage was accepted")
+	}
+	// The engine opens the storage once per call that sets the info; how often is its own business.
+	if len(rec.opened) == 0 || rec.opened[0] == "" {
+		t.Fatalf("the recording storage saw %v", rec.opened)
 	}
 }

@@ -1,6 +1,6 @@
 # 009 — Check file placement and persistence of verified-piece state
 
-**Status:** `planned`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** Gate/spike with a recorded result  
@@ -35,10 +35,10 @@ Prove that torrent data is written into the chosen folder, and that the state of
 
 ## Acceptance criteria
 
-- [ ] The torrent's physical files are located exactly in the directory chosen by the user.
-- [ ] After a restart, existing correct bytes are not downloaded again.
-- [ ] Unavailability of the persistent state store has an explicit result, and corrupted or modified files are not shown as 100% verified.
-- [ ] All checks listed below have been performed at the appropriate level; checks that were not performed or failed are not marked as successful.
+- [x] The torrent's physical files are located exactly in the directory chosen by the user.
+- [x] After a restart, existing correct bytes are not downloaded again.
+- [x] Unavailability of the persistent state store has an explicit result, and corrupted or modified files are not shown as 100% verified.
+- [x] All checks listed below have been performed at the appropriate level; checks that were not performed or failed are not marked as successful.
 
 ## Checks
 
@@ -76,3 +76,46 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Write a short result: what was changed, the exact checks with the statuses `pass`, `fail` or `not_run`, ADRs, the actual change locations in the code and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock it and the independent tasks that can continue.
 - Update the documentation, the contract and the README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+### Execution result (17 October 2026)
+
+- **Status:** `done`.
+  - Evidence: [report 009](../../docs/verification/009-storage-and-completion-spike.md).
+  - ADR: [engine-storage](../../docs/decisions/engine-storage.md) (O5 accepted).
+  - Feature: [engine storage](../../docs/app/engine-storage.md).
+- **Decisions:**
+  - one guarded engine storage per torrent, part files off, classic file IO, `AddTorrentOpts.Storage` +
+    `SetInfoBytes`;
+  - the verified-piece marks live in our own `piece-completion.sqlite`, with a loud failure and no
+    fallback; the engine's stores are not linked (`nosqlite,noboltdb`);
+  - `Persistent()` is false (a 64 MiB transfer is 4–5 times faster); the payload is synced once at a
+    clean quit;
+  - a mark is never believed alone: `files.Decide` trusts only the files of a clean earlier run on
+    APFS whose fingerprint is unchanged, hashes the rest, and reports a vanished file as `Missing`;
+  - a save folder on HFS+ is refused (the engine cannot hash there).
+- **Created:**
+  - `internal/library/completion.go`;
+  - `internal/torrentengine/filestore` (guard, marks completion, session record) and `classicio`;
+  - `internal/files` (fingerprints and the rule);
+  - `internal/testutil/volume` (disk images for tests; the `hdiutil` helpers of 008 moved here);
+  - `swarm.MainClassicIO`, `swarm.Options.DefaultStorage` and `DataDir`.
+- **Checks:**
+  - **`go tool devtool check` → `GATE PASSED`** (report, "Final gate").
+  - **Module checks `pass`**, on the real engine, real disks and real volumes: placement for four formats,
+    clean and partial restart, a killed process, a changed or moved file, an edit while the application
+    runs, FAT / exFAT / APFS volumes, a replugged volume, a deleted or replaced save folder, a volume
+    pulled while leeching and while seeding, refused mark writes, a full volume at open. In every failure
+    scenario the stand-in library database is unchanged.
+  - **Mutation checks** show the volume tests and the unverified-piece rule can fail.
+- **`not_run` (with owners):** power-loss durability; the `.app` restart, crash and quit (029, 052); the
+  re-exec in the bundle and shutdown with discovery on (018); the "not clean" marker written before the
+  first payload write (028, 029); quit time with many files (028).
+- **Limitations and handoffs:**
+  - 018: build on `filestore`, `classicio` first in `main` after the `GOPPROF` refusal, the product tags as a
+    gate step, the quit drain;
+  - 020: refuse HFS+ with a message, collisions with the user's files, show the guard's refusals;
+  - 014/023/028/029: persist the record and the "not clean" marker, apply `Decide`, `Missing` to 030;
+  - 010: the transfer that sometimes stands still (finding 22);
+  - 031: `DeleteMarks`; 032: stop the storage before file actions;
+  - the findings 15–24 are in the report; the design's limits are in the ADR.
+- **Next:** [010](010-upload-stop-and-pause-spike.md), [011](011-magnet-metadata-storage-spike.md), [012](012-macos-trash-and-path-spike.md), [013](013-transfer-policy-state-machine.md) or [014](014-sqlite-schema-migrations.md).

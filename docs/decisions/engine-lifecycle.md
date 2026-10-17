@@ -128,7 +128,8 @@ Findings 9–13 are each asserted by a test, so a release that fixes one turns t
 
 **Build facts of the spike.**
 - `go list -deps` with cgo on finds cgo in `go-libutp` and crawshaw sqlite. `-tags
-  nosqlite,disable_libutp` removes both; 009 decides.
+  nosqlite,disable_libutp` removes both. 009 decided: the product builds with `nosqlite,noboltdb`
+  ([engine-storage](engine-storage.md)); `disable_libutp` stays with 018/026.
 - `otool -L` lists only system frameworks, `libc++`, `libobjc`, `libresolv` and `libSystem`.
 - DHT, uTP, the HTTP and UDP trackers, web seeds, WebTorrent with pion WebRTC, and UPnP are all
   compiled in. Only runtime switches disable them.
@@ -153,10 +154,12 @@ Findings 9–13 are each asserted by a test, so a release that fixes one turns t
   measure.
 - **029/030** check existing bytes with the application's own hashing before the engine sees a
   folder, and **031/032** include `.part` names in deletion lists (finding 13).
-- **018** refuses to start with `GOPPROF` or `TORRENT_STORAGE_DEFAULT_FILE_IO` set, proves the
-  shutdown with discovery on, and removes the anacrolix clause of the isolation step.
-- **009** chooses the storage and the build tags. `DataDir` and the default storage must always be
-  set explicitly.
+- **018** refuses to start with `GOPPROF` set, calls `classicio.Require` first in `main` (**009 replaced
+  the rule "refuse `TORRENT_STORAGE_DEFAULT_FILE_IO`" with "require `classic`"**, see
+  [engine-storage](engine-storage.md#file-io)), proves the shutdown with discovery on, and removes the
+  anacrolix clause of the isolation step.
+- **009** chose the storage and the build tags ([engine-storage](engine-storage.md)). `DataDir` is always
+  set, and the default storage is `filestore.Refusing`.
 - **034** deletes the spike app, its rows in the gate and its documents.
 - An engine upgrade re-runs `internal/torrentengine` and `testutil/swarm`. Every finding test that
   turns red is decided again, and this ADR is updated.

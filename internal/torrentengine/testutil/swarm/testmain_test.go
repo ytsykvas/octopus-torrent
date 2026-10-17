@@ -2,10 +2,13 @@ package swarm
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"strings"
 	"testing"
 	"time"
+
+	"octopustorrent/internal/torrentengine/classicio"
 )
 
 type runner func() int
@@ -54,5 +57,51 @@ func TestClientIsTheEngineClientOfThePeer(t *testing.T) {
 	p := peer(t, Options{})
 	if p.Client() == nil || p.Client() != p.client {
 		t.Fatal("Client does not return the peer's engine client")
+	}
+}
+
+func fakeProcess(env map[string]string, execErr error, calls *int) classicio.Process {
+	return classicio.Process{
+		LookupEnv:  func(k string) (string, bool) { v, ok := env[k]; return v, ok },
+		Executable: func() (string, error) { return "/apps/test", nil },
+		Exec:       func(string, []string, []string) error { *calls++; return execErr },
+	}
+}
+
+func TestMainClassicIORunsTheTestsOnceClassicIOIsSet(t *testing.T) {
+	for _, want := range []int{0, 3} {
+		calls := 0
+		code := mainClassicIO(runner(func() int { return want }), fakeProcess(map[string]string{classicio.Variable: "classic"}, nil, &calls))
+		if code != want || calls != 0 {
+			t.Errorf("mainClassicIO = %d with %d restarts, want the tests' %d and none", code, calls, want)
+		}
+	}
+}
+
+func TestMainClassicIOStillRefusesWhatElseChangesTheEngine(t *testing.T) {
+	var out bytes.Buffer
+	replace[io.Writer](t, &mainOutput, &out)
+	t.Setenv("GOPPROF", "http")
+	ran, calls := false, 0
+	code := mainClassicIO(runner(func() int { ran = true; return 0 }), fakeProcess(map[string]string{classicio.Variable: "classic"}, nil, &calls))
+	if code != 1 || ran || !strings.Contains(out.String(), `GOPPROF="http" changes what the engine does`) {
+		t.Fatalf("mainClassicIO = %d, ran %v, output %q", code, ran, out.String())
+	}
+}
+
+func TestMainClassicIOFailsWhenClassicIOCannotBeEnsured(t *testing.T) {
+	for name, env := range map[string]map[string]string{
+		"another value":  {classicio.Variable: "mmap"},
+		"a failed start": nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out bytes.Buffer
+			replace[io.Writer](t, &mainOutput, &out)
+			ran, calls := false, 0
+			code := mainClassicIO(runner(func() int { ran = true; return 0 }), fakeProcess(env, errors.New("exec failed"), &calls))
+			if code != 1 || ran || !strings.Contains(out.String(), classicio.Variable) {
+				t.Fatalf("mainClassicIO = %d, ran %v, output %q", code, ran, out.String())
+			}
+		})
 	}
 }

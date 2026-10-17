@@ -5,6 +5,7 @@ package swarm
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +28,11 @@ import (
 type Options struct {
 	// RateLimit caps payload upload and download at this many bytes per second; 0 is unlimited.
 	RateLimit int
+	// DefaultStorage replaces the peer's file storage for torrents added without storage of their
+	// own. The caller owns it and closes it after the peer.
+	DefaultStorage storage.ClientImpl
+	// DataDir is the engine's own data folder; it defaults to the peer's Dir.
+	DataDir string
 }
 
 // Settings is what a peer's engine configuration allows, for reports and for the tests that prove
@@ -44,7 +50,7 @@ type Peer struct {
 
 	client  *torrent.Client
 	config  *torrent.ClientConfig
-	storage storage.ClientImplCloser
+	storage storage.ClientImplCloser // nil when the caller supplied the default storage
 	logs    *syncBuffer
 	options Options
 	seen    sync.Map // remote address → true, for every peer the engine created
@@ -57,11 +63,15 @@ var newClient = torrent.NewClient
 // NewPeer starts a client that keeps its files in dir and listens on 127.0.0.1 only.
 func NewPeer(dir string, opts Options) (*Peer, error) {
 	p := &Peer{Dir: dir, logs: &syncBuffer{}, options: opts}
-	p.storage = storage.NewFileOpts(storage.NewFileClientOpts{ClientBaseDir: dir, PieceCompletion: storage.NewMapPieceCompletion()})
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.SetListenAddr("127.0.0.1:0")
-	cfg.DataDir = dir
-	cfg.DefaultStorage = p.storage
+	cfg.DataDir = cmp.Or(opts.DataDir, dir)
+	if opts.DefaultStorage != nil {
+		cfg.DefaultStorage = opts.DefaultStorage
+	} else {
+		p.storage = storage.NewFileOpts(storage.NewFileClientOpts{ClientBaseDir: dir, PieceCompletion: storage.NewMapPieceCompletion()})
+		cfg.DefaultStorage = p.storage
+	}
 	cfg.NoDHT, cfg.DisableTrackers, cfg.DisablePEX = true, true, true
 	cfg.NoDefaultPortForwarding, cfg.DisableWebseeds, cfg.DisableWebtorrent = true, true, true
 	cfg.DisableUTP, cfg.DisableIPv6 = true, true
@@ -89,7 +99,7 @@ func NewPeer(dir string, opts Options) (*Peer, error) {
 	}
 	client, err := newClient(cfg)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("start a swarm peer: %w", err), p.storage.Close())
+		return nil, errors.Join(fmt.Errorf("start a swarm peer: %w", err), p.closeStorage())
 	}
 	p.client, p.config = client, cfg
 	return p, nil
@@ -106,7 +116,14 @@ func (p *Peer) Settings() Settings {
 	c := p.config
 	return Settings{DHT: !c.NoDHT, Trackers: !c.DisableTrackers, PEX: !c.DisablePEX, PortForwarding: !c.NoDefaultPortForwarding,
 		WebSeeds: !c.DisableWebseeds, WebTorrent: !c.DisableWebtorrent, UTP: !c.DisableUTP, IPv6: !c.DisableIPv6,
-		RateLimit: p.options.RateLimit, Storage: "files in Dir, piece completion in memory"}
+		RateLimit: p.options.RateLimit, Storage: p.storageDescription()}
+}
+
+func (p *Peer) storageDescription() string {
+	if p.options.DefaultStorage != nil {
+		return "default storage given by the caller"
+	}
+	return "files in Dir, piece completion in memory"
 }
 
 // ListenAddrs are the addresses the peer accepts connections on.
@@ -229,11 +246,19 @@ func Connect(t *torrent.Torrent, peers ...*Peer) {
 // Close stops the client and its storage, then checks that its listen address refuses connections.
 func (p *Peer) Close(ctx context.Context) error {
 	addrs := p.ListenAddrs()
-	errs := append(p.client.Close(), p.storage.Close())
+	errs := append(p.client.Close(), p.closeStorage())
 	for _, a := range addrs {
 		errs = append(errs, Refuses(ctx, a))
 	}
 	return errors.Join(errs...)
+}
+
+// closeStorage closes the storage the peer created; one the caller supplied stays the caller's.
+func (p *Peer) closeStorage() error {
+	if p.storage == nil {
+		return nil
+	}
+	return p.storage.Close()
 }
 
 // Refuses waits until addr refuses TCP connections, and returns an error when it still accepts

@@ -52,6 +52,8 @@ Get an early working `.app`: choose a `.torrent` or paste a magnet, preview the 
 
 This checkpoint must show the gaps between the engine, the DB, Wails and React before all functions are completed. A failed 010 does not forbid independent download checks, but the manual pause must pass the own checks of 025. Unproven independent upload is not marked successful; the full MVP is not accepted before 054.
 
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): the `.app` restart, crash (SIGKILL) and quit scenarios of the storage were `not_run` in 009. Run them here: a clean restart reads no piece, a killed process leaves everything to be verified and downloads nothing valid again, a moved file is reported and not downloaded, a pulled volume leaves nothing on the internal disk, and the library database is untouched in each.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.

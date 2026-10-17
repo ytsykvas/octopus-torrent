@@ -55,6 +55,8 @@ Locating and rechecking existing data is agreed. Do not add arbitrary moving of 
 
 **From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): a folder handed to the engine is checked by the engine itself, which renames every file of a failing piece to `<name>.part` and later overwrites it (finding 13). "A wrongly chosen folder is not overwritten" therefore needs the application's own hash check of the candidate folder before the engine sees it.
 
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): your input is `Decision.Missing` from `files.Decide`. After the owner picks a location, the files there are not trusted: run `Decide` without a record (everything is verified) and let the engine hash. A volume that was only replugged (another device number) is not missing: it is verified in full.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

@@ -29,6 +29,12 @@ caller (014 migrations, 015 repositories)
 
 The decision and the alternatives are in the ADR [sqlite-driver](../decisions/sqlite-driver.md).
 
+**A second database, from 009.** `library.OpenCompletion(ctx, path)` opens the verified-piece marks of
+the engine, `<dataDir>/piece-completion.sqlite`, through `library.Open`: table `piece_completion(infohash,
+piece, complete)`, `user_version` 1. `SaveMarks` writes a batch in one transaction, `LoadMarks` returns one
+torrent's marks, and a database of another version or purpose is `ErrUnsupportedVersion`, never
+`ErrCorrupt`. Its user is `filestore.Completion`; see [engine storage](engine-storage.md).
+
 ## Architecture analysis before the change
 
 - **Layer.** `internal/library` is the repository layer of the

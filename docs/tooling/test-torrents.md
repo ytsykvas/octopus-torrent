@@ -90,6 +90,8 @@ bytes in every format.
 | `Peer.Settings`, `ListenAddrs`, `SeenAddrs`, `Logs` | What the configuration allows, where the peer listens, the address of every peer it saw, and its engine log. |
 | `Peer.Client()` | The raw engine client, for tests of the engine's own API (007). The peer still owns it: close it only through `Peer.Close`. |
 | `Main(m)` | The `TestMain` body of every package that starts engine clients (see below). |
+| `MainClassicIO(m)` | `Main` for a package whose tests need classic file IO: it restarts the test binary with `TORRENT_STORAGE_DEFAULT_FILE_IO=classic` when it is not set (009). |
+| `Options.DefaultStorage`, `Options.DataDir` | A peer can take the engine client's default storage and its data folder from the caller, who closes the storage (009). |
 | `Peer.Close(ctx)`, `Refuses(ctx, addr)` | Stop the client and storage; wait until the address refuses connections. |
 | `NonLoopback(text)`, `WaitEngineStopped(ctx)` | Find non-loopback IP addresses; prove no engine goroutine is left. |
 
@@ -179,6 +181,9 @@ Each engine limitation is a named test, not a skipped one. The tracked items are
 
 ## Change history and evidence
 
+- 2026-10-17, task 009: `swarm.MainClassicIO`, `Options.DefaultStorage` and `DataDir`; the engine's file
+  IO is classic in `internal/torrentengine/filestore`. Disk images for volume scenarios are
+  `internal/testutil/volume` ([report](../verification/009-storage-and-completion-spike.md)).
 - 2026-10-17, task 007: `Peer.Client`, `swarm.Main`; the truncation test waits for the piece checks
   and asserts the rename to `.part` (finding 13). The engine contract tests and the spike app use the
   package ([report](../verification/007-engine-api-lifecycle-spike.md)).
