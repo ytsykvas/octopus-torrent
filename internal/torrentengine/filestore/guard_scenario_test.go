@@ -1,10 +1,10 @@
 package filestore
 
 import (
-	"crypto/sha1"
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -42,7 +42,7 @@ func waitPieces(t *testing.T, tor *torrent.Torrent, n int) {
 	}
 }
 
-// payloadAfter reports whether the leecher received payload during the window.
+// payloadMoved reports whether the leecher received payload during the window.
 func payloadMoved(tor *torrent.Torrent, window time.Duration) bool {
 	before := swarm.Count(tor).PayloadRead
 	time.Sleep(window)
@@ -64,22 +64,6 @@ func storedMarks(t *testing.T, dataDir string, mi *metainfo.MetaInfo) map[int]bo
 	return marks
 }
 
-// hashesRight reports whether the bytes of a piece in a single-file torrent's file match the
-// torrent's hash of it.
-func hashesRight(t *testing.T, info *metainfo.Info, file string, piece int) bool {
-	t.Helper()
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return false
-	}
-	p := info.Piece(piece)
-	if p.Offset()+p.Length() > int64(len(data)) {
-		return false
-	}
-	sum := sha1.Sum(data[p.Offset() : p.Offset()+p.Length()])
-	return metainfo.Hash(sum) == p.V1Hash().Value
-}
-
 func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *testing.T) {
 	for name, vanish := range map[string]func(t *testing.T, root string){
 		"deleted": func(t *testing.T, root string) {
@@ -91,18 +75,14 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 			if err := os.RemoveAll(root); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.Mkdir(root, 0o755); err != nil {
-				t.Fatal(err)
-			}
+			mustMkdir(t, root)
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fx, mi := named(t, "v1-large")
 			seed := seeder(t, fx, mi, swarm.Options{RateLimit: slowRate})
 			saveRoot := filepath.Join(t.TempDir(), "Downloads")
-			if err := os.Mkdir(saveRoot, 0o755); err != nil {
-				t.Fatal(err)
-			}
+			mustMkdir(t, saveRoot)
 			dataDir := t.TempDir()
 			r := start(t, mi, saveRoot, dataDir, runOptions{})
 			if r.addErr != nil {
@@ -114,8 +94,7 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 			vanish(t, saveRoot)
 
 			eventually(t, 5*time.Second, "the loss of the save folder was not noticed", func() bool { return !r.session.Clean() })
-			// the in-flight chunks drain, then the engine has stopped asking for data
-			time.Sleep(300 * time.Millisecond)
+			time.Sleep(drainWait)
 			if payloadMoved(r.torrent, time.Second) {
 				t.Error("the transfer goes on after the save folder is gone")
 			}
@@ -142,10 +121,7 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 
 func TestClosingTheRunMidTransferNeverLeavesAMarkWithoutItsBytes(t *testing.T) {
 	fx, mi := named(t, "v1-large")
-	info, err := mi.UnmarshalInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
+	info := infoOf(t, mi)
 	for attempt := range 3 {
 		saveRoot, dataDir := t.TempDir(), t.TempDir()
 		seed := seeder(t, fx, mi, swarm.Options{RateLimit: slowRate})
@@ -162,7 +138,7 @@ func TestClosingTheRunMidTransferNeverLeavesAMarkWithoutItsBytes(t *testing.T) {
 				t.Errorf("attempt %d: unexpected problem %v", attempt, p)
 			}
 		}
-		file := fx.FilePath(saveRoot, fx.Files[0])
+		bad := badPieces(t, info, saveRoot)
 		marks := storedMarks(t, dataDir, mi)
 		kept := 0
 		for piece, complete := range marks {
@@ -170,7 +146,7 @@ func TestClosingTheRunMidTransferNeverLeavesAMarkWithoutItsBytes(t *testing.T) {
 				continue
 			}
 			kept++
-			if !hashesRight(t, &info, file, piece) {
+			if slices.Contains(bad, piece) {
 				t.Errorf("attempt %d: piece %d is marked complete but its bytes are not on disk", attempt, piece)
 			}
 		}

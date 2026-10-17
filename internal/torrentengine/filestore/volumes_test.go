@@ -58,7 +58,7 @@ func TestRefusedMarkWritesAreReportedWhileTheEngineGoesOnAndTheNextStartVerifies
 		t.Fatalf("complete %d of %d pieces with %d reads, want all verified by reading", len(got), n, second.storage.Reads())
 	}
 	second.connect(seed)
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(idleWindow)
 	if payload := swarm.Count(second.torrent).PayloadRead; payload != 0 {
 		t.Fatalf("%d payload bytes downloaded again", payload)
 	}
@@ -92,9 +92,7 @@ func onVolume(t *testing.T, o volume.Options) (vol *volume.Volume, saveRoot, dat
 	t.Helper()
 	vol = volume.New(t, o)
 	saveRoot = filepath.Join(vol.Mount, "Downloads")
-	if err := os.Mkdir(saveRoot, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdir(t, saveRoot)
 	return vol, saveRoot, t.TempDir()
 }
 
@@ -111,7 +109,7 @@ func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothing
 
 	vol.Detach()
 	eventually(t, 5*time.Second, "the pulled volume was not noticed", func() bool { return !first.session.Clean() })
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(drainWait)
 	if entries, err := os.ReadDir(vol.Mount); err != nil || len(entries) != 0 {
 		t.Fatalf("the mount point on the internal disk holds %v (%v): the engine wrote beside the pulled volume", entries, err)
 	}

@@ -86,11 +86,8 @@ type runOptions struct {
 // decide applies the rehash rule to what the earlier run left.
 func decide(t *testing.T, mi *metainfo.MetaInfo, saveRoot string, prev *files.Record) (files.Decision, int) {
 	t.Helper()
-	info, err := mi.UnmarshalInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ranges, err := Ranges(saveRoot, &info)
+	info := infoOf(t, mi)
+	ranges, err := Ranges(saveRoot, info)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +128,12 @@ func start(t *testing.T, mi *metainfo.MetaInfo, saveRoot, dataDir string, o runO
 	}
 	return r
 }
+
+// drainWait lets the chunks in flight land once the engine has stopped asking for data.
+const drainWait = 300 * time.Millisecond
+
+// idleWindow is how long a connected run must stay without traffic to show that it asks for nothing.
+const idleWindow = 300 * time.Millisecond
 
 // stallWindow is how long a seeder may upload nothing before keepMoving wakes the transfer.
 const stallWindow = 1500 * time.Millisecond

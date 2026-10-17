@@ -115,11 +115,6 @@ func plainStorage(dir string, completion storage.PieceCompletion) storage.Client
 	return storage.NewFileOpts(opts)
 }
 
-// metaKey is the key of a piece of the torrent in the marks.
-func metaKey(mi *metainfo.MetaInfo, piece int) metainfo.PieceKey {
-	return metainfo.PieceKey{InfoHash: mi.HashInfoBytes(), Index: piece}
-}
-
 func mustMkdir(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

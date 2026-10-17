@@ -71,8 +71,8 @@ func TestEveryFormatLandsExactlyWhereLayoutSaysAndNothingElseIsWritten(t *testin
 			if _, err := os.Stat(contentRoot); err != nil {
 				t.Errorf("the content root: %v", err)
 			}
-			if got := listFiles(t, dataDir); len(got) == 0 || !strings.HasPrefix(got[0], CompletionFile) {
-				t.Errorf("the data folder holds %v, want only the marks database", got)
+			if got := listFiles(t, dataDir); len(got) == 0 {
+				t.Error("the data folder is empty, want the marks database")
 			}
 			for _, name := range listFiles(t, dataDir) {
 				if !strings.HasPrefix(name, CompletionFile) {
@@ -107,7 +107,7 @@ func TestATorrentAddedWithoutStorageOfItsOwnIsRefusedAndWritesNothing(t *testing
 }
 
 func TestTheGuardRefusesWhatWouldLeadThroughASymlinkOrTruncateAUsersFile(t *testing.T) {
-	fx, mi := named(t, "v1-tree") // its folder tree/ holds an empty file, empty.dat
+	_, mi := named(t, "v1-tree") // its folder tree/ holds an empty file, empty.dat
 	for name, prepare := range map[string]func(t *testing.T, saveRoot, outside string) (watch string){
 		"a symlink at a file": func(t *testing.T, saveRoot, outside string) string {
 			mustMkdir(t, filepath.Join(saveRoot, "tree", "docs"))
@@ -142,7 +142,6 @@ func TestTheGuardRefusesWhatWouldLeadThroughASymlinkOrTruncateAUsersFile(t *test
 			if after, _ := os.ReadFile(watch); !bytes.Equal(after, before) {
 				t.Fatalf("the user's data changed from %q to %q", before, after)
 			}
-			_ = fx
 			r.quit()
 		})
 	}

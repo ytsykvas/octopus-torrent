@@ -39,10 +39,7 @@ func (p *fakePiece) record(call string) {
 func (p *fakePiece) ReadAt(b []byte, off int64) (int, error) {
 	p.record("ReadAt")
 	n := copy(b, p.data[off:])
-	if p.err != nil {
-		return n, p.err
-	}
-	return n, nil
+	return n, p.err
 }
 
 func (p *fakePiece) WriteAt(b []byte, off int64) (int, error) {

@@ -79,7 +79,8 @@ func without(pieces, remove []int) []int {
 	return out
 }
 
-func info(t *testing.T, mi *metainfo.MetaInfo) *metainfo.Info {
+// infoOf returns the parsed info dictionary of mi.
+func infoOf(t *testing.T, mi *metainfo.MetaInfo) *metainfo.Info {
 	t.Helper()
 	i, err := mi.UnmarshalInfo()
 	if err != nil {
@@ -116,7 +117,7 @@ func TestACleanRestartTrustsTheMarksAndReadsNothing(t *testing.T) {
 		t.Fatalf("complete pieces after the restart = %v, want all", got)
 	}
 	second.connect(seed)
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(idleWindow)
 	if reads, payload := second.storage.Reads(), swarm.Count(second.torrent).PayloadRead; reads != 0 || payload != 0 {
 		t.Fatalf("the restart read %d pieces and downloaded %d payload bytes, want none", reads, payload)
 	}
@@ -253,7 +254,7 @@ func TestAKilledProcessLeavesNothingTrustedAndNothingValidIsDownloadedAgain(t *t
 	if reads, pieces := second.storage.Reads(), int64(second.torrent.NumPieces()); reads != pieces {
 		t.Errorf("the restart read %d pieces, want all %d: nothing may be trusted after a crash", reads, pieces)
 	}
-	for _, p := range badPieces(t, info(t, mi), saveRoot) {
+	for _, p := range badPieces(t, infoOf(t, mi), saveRoot) {
 		if slices.Contains(have, p) {
 			t.Errorf("piece %d has wrong bytes on disk but is marked complete", p)
 		}

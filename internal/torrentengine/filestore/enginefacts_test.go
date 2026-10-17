@@ -139,9 +139,7 @@ func TestAnEngineWithoutTheGuardWritesThroughASymlinkAtTheTorrentPath(t *testing
 	seed := seeder(t, fx, mi, swarm.Options{})
 	saveRoot, outside := t.TempDir(), t.TempDir()
 	target := filepath.Join(outside, "elsewhere.bin")
-	if err := os.WriteFile(target, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	mustWrite(t, target, "")
 	if err := os.Symlink(target, fx.FilePath(saveRoot, fx.Files[0])); err != nil {
 		t.Fatal(err)
 	}
@@ -165,16 +163,13 @@ func TestClassicIOReportsAShortWriteForAPieceThatEndsInsideItsFile(t *testing.T)
 	if err := fx.WritePayload(dir); err != nil {
 		t.Fatal(err)
 	}
-	info, err := mi.UnmarshalInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
+	info := infoOf(t, mi)
 	var session Session
 	s, err := NewTorrentStorage(dir, storage.NewMapPieceCompletion(), &session, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
-	impl, err := s.OpenTorrent(deadline(t, closeLimit), &info, mi.HashInfoBytes())
+	impl, err := s.OpenTorrent(deadline(t, closeLimit), info, mi.HashInfoBytes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,9 +237,7 @@ func TestWithoutTheGuardTheEngineRecreatesADeletedSaveFolder(t *testing.T) {
 	fx, mi := named(t, "v1-large")
 	seed := seeder(t, fx, mi, swarm.Options{RateLimit: slowRate})
 	saveRoot := filepath.Join(t.TempDir(), "Downloads")
-	if err := os.Mkdir(saveRoot, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdir(t, saveRoot)
 	plain := plainStorage(saveRoot, storage.NewMapPieceCompletion())
 	_, tor := plainTorrent(t, mi, plain)
 	connectPlain(t, tor, seed)
