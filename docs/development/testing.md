@@ -85,7 +85,8 @@ real SQLite, never a fake:
 - A refusal must leave the file as it was: compare its SHA-256 and inode before and after.
 - A volume for a test (`internal/testutil/volume`): `volume.New` attaches a small `hdiutil` image (APFS,
   HFS+, ExFAT or MS-DOS; an ExFAT label has at most 11 characters), `Detach` pulls it, `Attach` plugs it
-  again, `Fill` fills it to the last byte. Close every store opened on a volume before it goes away: SQLite
+  again, `AttachAt` plugs it at another folder (another drive in place of the pulled one), `Fill` fills it
+  to the last byte. Close every store opened on a volume before it goes away: SQLite
   keys its locks by device and inode, and a new volume can get the same numbers. A package that attaches
   volumes uses `volume.Main` in `TestMain`, which fails on an image left by an ended run.
 - Engine tests that write files run under classic file IO: `swarm.MainClassicIO` in `TestMain`.

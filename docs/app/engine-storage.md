@@ -53,15 +53,18 @@ The decision and the alternatives are in the ADR [engine-storage](../decisions/e
 
 | API | Contract |
 |---|---|
-| `classicio.Require(Process)` | nil when the variable is `classic`; an error for another value, and for a restarted process that lost it; otherwise restarts the process with the variable and a marker set |
+| `classicio.Require(Process)`, `Current()` | nil when the variable is `classic`; an error for another value, and for a restarted process that lost it; otherwise restarts the process with the variable and a marker set. `Current()` is the real process; tests pass a fake |
+| `classicio.Variable`, `Restarted` | The engine's variable (`TORRENT_STORAGE_DEFAULT_FILE_IO`) and the marker of a restarted process (`OCTOPUS_CLASSIC_IO_RESTARTED`) |
 | `library.OpenCompletion`, `LoadMarks`, `SaveMarks`, `Close` | Marks per (infohash, piece); a batch is one transaction; `ErrUnsupportedVersion` for another version or purpose, also for another table at the same version |
-| `filestore.OpenCompletion`, `NewCompletion` | `storage.PieceCompletion`; reads a torrent once, with no lock held; batches of ≤ 256 rows every 250 ms; sticky `Err`; `Persistent()` false; `Distrust`, `Unresolved`, `Closed`; `Close` flushes |
+| `filestore.OpenCompletion`, `NewCompletion` | `storage.PieceCompletion`; reads a torrent once, with no lock held; batches of ≤ 256 rows every 250 ms; sticky `Err`; `Persistent()` false; `Distrust`, `Unresolved`, `Closed`; `Close` flushes. `OpenCompletion` opens `<dataDir>/` + `CompletionFile` (`piece-completion.sqlite`) |
+| `filestore.Session` | The storage problems of one run: `Fail` records one (at most 100 are kept, `Dropped` counts the rest), `Problems` returns a copy, `Clean` is true only with none |
 | `filestore.NewTorrentStorage` | A guarded engine storage for one torrent. A relative, unclean, missing or non-folder path, and an HFS+ folder, are errors. A nil logger discards the engine's logs |
 | `TorrentStorage.Stop`, `Reads`, `Baseline`, `Seal` | Refuse and await operations (a timed-out `Stop` makes the session unclean); count piece reads; keep the files an earlier run left trusted or missing; sync and return the record (after a drained `Stop` and closed marks) |
 | `filestore.Layout`, `Ranges` | The content root and every file path by the engine's rule; with the pieces each file covers |
 | `filestore.Refusing()` | The client's default storage |
-| `files.Record`, `files.Decide`, `files.Decision` | What a run leaves; the rule, given the torrent's own layout; `VerifyAll`, `VerifyPieces`, `Trusted`, `Missing` |
-| `files.Stat`, `IdentityOf`, `FileSystem`, `Probe` | Fingerprint of a file (size, mtime, ctime, inode); identity of a folder or volume root (device, inode, creation time); the file system type; the seam |
+| `files.Record`, `FileState`, `FileRange` | What a run leaves (clean flag, file system, device, one `FileState` per file: present and its fingerprint); a file of the torrent with the pieces it covers, `[First, End)`, always taken from the torrent |
+| `files.Decide`, `files.Decision`, `Distrusted` | The rule, given the torrent's own layout; `VerifyAll`, `VerifyPieces`, `Trusted`, `Missing`; `Distrusted(pieces)` is the list to pass to `Completion.Distrust` |
+| `files.Stat`, `Fingerprint`, `IdentityOf`, `Identity`, `FileSystem`, `Probe`, `System` | Fingerprint of a file (size, mtime, ctime, inode); identity of a folder or volume root (device, inode, creation time); the file system type; the seam and its real implementation |
 
 Errors: `ErrRootChanged`, `ErrStopped`, `ErrNotStopped`, `ErrNotClosed`, `ErrFileSystem`, `ErrUnsafePath`,
 `ErrNoSaveFolder`, `ErrClosed`, `library.ErrUnsupportedVersion`. A failed write of marks is reported by `Err` and by every later `Set`.
@@ -80,8 +83,10 @@ The scenarios, all on the real engine in a closed loopback swarm:
 
 ## Implementation and reuse
 
-`internal/torrentengine/filestore`: `completion.go` (marks), `guard.go` (`TorrentStorage`, `Seal`),
-`storage.go` (`NewTorrentStorage`, `Layout`, `Refusing`), `session.go`. `internal/files`: `fingerprint.go`,
+`internal/torrentengine/filestore`: `completion.go` (marks), `guard.go` (`TorrentStorage`, `Stop`, the
+guarded pieces), `track.go` (which files were written, verified or changed from outside), `seal.go`
+(`Baseline`, `Seal`, the payload fsync), `safepath.go` (symlink and truncation refusals), `storage.go`
+(`NewTorrentStorage`, `Layout`, `Ranges`, `Refusing`), `session.go`. `internal/files`: `fingerprint.go`,
 `trust.go`. `internal/library/completion.go`. Test support: `swarm.MainClassicIO`, `swarm.Options`
 (`DefaultStorage`, `DataDir`), `internal/testutil/volume`.
 
