@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 
+	"octopustorrent/internal/files"
 	"octopustorrent/internal/torrentengine/testutil/fixture"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
 )
@@ -82,12 +85,26 @@ type run struct {
 	storage    *TorrentStorage
 	torrent    *torrent.Torrent
 	addErr     error
+	stopMoving func()         // ends the wake-ups of connect
+	decision   files.Decision // what the rehash rule decided at the start
+	record     files.Record   // what the run left at its quit
 }
 
 type runOptions struct {
 	rateLimit  int
-	distrusted []int // pieces the engine must verify instead of trusting
+	prev       *files.Record // what the earlier run left; nil is "no clean quit"
+	trustMarks bool          // skip the rule: believe every stored mark (to show why the rule exists)
 	completion Options
+}
+
+// decide applies the rehash rule to what the earlier run left.
+func decide(t *testing.T, mi *metainfo.MetaInfo, saveRoot string, prev *files.Record) (files.Decision, int) {
+	t.Helper()
+	info, err := mi.UnmarshalInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files.Decide(prev, saveRoot, info.NumPieces(), files.System{}), info.NumPieces()
 }
 
 // start begins a run: it adds the torrent with its info and its own storage, and asks for all of it,
@@ -99,15 +116,23 @@ func start(t *testing.T, mi *metainfo.MetaInfo, saveRoot, dataDir string, o runO
 	if r.completion, err = OpenCompletion(deadline(t, closeLimit), dataDir, r.session, o.completion); err != nil {
 		t.Fatal(err)
 	}
-	if len(o.distrusted) > 0 {
-		r.completion.Distrust(mi.HashInfoBytes(), o.distrusted)
-	}
 	if r.storage, err = NewTorrentStorage(saveRoot, r.completion, r.session, nil); err != nil {
 		t.Fatal(err)
+	}
+	if !o.trustMarks {
+		var pieces int
+		r.decision, pieces = decide(t, mi, saveRoot, o.prev)
+		r.completion.Distrust(mi.HashInfoBytes(), r.decision.Distrusted(pieces))
+		r.storage.Baseline(o.prev, r.decision)
 	}
 	if r.peer, err = swarm.NewPeer(t.TempDir(), swarm.Options{RateLimit: o.rateLimit, DefaultStorage: Refusing(), DataDir: dataDir}); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("engine log of the run:\n%s", r.peer.Logs())
+		}
+	})
 	r.torrent, _ = r.peer.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: r.storage})
 	if r.addErr = r.torrent.SetInfoBytes(mi.InfoBytes); r.addErr == nil {
 		r.torrent.DownloadAll()
@@ -115,19 +140,95 @@ func start(t *testing.T, mi *metainfo.MetaInfo, saveRoot, dataDir string, o runO
 	return r
 }
 
-// download connects the seeder and waits until the torrent is complete.
-func (r *run) download(seeder *swarm.Peer) {
+// stallWindow is how long a seeder may upload nothing before keepMoving wakes the transfer.
+const stallWindow = 1500 * time.Millisecond
+
+// keepMoving wakes a transfer that stands still. The pinned engine stalls now and then (finding 22):
+// one request sits unserved in the seeder's queue, and both sides wait for ever. It was seen only when
+// the process runs slowly (-race: 4% of fresh transfers with classic file IO, 2% with mmap; none
+// without it), and a second upload switch off and on, 50 ms apart, serves the request (finding 14).
+// When the seeder has uploaded nothing for stallWindow, the helper does that and counts it; the count
+// is logged at the end of the test. It stops with the test.
+func keepMoving(t *testing.T, seeder *swarm.Peer, infoHash metainfo.Hash) (stopMoving func()) {
+	t.Helper()
+	st, ok := seeder.Client().Torrent(infoHash)
+	if !ok {
+		t.Fatal("the seeder does not hold the torrent")
+	}
+	var wakes atomic.Int64
+	var once sync.Once
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		tick := time.NewTicker(100 * time.Millisecond)
+		defer tick.Stop()
+		last, since := swarm.Count(st).PayloadWritten, time.Now()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+			}
+			if now := swarm.Count(st).PayloadWritten; now != last {
+				last, since = now, time.Now()
+			} else if time.Since(since) >= stallWindow {
+				st.DisallowDataUpload()
+				time.Sleep(50 * time.Millisecond)
+				st.AllowDataUpload()
+				wakes.Add(1)
+				since = time.Now()
+			}
+		}
+	}()
+	stopMoving = func() {
+		once.Do(func() {
+			close(stop)
+			<-done
+			if n := wakes.Load(); n > 0 {
+				t.Logf("the stalled transfer was woken %d time(s) (engine finding 22)", n)
+			}
+		})
+	}
+	t.Cleanup(stopMoving)
+	return stopMoving
+}
+
+// connect gives the torrent the seeder as its only peer, and keeps the transfer moving until the run
+// ends.
+func (r *run) connect(seeder *swarm.Peer) {
 	r.t.Helper()
 	swarm.Connect(r.torrent, seeder)
+	r.stopMoving = keepMoving(r.t, seeder, r.torrent.InfoHash())
+}
+
+// connectPlain is connect for a torrent that is not part of a run.
+func connectPlain(t *testing.T, tor *torrent.Torrent, seeder *swarm.Peer) {
+	t.Helper()
+	swarm.Connect(tor, seeder)
+	keepMoving(t, seeder, tor.InfoHash())
+}
+
+// download connects the seeder and waits until the torrent is complete. A transfer that stands still
+// for good is reported with the engine's own status of both sides.
+func (r *run) download(seeder *swarm.Peer) {
+	r.t.Helper()
+	r.connect(seeder)
 	if err := swarm.WaitComplete(deadline(r.t, transferLimit), r.torrent); err != nil {
-		r.t.Fatal(err)
+		var leech, seed bytes.Buffer
+		r.peer.Client().WriteStatus(&leech)
+		seeder.Client().WriteStatus(&seed)
+		r.t.Fatalf("%v\nleecher status:\n%s\nseeder status:\n%s", err, leech.String(), seed.String())
 	}
 }
 
-// quit ends the run the way the application does: the client first, then the storage (waiting for
-// operations in flight), then the marks. It returns the problems of the session.
-func (r *run) quit() []error {
+// end ends the run the way the application does: the client first, then the storage (waiting for
+// operations in flight), then the marks, then the seal of the record. It returns the problems of the
+// session and the error of Seal.
+func (r *run) end() (problems []error, sealErr error) {
 	r.t.Helper()
+	if r.stopMoving != nil {
+		r.stopMoving()
+	}
 	ctx := deadline(r.t, closeLimit)
 	if err := r.peer.Close(ctx); err != nil {
 		r.t.Error(err)
@@ -138,11 +239,36 @@ func (r *run) quit() []error {
 	if err := r.completion.Close(); err != nil {
 		r.t.Error(err)
 	}
-	return r.session.Problems()
+	r.record, sealErr = r.storage.Seal()
+	return r.session.Problems(), sealErr
 }
 
-// files lists every regular file and symlink below dir, as paths relative to it.
-func files(t *testing.T, dir string) []string {
+// quit is end for a run that is expected to leave cleanly: any problem fails the test.
+func (r *run) quit() []error {
+	r.t.Helper()
+	problems, sealErr := r.end()
+	if sealErr != nil {
+		r.t.Error(sealErr)
+	}
+	return problems
+}
+
+// quitCleanly stops the download first and lets the writes in flight finish, as the application does
+// before it closes the engine, so that nothing reaches the storage after Stop.
+func (r *run) quitCleanly() {
+	r.t.Helper()
+	r.torrent.DisallowDataDownload()
+	time.Sleep(300 * time.Millisecond)
+	if problems := r.quit(); len(problems) != 0 {
+		r.t.Fatalf("session problems: %v", problems)
+	}
+	if !r.record.Clean {
+		r.t.Fatal("the record is not clean")
+	}
+}
+
+// listFiles lists every regular file and symlink below dir, as paths relative to it.
+func listFiles(t *testing.T, dir string) []string {
 	t.Helper()
 	var out []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -167,7 +293,7 @@ func TestEveryFormatLandsExactlyWhereLayoutSaysAndNothingElseIsWritten(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := files(t, wd)
+	before := listFiles(t, wd)
 	for _, name := range []string{"v1-single", "v1-tree", "hybrid-single", "hybrid-tree"} {
 		t.Run(name, func(t *testing.T) {
 			fx, mi := named(t, name)
@@ -206,7 +332,7 @@ func TestEveryFormatLandsExactlyWhereLayoutSaysAndNothingElseIsWritten(t *testin
 				}
 			}
 			var onDisk []string
-			for _, rel := range files(t, saveRoot) {
+			for _, rel := range listFiles(t, saveRoot) {
 				onDisk = append(onDisk, filepath.Join(saveRoot, rel))
 			}
 			wantPaths := slices.Clone(layout)
@@ -217,20 +343,20 @@ func TestEveryFormatLandsExactlyWhereLayoutSaysAndNothingElseIsWritten(t *testin
 			if _, err := os.Stat(contentRoot); err != nil {
 				t.Errorf("the content root: %v", err)
 			}
-			if got := files(t, dataDir); len(got) == 0 || !strings.HasPrefix(got[0], CompletionFile) {
+			if got := listFiles(t, dataDir); len(got) == 0 || !strings.HasPrefix(got[0], CompletionFile) {
 				t.Errorf("the data folder holds %v, want only the marks database", got)
 			}
-			for _, name := range files(t, dataDir) {
+			for _, name := range listFiles(t, dataDir) {
 				if !strings.HasPrefix(name, CompletionFile) {
 					t.Errorf("the data folder holds %s", name)
 				}
 			}
-			if got := files(t, ownDir); len(got) != 0 {
+			if got := listFiles(t, ownDir); len(got) != 0 {
 				t.Errorf("the peer's own folder holds %v: something was stored by the default", got)
 			}
 		})
 	}
-	if after := files(t, wd); !slices.Equal(before, after) {
+	if after := listFiles(t, wd); !slices.Equal(before, after) {
 		t.Errorf("the working directory changed from %v to %v", before, after)
 	}
 }
@@ -248,10 +374,10 @@ func TestATorrentAddedWithoutStorageOfItsOwnIsRefusedAndWritesNothing(t *testing
 	} else if !strings.Contains(err.Error(), ErrNoSaveFolder.Error()) {
 		t.Fatalf("Add = %v, want %q", err, ErrNoSaveFolder)
 	}
-	if got := files(t, dataDir); len(got) != 0 {
+	if got := listFiles(t, dataDir); len(got) != 0 {
 		t.Fatalf("the data folder holds %v", got)
 	}
-	if got := files(t, p.Dir); len(got) != 0 {
+	if got := listFiles(t, p.Dir); len(got) != 0 {
 		t.Fatalf("the peer folder holds %v", got)
 	}
 }

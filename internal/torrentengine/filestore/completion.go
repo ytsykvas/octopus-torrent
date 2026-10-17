@@ -245,7 +245,11 @@ func (c *Completion) Close() error {
 		c.mu.Lock()
 		failed := c.err
 		c.mu.Unlock()
-		c.closeErr = errors.Join(failed, c.marks.Close())
+		closeErr := c.marks.Close()
+		if closeErr != nil {
+			c.session.Fail(fmt.Errorf("close the piece marks: %w", closeErr))
+		}
+		c.closeErr = errors.Join(failed, closeErr)
 	})
 	return c.closeErr
 }

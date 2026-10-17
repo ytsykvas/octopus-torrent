@@ -7,12 +7,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"syscall"
 
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/segments"
 	"github.com/anacrolix/torrent/storage"
+
+	"octopustorrent/internal/files"
 )
 
 var (
@@ -22,6 +26,11 @@ var (
 	ErrRootChanged = errors.New("the save folder is no longer the folder this storage was made for")
 	// ErrStopped is returned by an operation that reaches the storage after Stop.
 	ErrStopped = errors.New("the torrent storage is stopped")
+	// ErrFileSystem is returned for a save folder on a file system the pinned engine cannot hash on.
+	ErrFileSystem = errors.New("the engine cannot verify pieces on this file system")
+	// ErrNotStopped is returned by Seal before Stop: while operations can still change files, no
+	// record of them can be exact.
+	ErrNotStopped = errors.New("the torrent storage is not stopped")
 )
 
 // operation kinds: only a mutation after Stop makes the session unclean; a refused read changes nothing.
@@ -50,9 +59,26 @@ type TorrentStorage struct {
 	mu      sync.RWMutex
 	stopped bool
 	flight  sync.WaitGroup
+
+	trackMu sync.Mutex
+	tracks  []fileTrack                // the torrent's files, in the engine's order
+	index   segments.Index             // which files a byte range of the torrent falls in
+	left    map[int]files.FileState    // file index → the file as this run last left it
+	base    map[string]files.FileState // path → the file as an earlier run left it, trusted and kept
+}
+
+// fileTrack is one file of the torrent: where it is and which pieces it covers.
+type fileTrack struct {
+	path       string
+	first, end int
 }
 
 var _ storage.ClientImpl = (*TorrentStorage)(nil)
+
+// unsupportedFileSystems are the file systems on which the engine's classic file IO cannot hash a
+// piece: it seeks with SEEK_DATA, which HFS+ does not support, so every piece fails its check and the
+// download never completes (finding 21). APFS, exFAT and FAT work.
+var unsupportedFileSystems = []string{"hfs"}
 
 // newTorrentStorage guards inner for the save folder root, which must be an existing, clean,
 // absolute folder.
@@ -61,14 +87,24 @@ func newTorrentStorage(inner storage.ClientImpl, root string, session *Session) 
 		return nil, fmt.Errorf("the save folder %q is not a clean absolute path", root)
 	}
 	info, err := os.Stat(root)
+	var fsType string
+	if err == nil {
+		fsType, err = files.FileSystem(root)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("the save folder: %w", err)
+	}
+	if slices.Contains(unsupportedFileSystems, fsType) {
+		return nil, fmt.Errorf("%w: %s (task 009, finding 21)", ErrFileSystem, fsType)
 	}
 	if !info.IsDir() {
 		return nil, fmt.Errorf("the save folder %q is not a folder", root)
 	}
 	st := info.Sys().(*syscall.Stat_t)
-	return &TorrentStorage{inner: inner, root: root, rootDev: uint64(st.Dev), rootIno: st.Ino, session: session}, nil
+	return &TorrentStorage{
+		inner: inner, root: root, rootDev: uint64(st.Dev), rootIno: st.Ino, session: session,
+		left: map[int]files.FileState{}, base: map[string]files.FileState{},
+	}, nil
 }
 
 // enter admits one operation: not after Stop, and only while the save folder is the recorded one.
@@ -165,12 +201,120 @@ func (s *TorrentStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, i
 	if extra := unsupported(impl); extra != "" {
 		return storage.TorrentImpl{}, errors.Join(fmt.Errorf("the engine storage offers %s, which the guard does not cover", extra), closeImpl())
 	}
+	if err := s.track(info); err != nil {
+		return storage.TorrentImpl{}, errors.Join(err, closeImpl())
+	}
 	return storage.TorrentImpl{
 		Piece: func(p metainfo.Piece) storage.PieceImpl {
-			return &guardedPiece{s: s, inner: impl.Piece(p), length: p.Length()}
+			return &guardedPiece{s: s, inner: impl.Piece(p), offset: p.Offset(), length: p.Length()}
 		},
 		Close: closeImpl,
 	}, nil
+}
+
+// track learns the torrent's files from its info, once.
+func (s *TorrentStorage) track(info *metainfo.Info) error {
+	s.trackMu.Lock()
+	defer s.trackMu.Unlock()
+	if s.tracks != nil {
+		return nil
+	}
+	_, paths, err := Layout(s.root, info)
+	if err != nil {
+		return err
+	}
+	tracks := make([]fileTrack, len(paths))
+	for i, f := range info.UpvertedFiles() {
+		tracks[i] = fileTrack{paths[i], f.BeginPieceIndex(info.PieceLength), f.EndPieceIndex(info.PieceLength)}
+	}
+	s.tracks, s.index = tracks, info.FileSegmentsIndex()
+	return nil
+}
+
+// touched records the files that the byte range [start, start+length) of the torrent falls in as the
+// run now leaves them: a write, or the verification of a piece, is the last thing this run did to
+// them. An outside edit made later changes the fingerprint and shows at the next start.
+func (s *TorrentStorage) touched(start, length int64) {
+	s.trackMu.Lock()
+	defer s.trackMu.Unlock()
+	for i := range s.index.LocateIter(segments.Extent{Start: start, Length: length}) {
+		fp, err := files.Stat(s.tracks[i].path)
+		if err != nil {
+			delete(s.left, i)
+			continue
+		}
+		s.left[i] = files.FileState{Path: s.tracks[i].path, Present: true, Fingerprint: fp,
+			FirstPiece: s.tracks[i].first, EndPiece: s.tracks[i].end}
+	}
+}
+
+// Baseline keeps the state an earlier run left for the files that decision trusts, so that a file
+// this run never touches is still described at the next start as the earlier run left it, and an
+// outside edit made in between is not taken for the run's own work. Call it before the torrent is added.
+func (s *TorrentStorage) Baseline(rec *files.Record, decision files.Decision) {
+	if rec == nil {
+		return
+	}
+	s.trackMu.Lock()
+	defer s.trackMu.Unlock()
+	for _, f := range rec.Files {
+		if slices.Contains(decision.Trusted, f.Path) {
+			s.base[f.Path] = f
+		}
+	}
+}
+
+// Seal syncs every payload file this run wrote and returns the record the next start decides by.
+// Call it after Stop and after the marks are closed. A file that cannot be synced makes the run
+// unclean. The record is Clean only if the whole session had no storage problem.
+func (s *TorrentStorage) Seal() (files.Record, error) {
+	s.mu.RLock()
+	stopped := s.stopped
+	s.mu.RUnlock()
+	if !stopped {
+		return files.Record{}, ErrNotStopped
+	}
+	s.trackMu.Lock()
+	defer s.trackMu.Unlock()
+	var errs []error
+	fail := func(err error) {
+		errs = append(errs, err)
+		s.session.Fail(err)
+	}
+	var rec files.Record
+	if root, err := files.Stat(s.root); err != nil {
+		fail(fmt.Errorf("the save folder: %w", err))
+	} else {
+		rec.Dev = root.Dev
+	}
+	var err error
+	if rec.FileSystem, err = files.FileSystem(s.root); err != nil {
+		fail(fmt.Errorf("the file system of the save folder: %w", err))
+	}
+	for i, t := range s.tracks {
+		state := files.FileState{Path: t.path, FirstPiece: t.first, EndPiece: t.end}
+		if left, ok := s.left[i]; ok {
+			if err := syncFile(t.path); err != nil {
+				fail(err)
+			} else {
+				state = left
+			}
+		} else if base, ok := s.base[t.path]; ok {
+			state = base
+		}
+		rec.Files = append(rec.Files, state)
+	}
+	rec.Clean = s.session.Clean()
+	return rec, errors.Join(errs...)
+}
+
+// syncFile flushes a file to stable storage (F_FULLFSYNC on macOS).
+func syncFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	return errors.Join(f.Sync(), f.Close())
 }
 
 func unsupported(impl storage.TorrentImpl) string {
@@ -191,6 +335,7 @@ func unsupported(impl storage.TorrentImpl) string {
 type guardedPiece struct {
 	s      *TorrentStorage
 	inner  storage.PieceImpl
+	offset int64 // of the piece in the torrent
 	length int64
 }
 
@@ -233,6 +378,7 @@ func (p *guardedPiece) WriteAt(b []byte, off int64) (int, error) {
 	}
 	defer done()
 	n, err := p.inner.WriteAt(b, off)
+	p.s.touched(p.offset+off, int64(len(b)))
 	return n, p.s.note(err)
 }
 
@@ -242,7 +388,9 @@ func (p *guardedPiece) MarkComplete() error {
 		return err
 	}
 	defer done()
-	return p.s.note(p.inner.MarkComplete())
+	err = p.s.note(p.inner.MarkComplete())
+	p.s.touched(p.offset, p.length)
+	return err
 }
 
 func (p *guardedPiece) MarkNotComplete() error {

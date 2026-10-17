@@ -109,7 +109,7 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 			if r.addErr != nil {
 				t.Fatal(r.addErr)
 			}
-			swarm.Connect(r.torrent, seed)
+			r.connect(seed)
 			waitPieces(t, r.torrent, 8)
 
 			vanish(t, saveRoot)
@@ -140,9 +140,15 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 					t.Errorf("the mark of piece %d was lost: %+v %v", piece, c, err)
 				}
 			}
-			problems := r.quit()
+			problems, sealErr := r.end()
 			if len(problems) == 0 || !errors.Is(problems[0], ErrRootChanged) {
 				t.Fatalf("problems %v, want ErrRootChanged first", problems)
+			}
+			if r.record.Clean {
+				t.Error("the record of a run that lost its save folder is clean")
+			}
+			if sealErr == nil {
+				t.Error("Seal did not report the lost save folder")
 			}
 			marks := storedMarks(t, dataDir, mi)
 			for _, piece := range kept {
@@ -176,7 +182,7 @@ func TestWithoutTheGuardTheEngineRecreatesADeletedSaveFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	tor.DownloadAll()
-	swarm.Connect(tor, seed)
+	connectPlain(t, tor, seed)
 	waitPieces(t, tor, 8)
 	if err := os.RemoveAll(saveRoot); err != nil {
 		t.Fatal(err)
@@ -207,7 +213,7 @@ func TestClosingTheRunMidTransferNeverLeavesAMarkWithoutItsBytes(t *testing.T) {
 		if r.addErr != nil {
 			t.Fatal(r.addErr)
 		}
-		swarm.Connect(r.torrent, seed)
+		r.connect(seed)
 		waitPieces(t, r.torrent, 3+attempt*4)
 		// close while chunks keep arriving
 		problems := r.quit()

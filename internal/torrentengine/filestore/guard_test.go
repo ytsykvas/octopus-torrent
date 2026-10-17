@@ -16,6 +16,8 @@ import (
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
+
+	"octopustorrent/internal/testutil/volume"
 )
 
 // fakePiece and fakeInner are test doubles for the engine's file storage: they record the calls
@@ -455,5 +457,16 @@ func TestTheEnginesShortWriteSignalOfAPieceInsideAFileIsNotAStorageProblem(t *te
 	}
 	if !session.Clean() {
 		t.Fatalf("the short-write signal was recorded: %v", session.Problems())
+	}
+}
+
+func TestASaveFolderOnAFileSystemTheEngineCannotHashOnIsRefusedBeforeAnyWrite(t *testing.T) {
+	vol := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctoHFS"})
+	_, err := NewTorrentStorage(vol.Mount, storage.NewMapPieceCompletion(), &Session{}, nil)
+	if !errors.Is(err, ErrFileSystem) {
+		t.Fatalf("NewTorrentStorage on HFS+ = %v, want ErrFileSystem", err)
+	}
+	if got := listFiles(t, vol.Mount); len(got) != 0 {
+		t.Fatalf("the refused volume holds %v", got)
 	}
 }

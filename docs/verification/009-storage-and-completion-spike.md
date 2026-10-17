@@ -171,8 +171,8 @@ Linking the engine into the product and the Wails build tags (018); persisting t
 |---|---|---|
 | A — measurements | `e7ca03e` | `pass` |
 | B — library marks, volume package | `5631f10` | `pass` |
-| C1 — placement and the guard | stage C1 commit | `pass` |
-| C2 — restart, crash, mismatches | — | `not_run` |
+| C1 — placement and the guard | `c239f71` | `pass` |
+| C2 — restart, crash, mismatches | stage C2 commit | `pass` |
 | C3 — volumes | — | `not_run` |
 | D — documents, review, `done` | — | `not_run` |
 
@@ -311,3 +311,75 @@ flags, and the profile it writes covers `filestore`.
     `storage.NewFile`, `NewMMap` and `NewFileOpts` (part files off, no completion) log a line and use
     an in-memory completion; when the database does open, it is `.torrent.db` **in the user's folder**
     (`internal/torrentengine/storage_test.go`).
+
+## Stage C2 — restart, crash, mismatches
+
+**RED** (before the code existed):
+
+| Command | Result |
+|---|---|
+| `go vet ./internal/files` (fingerprint tests) | `fail` as expected: `undefined: Stat` |
+| `go vet ./internal/files` (rule tests) | `fail` as expected: `undefined: Record` |
+| `go vet ./internal/torrentengine/filestore` (seal tests) | `fail` as expected: `s.Seal undefined` |
+
+**GREEN:**
+
+| Command | Result |
+|---|---|
+| `go test -race -count=1 -cover ./internal/files` | `pass`, 100.0% of statements |
+| `go test -race -count=1 -covermode=atomic -coverprofile=… ./internal/torrentengine/filestore`, no block with count 0 | `pass`, 100.0% of statements, 35 s |
+| `go test -race -count=6 ./internal/torrentengine/filestore` | `pass` (206 s) |
+
+**What was built.**
+- `internal/files`: `Stat` (size, mtime, ctime, inode, device, regular), `FileSystem` (`statfs` type
+  name), the `Probe` seam with `System`, and `Decide(record, saveRoot, pieces, probe)`.
+- `TorrentStorage` records each file as the run last left it (after every write, and after the verification
+  of a piece), `Baseline` carries over the files an earlier run left and the rule trusted, and `Seal`
+  syncs the written files and returns the `files.Record`. `Completion.Close` fails the session when
+  the marks store cannot close.
+
+**Rule as built** (changed from the plan after the stage's own review; the reasons are in the ADR):
+- Marks are trusted only for **APFS**. Any other file system is verified in full. HFS+ keeps whole
+  seconds, so a fingerprint taken right after a write proves nothing; exFAT makes up inodes.
+- A file whose fingerprint differs is verified; a file that was there and is gone is `Missing`; a replugged
+  volume (another device) is verified in full, never `Missing`.
+- A fingerprint is the file **as the run left it**, so an outside edit made while the application runs
+  shows at the next start (`TestAnEditMadeWhileTheApplicationRunsIsVerifiedAtTheNextStart`).
+
+**Scenarios on the real engine** (classic IO, `-race`):
+
+| Scenario | Result |
+|---|---|
+| Clean restart after a full download (`v1-tree`) | `pass`: decision is trust; all pieces complete at once; **0 pieces read, 0 payload bytes** after the seeder connects; the record is carried over unchanged |
+| Clean restart after a partial download (K of 64 pieces, stopped mid-way) | `pass`: exactly the K pieces are complete, 0 reads; the second run downloads at most the missing bytes; the file ends equal to the fixture |
+| Process killed with SIGKILL (child process, ≥ 20 pieces reported) | `pass`: no record, so everything is verified (all 64 pieces read); every piece the child had reported is complete; no piece with wrong bytes is complete; nothing valid is downloaded again |
+| A file truncated by a byte / rewritten with the same size / rewritten with the same size and the mtime set back / replaced by an identical copy | `pass` for each: only the file's pieces (piece 0) are verified, 1 piece read, the other four files are trusted, complete pieces equal the pieces whose bytes hash right, and the download repairs the rest |
+| A file moved away | `pass`: `Missing` is that file; nothing is added |
+| Trusted marks over a same-size rewrite (the contrast) | `pass`, i.e. the engine believes the mark: all pieces complete while piece 0 has wrong bytes (finding 20) |
+| An outside edit while the application runs | `pass`: the record keeps the earlier fingerprint, so the next start verifies that file's piece only |
+| Save folder on FAT, exFAT and APFS volumes | `pass`: FAT and exFAT are verified in full (all pieces read); APFS is trusted (0 reads) |
+| APFS volume pulled and plugged again while another volume took its device number | `pass`: the device differs, the decision is "another volume", verify everything, nothing missing |
+
+**Engine findings (numbered after 19).**
+
+20. **The engine believes a stored mark over a file of the right size and never hashes it.** A same-size
+    rewrite stays "complete" (`TestTrustedMarksAreBlindToASameSizeRewrite`). A truncated or missing file is
+    re-downloaded without hashing. This is why a mark is never trusted on its own.
+21. **On HFS+ the engine cannot hash any piece with classic file IO.** It seeks with `SEEK_DATA`, which
+    HFS+ lacks (`seeking to start of extent: inappropriate ioctl for device`). Every piece fails its check and
+    the download never completes (`TestOnHFSPlusTheEngineCannotHashAnyPiece`). FAT, exFAT and APFS work.
+    `NewTorrentStorage` refuses an HFS+ save folder with `ErrFileSystem`. 020 must show this to the owner
+    before an import is confirmed.
+22. **A fresh transfer sometimes stands still for good.** One request sits unserved in the seeder's queue
+    (the pattern of finding 14, with no upload switch used). Measured on the closed loopback swarm, 300
+    fresh transfers of `v1-tree-no-empty` per row, 4 s limit each:
+
+    | | with `-race` | without `-race` |
+    |---|---|---|
+    | classic file IO | 13 stalled (4.3%) | 0 |
+    | mmap file IO | 5 stalled (1.7%) | 0 |
+
+    The stock storage and our storage stall alike (2 and 3 of 80 under `-race`), so it is not the storage. The
+    test helper `keepMoving` switches the seeder's upload off and on 50 ms apart when the seeder uploaded
+    nothing for 1.5 s, and logs the count; the package passed six runs in a row under `-race`. The
+    product's remedy is 010's.
