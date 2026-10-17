@@ -66,6 +66,8 @@ Respect the boundaries of our own DTOs, the repository and the engine adapter. A
 
 **From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): startup calls `classicio.Require` first, creates the data directory, opens `Completion` (an open failure is an explicit error, never a fallback), then per torrent writes "not clean", applies `files.Decide`, `Completion.Distrust`, `TorrentStorage.Baseline` and adds the torrent. Quit stops asking for data, waits for the writes in flight, then `Client.Close` → `TorrentStorage.Stop` → `Completion.Close` → `Seal`, and stores the record and "clean" in one transaction. A killed process never reaches the last step, which is how a crash is seen. The step before `Client.Close` (stop asking for data, wait until the writes in flight have landed) is an open primitive the engine gives no signal for; measure the quit time of a torrent with many files too (`Seal` fsyncs every written file).
 
+**From the 009 checkpoint** ([refactor after 009](../../docs/verification/refactor-after-009.md)): when this task (or 018, whichever touches `run` first) changes `main.go`, split the start test of `main_test.go`: extract `startedOptions(t)` for the repeated start-capture closure, assert the error formatter on its exact JSON text instead of equality with a second formatter, and give the formatter/stderr check its own test; window, assets and bind stay together.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

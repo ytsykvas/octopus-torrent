@@ -41,6 +41,7 @@
 | [The engine version, its lifecycle and who may release what](decisions/engine-lifecycle.md) (O2) | accepted, [007](../product/tasks/007-engine-api-lifecycle-spike.md); [report](verification/007-engine-api-lifecycle-spike.md) |
 | [The SQLite driver and how every library database is opened](decisions/sqlite-driver.md) (O4) | accepted, [008](../product/tasks/008-sqlite-driver-durability-spike.md); [report](verification/008-sqlite-driver-durability-spike.md) |
 | [Where the engine writes, what it remembers, and what the application believes](decisions/engine-storage.md) (O5) | accepted, [009](../product/tasks/009-storage-and-completion-spike.md); [report](verification/009-storage-and-completion-spike.md) |
+| Refactor pass after task 009: patterns, clean code, simplification | owner's request of 17 October 2026; [report](verification/refactor-after-009.md) |
 
 ## Documentation index
 

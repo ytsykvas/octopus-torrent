@@ -109,19 +109,13 @@ func TestACancelledContextIsRefusedByEveryOperation(t *testing.T) {
 	}
 }
 
-func TestAStoreThatCannotBeOpenedIsAnErrorAndCreatesNothing(t *testing.T) {
+// The read-only folder and the other open failures are store_test.go's: OpenCompletion opens through
+// Open.
+func TestAStoreThatCannotBeOpenedIsAnError(t *testing.T) {
 	ctx := deadline(t, 5*time.Second)
 	missing := filepath.Join(t.TempDir(), "no", "such", "folder", "piece-completion.sqlite")
 	if _, err := OpenCompletion(ctx, missing); !errors.Is(err, ErrCannotOpen) {
 		t.Fatalf("a missing folder = %v, want ErrCannotOpen", err)
-	}
-	dir := t.TempDir()
-	readOnly(t, dir)
-	if _, err := OpenCompletion(ctx, filepath.Join(dir, "piece-completion.sqlite")); !errors.Is(err, ErrCannotOpen) {
-		t.Fatalf("a read-only folder = %v, want ErrCannotOpen", err)
-	}
-	if got := names(t, dir); len(got) != 0 {
-		t.Fatalf("the read-only folder now holds %v", got)
 	}
 	if _, err := OpenCompletion(ctx, t.TempDir()); err == nil {
 		t.Fatal("a folder was opened as a store")
@@ -176,7 +170,7 @@ func TestAStoreOfAnotherVersionOrPurposeIsNeverCorruptAndNeverChanged(t *testing
 }
 
 func TestAFullDiskFailsTheBatchWholeAndKeepsEarlierMarks(t *testing.T) {
-	mount := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctopusMarksTest"}).Mount
+	mount := smallVolume(t)
 	path := filepath.Join(mount, "piece-completion.sqlite")
 	c := openMarks(t, path)
 	save(t, c, Mark{hashA, 0, true}, Mark{hashA, 1, true})
@@ -209,31 +203,29 @@ func TestAFullDiskFailsTheBatchWholeAndKeepsEarlierMarks(t *testing.T) {
 }
 
 func TestAStoreWhoseSchemaCannotBeCommittedOnAFullDiskIsAnError(t *testing.T) {
-	t.Run("an empty database on a full disk", func(t *testing.T) {
-		mount := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctopusMarksTest"}).Mount
-		path := filepath.Join(mount, "piece-completion.sqlite")
-		empty, err := Open(deadline(t, 5*time.Second), path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := empty.Close(); err != nil {
-			t.Fatal(err)
-		}
-		// 40 KiB stay free: enough for Open to create its WAL files, too little for the table.
-		filler := volume.Fill(t, mount)
-		if info, err := os.Stat(filler); err != nil {
-			t.Fatal(err)
-		} else if err := os.Truncate(filler, info.Size()-40<<10); err != nil {
-			t.Fatal(err)
-		}
-		c, err := OpenCompletion(deadline(t, 10*time.Second), path)
-		if c != nil {
-			_ = c.Close() // never leave a store open on a volume that is about to go away
-		}
-		if !errors.Is(err, ErrFull) {
-			t.Fatalf("OpenCompletion = %v, want ErrFull", err)
-		}
-	})
+	mount := smallVolume(t)
+	path := filepath.Join(mount, "piece-completion.sqlite")
+	empty, err := Open(deadline(t, 5*time.Second), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := empty.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// 40 KiB stay free: enough for Open to create its WAL files, too little for the table.
+	filler := volume.Fill(t, mount)
+	if info, err := os.Stat(filler); err != nil {
+		t.Fatal(err)
+	} else if err := os.Truncate(filler, info.Size()-40<<10); err != nil {
+		t.Fatal(err)
+	}
+	c, err := OpenCompletion(deadline(t, 10*time.Second), path)
+	if c != nil {
+		_ = c.Close() // never leave a store open on a volume that is about to go away
+	}
+	if !errors.Is(err, ErrFull) {
+		t.Fatalf("OpenCompletion = %v, want ErrFull", err)
+	}
 }
 
 func TestATableChangedBehindTheStoresBackIsReportedNotHidden(t *testing.T) {

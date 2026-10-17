@@ -56,6 +56,8 @@ Respect the boundaries of our own DTOs, the repository and the engine adapter. A
 
 **Basis for technical decisions:** [Go race detector](https://go.dev/doc/articles/race_detector), [Go fuzzing](https://go.dev/doc/tutorial/fuzz). Check signatures and constraints against the pinned version; reading the API is not a passed integration check.
 
+**From the 009 checkpoint** ([refactor after 009](../../docs/verification/refactor-after-009.md)): three tests re-run the test binary as a child process, each with its own launcher — library `child` (`internal/library/process_test.go`), the filestore crash test (`TestLeechChild` in `internal/torrentengine/filestore/restart_test.go`) and the lifecycle deadlock (`TestPinnedEngineDeadlocksOnVerifyAfterDrop` in `internal/torrentengine/lifecycle_test.go`) — and each refuses a marker path outside `os.TempDir()` with its own three lines (library `childPath`, `TestLeechChild`, the lifecycle child). When the forced-termination matrix needs another child, extract one helper in `internal/testutil` (start the test binary for one named test, refuse a marker outside the temporary folder, read its lines, kill it at cleanup) and move these three onto it. Until then `deadline` and `named` stay per package: a shared package needs its own 100% coverage.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

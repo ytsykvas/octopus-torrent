@@ -61,6 +61,8 @@ The schema contains library data, not internal engine objects. Migrations run th
 
 **From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): the verified-piece marks are a second database file, `<dataDir>/piece-completion.sqlite`, opened by `library.OpenCompletion` (table `piece_completion`, `user_version` 1). Its schema precedes your migration policy: apply the same policy to it, and never treat a newer `user_version` as damage (`ErrUnsupportedVersion`). Your schema must also hold, per torrent, the `files.Record` that a clean quit leaves (files, fingerprints, piece ranges, file system type, device, clean flag) and the "not clean" marker that 029 writes before the first payload write.
 
+**From the 009 checkpoint** ([refactor after 009](../../docs/verification/refactor-after-009.md)): when the migration policy generalizes the version check, move `ErrUnsupportedVersion` from `internal/library/completion.go` into `errors.go`, and restructure `ensureCompletionSchema` as: the query error first, then a switch over an empty store (create), the current version (nil) and anything else (`ErrUnsupportedVersion`). The ended-transaction, full-disk and three unsupported-version tests are the branch evidence.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

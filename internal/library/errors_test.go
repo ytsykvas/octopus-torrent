@@ -8,8 +8,8 @@ import (
 	"modernc.org/sqlite"
 )
 
-// kinds lists every kind.
-var kinds = []error{ErrBusy, ErrFull, ErrCannotOpen, ErrReadOnly, ErrCanceled, ErrConstraint, ErrCorrupt}
+// kinds lists every exported error.
+var kinds = []error{ErrBusy, ErrFull, ErrCannotOpen, ErrReadOnly, ErrCanceled, ErrConstraint, ErrCorrupt, ErrReplaced, ErrUnsupportedVersion}
 
 func TestAnUnclassifiedSQLiteErrorPassesThrough(t *testing.T) {
 	s, _ := withTable(t)

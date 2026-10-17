@@ -8,6 +8,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"octopustorrent/internal/testutil/volume"
 )
 
 // deadline gives a context that ends with the test.
@@ -45,9 +47,23 @@ func withTable(t *testing.T) (*Store, string) {
 func withTableUsing(t *testing.T, set settings) (*Store, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "library.sqlite")
+	return tableAt(t, path, set), path
+}
+
+// tableAt opens a store in path with set, closes it after the test, and creates the table
+// rows(id, n, data).
+func tableAt(t *testing.T, path string, set settings) *Store {
+	t.Helper()
 	s := openWith(t, path, set)
 	must(t, s, "CREATE TABLE rows(id INTEGER PRIMARY KEY, n INTEGER, data BLOB)")
-	return s, path
+	return s
+}
+
+// smallVolume attaches an 8 MiB HFS+ volume for the test and returns where it is mounted: small
+// enough to fill in a moment.
+func smallVolume(t *testing.T) string {
+	t.Helper()
+	return volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctopusLibraryTest"}).Mount
 }
 
 // must runs one statement in its own write transaction.
