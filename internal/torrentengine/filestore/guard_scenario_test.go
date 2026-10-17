@@ -113,13 +113,7 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 
 			vanish(t, saveRoot)
 
-			noticed := time.Now().Add(5 * time.Second)
-			for r.session.Clean() {
-				if time.Now().After(noticed) {
-					t.Fatal("the loss of the save folder was not noticed")
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
+			eventually(t, 5*time.Second, "the loss of the save folder was not noticed", func() bool { return !r.session.Clean() })
 			// the in-flight chunks drain, then the engine has stopped asking for data
 			time.Sleep(300 * time.Millisecond)
 			if payloadMoved(r.torrent, time.Second) {

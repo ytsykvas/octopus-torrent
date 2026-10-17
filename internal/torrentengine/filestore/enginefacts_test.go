@@ -300,15 +300,9 @@ func TestWithoutTheGuardTheEngineRecreatesADeletedSaveFolder(t *testing.T) {
 	if err := os.RemoveAll(saveRoot); err != nil {
 		t.Fatal(err)
 	}
-	ctx := deadline(t, transferLimit)
-	for {
-		if _, err := os.Stat(fx.FilePath(saveRoot, fx.Files[0])); err == nil {
-			return // the folder and the file are back: the engine wrote the payload on
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatal("the engine did not recreate the deleted save folder; the guard may no longer be needed (finding 18)")
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
+	// the folder and the file come back: the engine writes the payload on
+	eventually(t, transferLimit, "the engine did not recreate the deleted save folder; the guard may no longer be needed (finding 18)", func() bool {
+		_, err := os.Stat(fx.FilePath(saveRoot, fx.Files[0]))
+		return err == nil
+	})
 }

@@ -35,13 +35,7 @@ func TestRefusedMarkWritesAreReportedWhileTheEngineGoesOnAndTheNextStartVerifies
 
 	first := start(t, mi, saveRoot, dataDir, runOptions{marks: refusingMarks{}, completion: Options{FlushRows: 4}})
 	first.download(seed) // the engine only logs a failed mark and completes the torrent
-	for first.completion.Err() == nil {
-		select {
-		case <-deadline(t, transferLimit).Done():
-			t.Fatal("the refused write was never reported")
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
+	eventually(t, transferLimit, "the refused write was never reported", func() bool { return first.completion.Err() != nil })
 	if !errors.Is(first.completion.Err(), errDiskFull) {
 		t.Fatalf("Err = %v", first.completion.Err())
 	}
@@ -116,13 +110,7 @@ func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothing
 	have := completePieces(first.torrent)
 
 	vol.Detach()
-	noticed := time.Now().Add(5 * time.Second)
-	for first.session.Clean() {
-		if time.Now().After(noticed) {
-			t.Fatal("the pulled volume was not noticed")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	eventually(t, 5*time.Second, "the pulled volume was not noticed", func() bool { return !first.session.Clean() })
 	time.Sleep(300 * time.Millisecond)
 	if entries, err := os.ReadDir(vol.Mount); err != nil || len(entries) != 0 {
 		t.Fatalf("the mount point on the internal disk holds %v (%v): the engine wrote beside the pulled volume", entries, err)
@@ -186,22 +174,10 @@ func TestAVolumePulledWhileSeedingIsNotRecreatedAndTheMarksSurvive(t *testing.T)
 	}
 	swarm.Connect(lt, second.peer)
 	keepMoving(t, second.peer, mi.HashInfoBytes())
-	for swarm.Count(lt).PayloadRead == 0 {
-		select {
-		case <-deadline(t, transferLimit).Done():
-			t.Fatal("nothing was uploaded from the volume")
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
+	eventually(t, transferLimit, "nothing was uploaded from the volume", func() bool { return swarm.Count(lt).PayloadRead > 0 })
 
 	vol.Detach()
-	for second.session.Clean() {
-		select {
-		case <-deadline(t, transferLimit).Done():
-			t.Fatal("the pulled volume was not noticed while seeding")
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
+	eventually(t, transferLimit, "the pulled volume was not noticed while seeding", func() bool { return !second.session.Clean() })
 	if entries, err := os.ReadDir(vol.Mount); err != nil || len(entries) != 0 {
 		t.Fatalf("the mount point holds %v (%v)", entries, err)
 	}

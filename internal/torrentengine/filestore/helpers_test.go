@@ -7,12 +7,27 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 
 	"octopustorrent/internal/library"
 )
+
+// eventually waits until cond holds and fails the test with what once limit has passed. The deadline
+// is taken once, before the first poll.
+func eventually(t *testing.T, limit time.Duration, what string, cond func() bool) {
+	t.Helper()
+	ctx := deadline(t, limit)
+	for !cond() {
+		select {
+		case <-ctx.Done():
+			t.Fatal(what)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
 
 // writeFile returns the path of a regular file, for tests that need a path that is not a folder.
 func writeFile(t *testing.T) string {

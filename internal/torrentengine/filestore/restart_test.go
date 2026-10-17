@@ -149,7 +149,8 @@ func TestAPartialDownloadResumesWithoutReadingOrFetchingWhatIsAlreadyThere(t *te
 	first.connect(seed)
 	waitPieces(t, first.torrent, 20)
 	first.torrent.DisallowDataDownload()
-	time.Sleep(300 * time.Millisecond)
+	quiet(t, first.torrent)  // the chunks in flight have landed
+	settle(t, first.torrent) // and no piece is still being hashed or marked
 	have := completePieces(first.torrent)
 	first.quitCleanly()
 
