@@ -60,15 +60,15 @@ func pause(ctx context.Context, d time.Duration) error {
 }
 
 // pieceBusy reports a piece the engine is still checking: queued, hashing, or storing the result.
-// Tests replace it to reach the deadline branch of settle.
+// Tests replace it to reach the deadline branch of Settle.
 var pieceBusy = func(t *torrent.Torrent, piece int) bool {
 	s := t.PieceState(piece)
 	return s.QueuedForHash || s.Hashing || s.Marking
 }
 
-// settle waits until no piece is busy. VerifyDataContext returns as soon as a piece is hashed,
+// Settle waits until no piece is busy. VerifyDataContext returns as soon as a piece is hashed,
 // before the engine stores whether it passed, so the completion read right after it can be stale.
-func settle(ctx context.Context, t *torrent.Torrent) error {
+func Settle(ctx context.Context, t *torrent.Torrent) error {
 	for slices.ContainsFunc(pieceIndexes(t), func(i int) bool { return pieceBusy(t, i) }) {
 		if err := pause(ctx, 5*time.Millisecond); err != nil {
 			return fmt.Errorf("pieces still being checked: %w", err)

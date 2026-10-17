@@ -239,7 +239,7 @@ func TestPinnedEngineTruncatesAndRenamesExistingFilesAtTorrentPathsOnAdd(t *test
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if err := settle(deadline(t, closeLimit), tor); err != nil {
+		if err := Settle(deadline(t, closeLimit), tor); err != nil {
 			t.Fatal(err)
 		}
 		tor.Drop()

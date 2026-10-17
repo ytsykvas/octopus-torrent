@@ -40,7 +40,7 @@ for test fixtures only. Four things were open:
   - `Client.Close` → wait for `Client.Closed()`, then until every listen address refuses connections
     (`swarm.Refuses`; the engine closes its listeners in a goroutine), then until no engine goroutine
     is left (`swarm.WaitEngineStopped`).
-  - `VerifyDataContext` → wait until no piece is queued, hashing or marking (`swarm`'s `settle`).
+  - `VerifyDataContext` → wait until no piece is queued, hashing or marking (`swarm.Settle`).
 - **Ownership** (018 implements it):
   - The import that got `new=true` owns that `*Torrent`. It may `Drop` it when it is cancelled or
     fails.

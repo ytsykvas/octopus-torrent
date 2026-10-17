@@ -64,7 +64,7 @@ anacrolix/torrent. The open questions were:
   adding one panics.
 - **Engine limitations.** Limitations 1–4, 7 and 8 below are asserted by tests, so a version that fixes
   one turns its test red. Limitations 5 and 6 are timing races: the harness waits them out with
-  `Refuses` and `settle`, and no test can assert them deterministically.
+  `Refuses` and `Settle`, and no test can assert them deterministically.
 - **Swarm tests run in the ordinary `go test -race ./...` step of every gate mode.** They use
   loopback only, not the network. The "engine integration" `not_run` tier stays for 007/018, which
   test our adapter.
@@ -151,7 +151,7 @@ and real-network checks are not part of AI-08.
 - **007:**
   - re-checks the pin and decides the product answer to v2-only torrents (reject on import, or
     wait for a release with the fix);
-  - must not read piece state right after `VerifyDataContext` without the `settle` wait.
+  - must not read piece state right after `VerifyDataContext` without the `Settle` wait.
 - **009** decides the storage:
   - the default mmap IO loses torrents with an empty file inside a chunk;
   - the default piece completion is SQLite through cgo when cgo is on, which is the case for Wails;

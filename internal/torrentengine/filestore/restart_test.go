@@ -32,21 +32,8 @@ import (
 // settle waits until the engine has no piece queued, hashing or storing a verdict.
 func settle(t *testing.T, tor *torrent.Torrent) {
 	t.Helper()
-	ctx := deadline(t, transferLimit)
-	for {
-		busy := false
-		for i := range tor.NumPieces() {
-			s := tor.PieceState(i)
-			busy = busy || s.QueuedForHash || s.Hashing || s.Marking
-		}
-		if !busy {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatal("pieces are still being checked")
-		case <-time.After(5 * time.Millisecond):
-		}
+	if err := swarm.Settle(deadline(t, transferLimit), tor); err != nil {
+		t.Fatal(err)
 	}
 }
 
