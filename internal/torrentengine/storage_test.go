@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent/storage"
 )
 
@@ -51,7 +50,9 @@ func TestTheEnginesOwnConstructorsForgetEveryPieceWhenTheirDatabaseCannotBeOpene
 		"NewFile": func(dir string) storage.ClientImplCloser { return storage.NewFile(dir) },
 		"NewMMap": func(dir string) storage.ClientImplCloser { return storage.NewMMap(dir) },
 		"NewFileOpts, part files off, no completion": func(dir string) storage.ClientImplCloser {
-			return storage.NewFileOpts(storage.NewFileClientOpts{ClientBaseDir: dir, UsePartFiles: g.Some(false)})
+			opts := storage.NewFileClientOpts{ClientBaseDir: dir}
+			opts.UsePartFiles.Set(false)
+			return storage.NewFileOpts(opts)
 		},
 	}
 	for name, open := range constructors {

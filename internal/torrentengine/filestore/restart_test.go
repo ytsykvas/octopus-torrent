@@ -181,10 +181,14 @@ func TestAPartialDownloadResumesWithoutReadingOrFetchingWhatIsAlreadyThere(t *te
 // The child process of the crash test: a leecher that is killed while it works.
 func TestLeechChild(t *testing.T) {
 	spec := os.Getenv(childEnv)
-	if spec == "" {
-		t.Skip("only the crash test starts this")
+	if spec != "" {
+		leechUntilKilled(t, strings.Split(spec, "|"))
 	}
-	parts := strings.Split(spec, "|")
+}
+
+// leechUntilKilled leeches the torrent from the seeder at addr and prints each piece it completes. It
+// never returns: the parent kills the process.
+func leechUntilKilled(t *testing.T, parts []string) {
 	saveRoot, dataDir, addr := parts[0], parts[1], parts[2]
 	_, mi := named(t, "v1-large")
 	r := start(t, mi, saveRoot, dataDir, runOptions{})
@@ -458,15 +462,8 @@ func TestOnlyAPFSVolumesAreTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
 				second.quitCleanly()
 
 				// pulled and plugged again, with another volume taking its device number
-				vol.Detach()
-				other := volume.New(t, volume.Options{Size: "8m", FS: "APFS", Name: "OctoOther"})
-				vol.Attach()
-				_ = other
+				replug(t, vol, saveRoot, second.record.Dev)
 				d, _ := decide(t, mi, saveRoot, &second.record)
-				before, _ := files.Stat(saveRoot)
-				if before.Dev == second.record.Dev {
-					t.Skip("the system gave the volume the same device number again")
-				}
 				if !d.VerifyAll || len(d.Missing) != 0 || !strings.Contains(d.Reason, "another volume") {
 					t.Fatalf("after a replug the decision is %+v, want everything verified and nothing missing", d)
 				}
@@ -494,8 +491,7 @@ func TestOnHFSPlusTheEngineCannotHashAnyPiece(t *testing.T) {
 	fx, mi := named(t, "v1-single")
 	seed := seeder(t, fx, mi, swarm.Options{})
 	vol := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctoHFS"})
-	plain := storage.NewFileOpts(storage.NewFileClientOpts{ClientBaseDir: vol.Mount, PieceCompletion: storage.NewMapPieceCompletion(),
-		UsePartFiles: someFalse()})
+	plain := plainStorage(vol.Mount, storage.NewMapPieceCompletion())
 	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
@@ -514,4 +510,19 @@ func TestOnHFSPlusTheEngineCannotHashAnyPiece(t *testing.T) {
 	if !strings.Contains(p.Logs(), "inappropriate ioctl for device") {
 		t.Fatalf("the engine's log does not show the SEEK_DATA failure:\n%s", p.Logs())
 	}
+}
+
+// replug detaches and attaches a volume again until it gets another device number than before; the
+// system hands out the number it just freed unless another volume takes it first.
+func replug(t *testing.T, vol *volume.Volume, saveRoot string, before uint64) {
+	t.Helper()
+	for attempt := range 4 {
+		vol.Detach()
+		volume.New(t, volume.Options{Size: "8m", FS: "APFS", Name: fmt.Sprintf("OctoOther%d", attempt)})
+		vol.Attach()
+		if now, err := files.Stat(saveRoot); err == nil && now.Dev != before {
+			return
+		}
+	}
+	t.Fatal("the volume kept its device number through four replugs")
 }

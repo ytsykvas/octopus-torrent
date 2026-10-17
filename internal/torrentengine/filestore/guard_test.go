@@ -8,12 +8,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 
@@ -221,7 +221,7 @@ func TestAnOpenFailureOfTheEngineStorageIsReturnedAndRecorded(t *testing.T) {
 
 func TestAnEngineStorageWithMoreThanPieceAndCloseIsRefusedBecauseTheGuardCouldNotCoverIt(t *testing.T) {
 	for name, impl := range map[string]storage.TorrentImpl{
-		"PieceWithHash":  {PieceWithHash: func(metainfo.Piece, g.Option[[]byte]) storage.PieceImpl { return nil }},
+		"PieceWithHash":  withFunc("PieceWithHash"),
 		"Capacity":       {Capacity: capacity()},
 		"NewReader":      {NewReader: func() storage.TorrentReader { return nil }},
 		"NewPieceReader": {NewPieceReader: func(storage.Piece) storage.PieceReader { return nil }},
@@ -469,4 +469,19 @@ func TestASaveFolderOnAFileSystemTheEngineCannotHashOnIsRefusedBeforeAnyWrite(t 
 	if got := listFiles(t, vol.Mount); len(got) != 0 {
 		t.Fatalf("the refused volume holds %v", got)
 	}
+}
+
+// withFunc is a TorrentImpl whose func field of the given name is set to a function that does nothing,
+// whatever the field's signature: the test only needs the field to be non-nil.
+func withFunc(name string) storage.TorrentImpl {
+	var impl storage.TorrentImpl
+	field := reflect.ValueOf(&impl).Elem().FieldByName(name)
+	field.Set(reflect.MakeFunc(field.Type(), func([]reflect.Value) []reflect.Value {
+		out := make([]reflect.Value, field.Type().NumOut())
+		for i := range out {
+			out[i] = reflect.Zero(field.Type().Out(i))
+		}
+		return out
+	}))
+	return impl
 }

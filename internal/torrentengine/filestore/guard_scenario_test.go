@@ -170,8 +170,7 @@ func TestWithoutTheGuardTheEngineRecreatesADeletedSaveFolder(t *testing.T) {
 	if err := os.Mkdir(saveRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plain := storage.NewFileOpts(storage.NewFileClientOpts{ClientBaseDir: saveRoot, PieceCompletion: storage.NewMapPieceCompletion(),
-		UsePartFiles: someFalse()})
+	plain := plainStorage(saveRoot, storage.NewMapPieceCompletion())
 	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)

@@ -172,7 +172,7 @@ Linking the engine into the product and the Wails build tags (018); persisting t
 | A — measurements | `e7ca03e` | `pass` |
 | B — library marks, volume package | `5631f10` | `pass` |
 | C1 — placement and the guard | `c239f71` | `pass` |
-| C2 — restart, crash, mismatches | stage C2 commit | `pass` |
+| C2 — restart, crash, mismatches | `9bc9859` | `pass` |
 | C3 — volumes | — | `not_run` |
 | D — documents, review, `done` | — | `not_run` |
 

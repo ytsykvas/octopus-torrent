@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 )
@@ -21,14 +20,14 @@ var ErrNoSaveFolder = errors.New("the torrent has no save folder: it needs stora
 // the payload under saveRoot, part files off, and the given completion, inside a guard. A nil logger
 // is slog.Default.
 func NewTorrentStorage(saveRoot string, completion storage.PieceCompletion, session *Session, logger *slog.Logger) (*TorrentStorage, error) {
-	inner := storage.NewFileOpts(storage.NewFileClientOpts{
+	opts := storage.NewFileClientOpts{
 		ClientBaseDir:   saveRoot,
 		FilePathMaker:   filePath,
 		PieceCompletion: completion,
-		UsePartFiles:    g.Some(false),
 		Logger:          logger,
-	})
-	return newTorrentStorage(inner, saveRoot, session)
+	}
+	opts.UsePartFiles.Set(false)
+	return newTorrentStorage(storage.NewFileOpts(opts), saveRoot, session)
 }
 
 // filePath is the engine's own default rule for the path of a file below the save folder: the

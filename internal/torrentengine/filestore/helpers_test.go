@@ -1,7 +1,7 @@
 package filestore
 
 import (
-	g "github.com/anacrolix/generics"
+	"github.com/anacrolix/torrent/storage"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,4 +19,10 @@ func writeFile(t *testing.T) string {
 	return path
 }
 
-func someFalse() g.Option[bool] { return g.Some(false) }
+// plainStorage is the engine's own file storage over dir, with part files off and the given
+// completion, with none of our guard.
+func plainStorage(dir string, completion storage.PieceCompletion) storage.ClientImplCloser {
+	opts := storage.NewFileClientOpts{ClientBaseDir: dir, PieceCompletion: completion}
+	opts.UsePartFiles.Set(false)
+	return storage.NewFileOpts(opts)
+}
