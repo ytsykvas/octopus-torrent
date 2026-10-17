@@ -100,4 +100,65 @@ test was run with
 
 ## PR 2 — owned code
 
-Filled in by PR 2.
+| Commit | Items | Change |
+|---|---|---|
+| `432d555` | D4, D12 | Pure moves: `internal/devtool` gets one file per role (`workspace.go`, `docs.go`, `plan.go`, `codexagents.go`, `escapehatches.go`, `toolchain.go`); `devtool.go` keeps the entry point and the shared repository listing. The tooling documents name the new files |
+| `e43f327` | D1–D3, D5–D11 | One packument cache with one store path, the lockfile parsed once, `printOwn` for the docs and plan output, `c.gomod()`/`c.module()`, named cover and lockfile paths, `npm(args...)`, the step lists joined with `slices.Concat`, `waitForPid` and `appWait`, `PlanSummary` returns only the summary |
+| `75f9cc5` | A8, A9, A10(b), A11, B1, B3, B4, E9 | `NewTorrentStorage` takes a `*Completion`; `tracker.seal` calls `syncFile` itself; the guard makes its idle channel up front and Seal reads it; `Layout` returns `paths`; `SaveMarks` with a cancelled context returns `ErrCanceled`; `closeOnce`/`closeErr`; `library/doc.go` rewritten; the fixture's `truncated()` and bencode lists and maps |
+| `46fadf7` | C1, C3–C8 | Every `normalized()` copies, then blanks, and a table proves every request field changes the fingerprint; `IsInfohashV1`/`V2` deleted; `ordering.ts` uses `needsFetch`; one typed `stubGoMethod` for the bridge tests; the operation test waits for `ledger.Shutdown` instead of polling; `slices.Sorted(maps.Keys(…))` |
+| (this commit) | C2 | `getRuntimeInfo` follows the bridge template: `callGo` with a `runtimeInfo` decoder, returning `Result<RuntimeInfo>`. `RuntimeCheck` shows the error's fallback text. The TS test uses the Go JSON pin's values, and each test names the other |
+
+### RED / GREEN
+
+**B1.** `SaveMarks(cancelledCtx, nil)` was added to `TestACancelledContextIsRefusedByEveryOperation`:
+
+- **RED:** `completion_test.go:105: SaveMarks of no marks = context canceled, want ErrCanceled`.
+- **GREEN:** after `return classify(ctx.Err())` in `completion.go`, the test passes.
+
+**C2.** `runtimeInfo.test.ts` gained a malformed answer (no `sqliteVersion`) expecting
+`contract.invalidDto`, and a rejection expecting `bridge.callFailed`:
+
+- **RED:** `npm --prefix frontend test -- src/bridge/runtimeInfo.test.ts` → 3 failures. The old wrapper
+  returned the bare DTO, passed the malformed answer through, and rejected with `binding failed`.
+- **GREEN:** after the decoder, the `callGo` wrapper and the component change, the runtime info, runtime
+  check and `App` tests pass (8 tests).
+
+**Behavior changes in PR 2 (owned code):**
+- `SaveMarks` with a cancelled context and an empty batch returns `ErrCanceled` (B1).
+- `NewTorrentStorage` accepts only `*Completion` (A9). The engine's own completion stores were never
+  used in product code.
+- The runtime check:
+  - refuses a malformed Go answer;
+  - shows the bridge's English fallback (`The application did not answer.` or `The application sent data
+    this window cannot read.`) instead of `Go call failed: <reason>`;
+  - never shows the diagnostic text (C2).
+- `check-plan` problem lines from `plan-nav` carry the `PLAN ` prefix (D5). Every text asserted before is
+  unchanged.
+
+**Dropped after measurement:**
+- **E10, the growing stack buffer in `engineStacks`.**
+  - With it, `go test -race -count=10 ./internal/torrentengine` had 4 failing tests, all stall or
+    metadata timing.
+  - With it reverted, 10 of 10 runs passed. `main` had 1 failure in 10, in
+    `TestPinnedEngineAcceptsInfoBytes…/from a peer's metadata`.
+  - The extra stack captures change the timing the engine tests depend on, so the fixed buffer stays.
+
+### Checks
+
+- After every commit, `go tool devtool check` → `GATE PASSED`. Coverage: Go 100% of blocks (unit tests
+  plus the `.app` run), TS 100% on all four metrics per file.
+- `go test -race -count=20 -run 'Stop|Seal' ./internal/torrentengine/filestore` passes after A10(b).
+- E9: `TestCatalogMatchesTheCommittedTestdata` passes, so the committed fixture bytes are unchanged.
+- **Flakes seen, none caused by this pass:**
+  - The first gate of `e43f327` failed in `internal/enginespike`
+    `TestAStalledTransferIsWokenAndCounted`: 2 recoveries where 1 was expected, an extra natural stall
+    (finding 22). The test passed `-count=5` alone, and the gate rerun passed. The spike has been
+    unchanged since 007 and is deleted by 034.
+  - `TestPinnedEngineAcceptsInfoBytes…/from a peer's metadata` fails about 1 in 10 on `main` too.
+- `not_run`, as before:
+  - engine integration (018);
+  - test-bridge UI tests (035);
+  - `.app` QA of the new runtime-check error text. The gate still launches the `.app` for coverage.
+
+**Debt after PR 2:** none in the code this pass touched. The deferred items keep the owners listed in
+the plan above.

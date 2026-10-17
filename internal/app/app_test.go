@@ -33,6 +33,7 @@ func TestGetRuntimeInfoReportsCompiledGoRuntime(t *testing.T) {
 	}
 }
 
+// The frontend decodes the same values in frontend/src/bridge/runtimeInfo.test.ts.
 func TestRuntimeInfoJSONUsesBridgeFieldNames(t *testing.T) {
 	encoded, err := json.Marshal(RuntimeInfo{GoVersion: "go1.0", OS: "darwin", Arch: "arm64", SQLiteVersion: "3.53.4"})
 	if err != nil {

@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import type { RuntimeInfo } from '../../bridge/runtimeInfo'
+import { describeError } from '../../bridge/contract/errorMessages'
+import type { AppError, Result } from '../../bridge/contract/errors'
+import type { RuntimeInfo } from '../../bridge/contract/runtimeInfo'
 
 type CheckState =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'success'; info: RuntimeInfo }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; error: AppError }
 
 interface RuntimeCheckProps {
-  loadRuntimeInfo: () => Promise<RuntimeInfo>
+  loadRuntimeInfo: () => Promise<Result<RuntimeInfo>>
 }
 
 function statusText(state: CheckState): string {
@@ -30,11 +32,8 @@ export function RuntimeCheck({ loadRuntimeInfo }: RuntimeCheckProps) {
 
   async function check() {
     setState({ kind: 'loading' })
-    try {
-      setState({ kind: 'success', info: await loadRuntimeInfo() })
-    } catch (error) {
-      setState({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
-    }
+    const result = await loadRuntimeInfo()
+    setState(result.ok ? { kind: 'success', info: result.value } : { kind: 'error', error: result.error })
   }
 
   return (
@@ -46,7 +45,7 @@ export function RuntimeCheck({ loadRuntimeInfo }: RuntimeCheckProps) {
       <p>
         <output>{statusText(state)}</output>
       </p>
-      {state.kind === 'error' && <p role="alert">Go call failed: {state.message}</p>}
+      {state.kind === 'error' && <p role="alert">{describeError(state.error).fallback}</p>}
     </section>
   )
 }
