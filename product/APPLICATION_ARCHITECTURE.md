@@ -61,7 +61,7 @@ internal/torrentengine/         interface and anacrolix adapter
 internal/torrentengine/testutil/ fixture (own v1/v2/hybrid test torrents), swarm (closed loopback swarm) (exists, 006)
 internal/torrentengine/          engine contract tests on the pinned version (exist, 007); the adapter comes in 018
 cmd/engine-spike/, internal/enginespike/, frontend/src/spike/   temporary EngineSpike.app (exists, 007; deleted by 034)
-internal/library/               SQLite repositories and migrations
+internal/library/               SQLite: Open/Write/Read and error kinds (008); repositories and migrations
 internal/files/                 access, paths, folders, deletion
 internal/automation/            rules and watch folder
 internal/platform/              Wails runtime, Finder, URL, system dialogs
@@ -127,7 +127,14 @@ For a completed torrent, the text "Completed" and "Seeding" depends on readiness
 | ImportRules / Preferences | Conditions, order, local paths, theme, language, limits, global upload, watch folder and explicit auto-add. |
 | Operations | A non-trivial operation, its state and result; needed to recover an interrupted import/deletion. |
 
-The application uses explicit SQL migrations and transactions through the repository. The driver is chosen based on the build on the Mac, concurrency and CGO requirements and is pinned in the Go module. Payload lives in the selected folder; the library and internal engine data live in the application's data directory.
+The application uses explicit SQL migrations and transactions through the repository. The driver, chosen in [008](tasks/008-sqlite-driver-durability-spike.md) ([ADR](../docs/decisions/sqlite-driver.md)), is `modernc.org/sqlite` (SQLite 3.53.4, no C code), used only in `internal/library`:
+
+- every database is opened by `library.Open`: WAL, `synchronous=FULL` and `fullfsync` on every connection (a commit returns only after it is on stable storage), `busy_timeout` 5 s, foreign keys on;
+- one writer connection whose transactions take the lock at `BEGIN IMMEDIATE`, so writes are serialized (not FIFO: the order of commands for one torrent is the service's queue, STACK-03); a read-only pool of four for snapshots; only the writer checkpoints;
+- `Write`/`Read` take a function over `library.Tx`, whose statements run under the operation's context, so a cancel interrupts them; errors arrive as the package's kinds (`ErrBusy`, `ErrFull`, `ErrCannotOpen`, `ErrReadOnly`, `ErrCanceled`, `ErrConstraint`, `ErrCorrupt`, `ErrReplaced`);
+- a database is never created in place of an existing file, reset or deleted: `Open` creates it `0600` with `O_EXCL`, refuses an empty file beside a WAL with commits, and every write or read first checks that the path still names the opened file.
+
+**Data directory.** The library is `~/Library/Application Support/dev.tsykvas.octopustorrent/library.sqlite`. `OCTOPUS_DATA_DIR` (an absolute folder, validated in Go) replaces the folder: `go tool devtool workspace run` sets it per workspace, the gate's `.app` run sets it to a temporary folder, and tests use their own temporary folders, so none of them opens the owner's library. The first task that reads the data directory (014 or 028) implements this. Payload lives in the selected folder; the library and internal engine data live in the data directory.
 
 Piece completion belongs to the engine's storage backend and does not replace our own SQLite library. Its database is not edited by React or the product repository. Our manualPaused/wanted are stored and restored explicitly through the SQLite repository. Foreign or stale completion markers do not replace checking the actual files.
 

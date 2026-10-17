@@ -24,7 +24,7 @@ React feature ─ prop ─▶ frontend/src/bridge/<area>.ts   callGo(() => Gener
 
 | Method | Answer | Errors | Since |
 |---|---|---|---|
-| `GetRuntimeInfo()` | `RuntimeInfo{goVersion, os, arch}` of the compiled binary | none | 003 |
+| `GetRuntimeInfo()` | `RuntimeInfo{goVersion, os, arch, sqliteVersion}` of the compiled binary; the SQLite version is read once at start (008) | none | 003, 008 |
 | `GetLibrarySnapshot()` | `LibrarySnapshot` of this runtime: revision `"0"`, no torrents until the library exists (034) | none | 005 |
 | `GetOperation(operationID)` | `OperationStatus` recorded by the [operation ledger](operations.md) | `request.invalid` (missing or malformed ID), `operation.notFound` with `params.runtimeID` | 005 |
 

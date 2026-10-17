@@ -39,6 +39,7 @@
 | [Go–TypeScript contract: DTOs, numbers, errors, operations, ordering](decisions/api-contract.md) | accepted, [005](../product/tasks/005-domain-dto-and-bridge-contract.md); [report](verification/005-domain-dto-and-bridge-contract.md) |
 | [Controlled test torrents and a closed local swarm](decisions/controlled-swarm.md) | accepted, [006](../product/tasks/006-controlled-torrent-fixtures.md); [report](verification/006-controlled-torrent-fixtures.md) |
 | [The engine version, its lifecycle and who may release what](decisions/engine-lifecycle.md) (O2) | accepted, [007](../product/tasks/007-engine-api-lifecycle-spike.md); [report](verification/007-engine-api-lifecycle-spike.md) |
+| [The SQLite driver and how every library database is opened](decisions/sqlite-driver.md) (O4) | accepted, [008](../product/tasks/008-sqlite-driver-durability-spike.md); [report](verification/008-sqlite-driver-durability-spike.md) |
 
 ## Documentation index
 
@@ -48,9 +49,10 @@ A feature document (from the [template](_FEATURE_TEMPLATE.md)) records one featu
 
 | Document | Kind | Status | Tasks |
 |---|---|---|---|
-| [Desktop shell, `.app` build, startup and quit](app/desktop-shell.md) | feature | `implemented` (prototype) | [003](../product/tasks/003-wails-macos-build-spike.md), [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
+| [Desktop shell, `.app` build, startup and quit](app/desktop-shell.md) | feature | `implemented` (prototype) | [003](../product/tasks/003-wails-macos-build-spike.md), [005](../product/tasks/005-domain-dto-and-bridge-contract.md), [008](../product/tasks/008-sqlite-driver-durability-spike.md) |
 | [Wails facade](app/facade.md) | reference | current | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
 | [Operation ledger](app/operations.md) | reference | current | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
+| [Library store: SQLite open, write, read](app/library-store.md) | feature | `implemented` (prototype: no schema yet) | [008](../product/tasks/008-sqlite-driver-durability-spike.md) |
 
 ### `bridge/` — Go ↔ TypeScript
 

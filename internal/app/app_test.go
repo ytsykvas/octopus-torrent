@@ -21,26 +21,26 @@ const (
 
 func newApp() (*App, *operations.Ledger) {
 	ledger := operations.NewLedger(runtimeID)
-	return New(ledger), ledger
+	return New(ledger, "3.53.4"), ledger
 }
 
 func TestGetRuntimeInfoReportsCompiledGoRuntime(t *testing.T) {
 	a, _ := newApp()
 	info := a.GetRuntimeInfo()
 
-	want := RuntimeInfo{GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH}
+	want := RuntimeInfo{GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, SQLiteVersion: "3.53.4"}
 	if info != want {
 		t.Fatalf("GetRuntimeInfo() = %+v, want %+v", info, want)
 	}
 }
 
 func TestRuntimeInfoJSONUsesBridgeFieldNames(t *testing.T) {
-	encoded, err := json.Marshal(RuntimeInfo{GoVersion: "go1.0", OS: "darwin", Arch: "arm64"})
+	encoded, err := json.Marshal(RuntimeInfo{GoVersion: "go1.0", OS: "darwin", Arch: "arm64", SQLiteVersion: "3.53.4"})
 	if err != nil {
 		t.Fatalf("json.Marshal: %v", err)
 	}
 
-	const want = `{"goVersion":"go1.0","os":"darwin","arch":"arm64"}`
+	const want = `{"goVersion":"go1.0","os":"darwin","arch":"arm64","sqliteVersion":"3.53.4"}`
 	if string(encoded) != want {
 		t.Fatalf("JSON = %s, want %s", encoded, want)
 	}

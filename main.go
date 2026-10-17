@@ -17,6 +17,7 @@ import (
 	"octopustorrent/internal/app"
 	"octopustorrent/internal/app/contracts"
 	"octopustorrent/internal/app/operations"
+	"octopustorrent/internal/library"
 )
 
 // assets is the built frontend (frontend/dist) compiled into the binary, so the
@@ -31,20 +32,27 @@ const shutdownTimeout = 5 * time.Second
 // main has no branches: all logic lives in run, which is unit-tested; main
 // itself is covered by the instrumented run of the real .app (see README).
 func main() {
-	os.Exit(run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID())))
+	os.Exit(run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID()), library.SQLiteVersion))
 }
 
 // run starts the application of the ledger's runtime through start
-// (wails.Run in production) and returns the process exit code. A start
+// (wails.Run in production) and returns the process exit code. It first reads
+// the bundled SQLite's version through sqliteVersion (an in-memory database,
+// no file): an application whose SQLite does not work does not start. A
 // failure is reported on stderr. Errors cross the bridge as AppError JSON,
 // and quitting stops the ledger's operations.
-func run(start func(*options.App) error, stderr io.Writer, ledger *operations.Ledger) int {
-	err := start(&options.App{
+func run(start func(*options.App) error, stderr io.Writer, ledger *operations.Ledger, sqliteVersion func(context.Context) (string, error)) int {
+	version, err := sqliteVersion(context.Background())
+	if err != nil {
+		fmt.Fprintf(stderr, "OctopusTorrent: read the SQLite version: %v\n", err)
+		return 1
+	}
+	err = start(&options.App{
 		Title:          "OctopusTorrent",
 		Width:          1024,
 		Height:         768,
 		AssetServer:    &assetserver.Options{Assets: assets},
-		Bind:           []any{app.New(ledger)},
+		Bind:           []any{app.New(ledger, version)},
 		ErrorFormatter: app.ErrorFormatter(stderr),
 		OnShutdown:     func(ctx context.Context) { stopOperations(ctx, ledger, stderr) },
 	})

@@ -111,9 +111,10 @@ absolute path passes the gate.
 - **The `.app` run must not touch the owner's data.** Today `main()` only opens a window. Once startup
   opens the library, logs and the engine ([architecture §6](../../product/APPLICATION_ARCHITECTURE.md#6-sqlite-and-restore)),
   every `check` would open the owner's real library and resume real torrents, and would collide with
-  the single-instance lock. The first task that gives the application a data directory (008, 014, 015
-  or 028, whichever comes first) must make the gate launch it with an isolated data directory and save
-  folder (`open --env …`) and fail if the override is not honoured.
+  the single-instance lock. The first task that gives the application a data directory (014, 015 or
+  028, whichever comes first; 008 opens only an in-memory database) must make the gate launch it with
+  an isolated data directory and save folder (`open --env OCTOPUS_DATA_DIR=…`, the variable fixed by
+  [sqlite-driver](sqlite-driver.md)) and fail if the override is not honoured.
 - **Exit 0 for `GATE INCOMPLETE`** in the partial modes is deliberate: they are the TDD loop and the
   network-free run, and the last line says the gate is incomplete. Acceptance is only `GATE PASSED`
   from the full `check`, which exits 1 on any mandatory `not_run`. A caller that needs to tell the two

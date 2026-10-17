@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeInfo } from '../../bridge/runtimeInfo'
 import { RuntimeCheck } from './RuntimeCheck'
 
-const info: RuntimeInfo = { goVersion: 'go1.27.2', os: 'darwin', arch: 'arm64' }
+const info: RuntimeInfo = { goVersion: 'go1.27.2', os: 'darwin', arch: 'arm64', sqliteVersion: '3.53.4' }
 
 describe('RuntimeCheck', () => {
   it('starts with an unchecked status and does not call Go', () => {
@@ -29,7 +29,7 @@ describe('RuntimeCheck', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Checking…')
 
     pending.resolve?.(info)
-    expect(await screen.findByText('Go go1.27.2 · darwin/arm64')).toBeInTheDocument()
+    expect(await screen.findByText('Go go1.27.2 · darwin/arm64 · SQLite 3.53.4')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
@@ -41,7 +41,7 @@ describe('RuntimeCheck', () => {
     expect(button).toHaveFocus()
     await userEvent.keyboard('{Enter}')
 
-    expect(await screen.findByText('Go go1.27.2 · darwin/arm64')).toBeInTheDocument()
+    expect(await screen.findByText('Go go1.27.2 · darwin/arm64 · SQLite 3.53.4')).toBeInTheDocument()
     expect(button).toHaveFocus()
   })
 

@@ -9,6 +9,10 @@
 /cmd/engine-spike/build/bin/
 /cmd/engine-spike/assets/
 
+# Skills Codex generates locally from .claude/commands (owner's decision of 2026-10-17); their
+# relative links point nowhere from there
+/.agents/
+
 # Frontend dependencies (reproduced from the lockfile)
 node_modules/
 # Wails CLI cache: package.json checksum used to skip npm install

@@ -4,6 +4,7 @@ export namespace app {
 	    goVersion: string;
 	    os: string;
 	    arch: string;
+	    sqliteVersion: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RuntimeInfo(source);
@@ -14,6 +15,7 @@ export namespace app {
 	        this.goVersion = source["goVersion"];
 	        this.os = source["os"];
 	        this.arch = source["arch"];
+	        this.sqliteVersion = source["sqliteVersion"];
 	    }
 	}
 

@@ -53,6 +53,8 @@ This is internal data protection during migrations, not a new backup or export f
 
 **Basis for technical decisions:** [SQLite backup](https://www.sqlite.org/backup.html), [PRAGMA](https://www.sqlite.org/pragma.html#pragma_integrity_check). During implementation, check signatures and constraints against the pinned version. Reading API documentation does not replace a completed integration check.
 
+**From 008** ([sqlite-driver](../../docs/decisions/sqlite-driver.md)): `VACUUM INTO` on the pinned driver gives a copy that passes `integrity_check` (measured in the probe), and the driver also exposes SQLite's online backup API (`NewBackup`/`NewRestore` on its connection). `library.Close` may leave a WAL behind (`ErrBusy` while another process reads, `ErrFull` on a full disk): it holds committed changes and must never be deleted. A damaged page and a file that is not a database already arrive as `ErrCorrupt` without touching the file, and so does an empty or missing main file beside a WAL with commits (SQLite alone would delete that WAL). A restored or imported database file chosen by the owner is untrusted: open it with the driver's `_defensive=1` and `trusted_schema=OFF`, check `application_id`, then `integrity_check`.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

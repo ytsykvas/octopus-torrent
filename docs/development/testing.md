@@ -71,12 +71,27 @@ Anything that needs the real torrent engine uses the [test torrents and the loca
 TypeScript reads the files through `src/test/contractExamples.ts` (`example`, `record`,
 `decodedExample`, `manifest`).
 
+## Library tests: real SQLite
+
+Anything that touches the library database uses [the library store](../app/library-store.md) on
+real SQLite, never a fake:
+
+- Open a store in `t.TempDir()`; never a path under the user's folders, and never the default data
+  directory.
+- Prove a guarantee with the real failure: another process holding the lock, a child process killed
+  with SIGKILL, a read-only folder (`chmod 0500`, restored in `t.Cleanup`), a real full volume
+  (`hdiutil` disk image, detached in `t.Cleanup`). A seam is for a failure SQLite cannot be made to
+  produce.
+- A refusal must leave the file as it was: compare its SHA-256 and inode before and after.
+- Statements run through `library.Tx`, so they honour the operation's context.
+
 ## Commands
 
 ```sh
 go test -race ./internal/app/... -run TestName -v
 go test -race -count=1 ./internal/torrentengine/...                 # fixtures, the swarm, the engine contract tests, about 15 s
 go test -race -count=1 ./internal/enginespike ./cmd/engine-spike     # the engine spike app's Go side
+go test -race -count=1 ./internal/library                           # real SQLite: durability, locks, read-only, full disk, about 8 s
 go test ./internal/torrentengine/testutil/fixture -args -update     # rewrite the committed torrents
 npm --prefix frontend test -- src/bridge/contract/errors.test.ts -t 'unknown code'
 npm --prefix frontend run test:coverage     # all files, per-file thresholds

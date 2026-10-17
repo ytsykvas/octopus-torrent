@@ -3,7 +3,7 @@
 **Status:** `accepted`  
 **Date:** 2026-10-14, policy refined on 2026-10-15 by the owner's decision  
 **Task:** [003](../../product/tasks/003-wails-macos-build-spike.md)  
-**Register item:** O2 from the [baseline description](project-baseline.md#6-open-decision-register) — partially: Go, Wails, Node.js, frontend. The anacrolix/torrent version is fixed by [007](../../product/tasks/007-engine-api-lifecycle-spike.md) ([engine-lifecycle](engine-lifecycle.md): v1.61.0), the SQLite driver by [008](../../product/tasks/008-sqlite-driver-durability-spike.md); both follow the policy below.  
+**Register item:** O2 from the [baseline description](project-baseline.md#6-open-decision-register) — partially: Go, Wails, Node.js, frontend. The anacrolix/torrent version is fixed by [007](../../product/tasks/007-engine-api-lifecycle-spike.md) ([engine-lifecycle](engine-lifecycle.md): v1.61.0), the SQLite driver by [008](../../product/tasks/008-sqlite-driver-durability-spike.md) ([sqlite-driver](sqlite-driver.md): modernc.org/sqlite v1.60.1); both follow the policy below.  
 **Requirements:** AI-07, REL-01, STACK-05
 
 ## Question
@@ -38,6 +38,7 @@
 | govulncheck (`golang.org/x/vuln`, task 004) | v1.8.0 | 2026-09-08 | `go.mod`: `tool golang.org/x/vuln/cmd/govulncheck`, invoked as `go tool govulncheck ./...`; MVS raised the transitive `golang.org/x/{crypto,mod,net,sync,sys,telemetry,term,text,tools}` to versions from 2026-08-24 to 2026-09-08 |
 | anacrolix/torrent (tasks 006, 007) | v1.61.0 | 2025-12-17 | `go.mod` / `go.sum`; the newest tag, confirmed by 007 (O2) — [engine-lifecycle](engine-lifecycle.md). Linked into test binaries and the temporary `EngineSpike.app`; the gate's product isolation step keeps it out of the product until 018 |
 | anacrolix/chansync (task 007) | v0.7.0 | 2025-08-05 | `go.mod` / `go.sum`; already required by anacrolix/torrent, direct since 007 because the engine contract tests import its `events` package; same version, `go.sum` unchanged |
+| modernc.org/sqlite (task 008) | v1.60.1 | 2026-09-29 | `go.mod` / `go.sum`; the newest tag, bundles SQLite 3.53.4; chosen over mattn/go-sqlite3 and ncruces/go-sqlite3 by measurement — [sqlite-driver](sqlite-driver.md). Linked into the product. MVS raised the indirect `modernc.org/libc` v1.77.1 (2026-09-21), `memory` v1.12.1 (2026-08-19), `mathutil` v1.7.1 (2024-12-26), `mattn/go-isatty` v0.0.24 (2026-07-23), `dustin/go-humanize` v1.0.1 (2023-01-10) and added `ncruces/go-strftime` v1.0.0 (2025-10-08) |
 | golang.org/x/time (task 006) | v0.16.0 | 2026-08-19 | `go.mod`: `rate.Limiter` for the swarm's rate limits (was a transitive v0.8.0) |
 | github.com/pion/dtls/v3, github.com/pion/stun/v3 (transitive, task 006) | v3.1.10 / v3.1.7 | 2026-09-26 / 2026-08-18 | `go.mod` (indirect): force-upgraded from v3.0.3 / v3.0.0 for GO-2026-6165 / GO-2026-6163, reachable through the engine; MVS raised `pion/logging` v0.2.4, `wlynxg/anet` v0.0.5 and added `pion/transport` v4.1.0 and v5.0.0 |
 | golang.org/x/net (transitive, task 006) | v0.60.0 | 2026-10-08 | `go.mod` (indirect): **owner's exception of 2026-10-16**, taken at 8 days old. It fixes GO-2026-6603, -6610, -6611, -6612 and -6617 in v0.59.0, which became reachable once the engine was linked. It is in `releaseAgeExceptions` until it turns 14 days old on 2026-10-22. |

@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import App from './App'
 
 vi.mock('./bridge/runtimeInfo', () => ({
-  getRuntimeInfo: () => Promise.resolve({ goVersion: 'go1.27.2', os: 'darwin', arch: 'arm64' }),
+  getRuntimeInfo: () => Promise.resolve({ goVersion: 'go1.27.2', os: 'darwin', arch: 'arm64', sqliteVersion: '3.53.4' }),
 }))
 
 it('wires the runtime check to the Wails bridge', async () => {
@@ -13,5 +13,5 @@ it('wires the runtime check to the Wails bridge', async () => {
   expect(screen.getByRole('heading', { level: 1, name: 'OctopusTorrent' })).toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Check Go connection' }))
 
-  expect(await screen.findByText('Go go1.27.2 · darwin/arm64')).toBeInTheDocument()
+  expect(await screen.findByText('Go go1.27.2 · darwin/arm64 · SQLite 3.53.4')).toBeInTheDocument()
 })

@@ -13,7 +13,7 @@ frontend/index.html  <div id="root"> + /src/main.tsx
   └─ src/main.tsx    createRoot(#root).render(<StrictMode><App/></StrictMode>)  (no #root → clear error)
        └─ src/App.tsx   composition root: wires real bridge functions into features
             └─ src/features/runtime-check/RuntimeCheck.tsx   loadRuntimeInfo={getRuntimeInfo}
-                 button "Check Go connection" → loading → "Go go1.27.2 · darwin/arm64" | role="alert"
+                 button "Check Go connection" → loading → "Go go1.27.2 · darwin/arm64 · SQLite 3.53.4" | role="alert"
 ```
 
 The runtime check is the 003 prototype that proves the React → Go path. The product UI replaces it:

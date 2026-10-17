@@ -43,16 +43,16 @@ Before asking for approval:
    - List what the review fixed.
    - Name what remains weak and why it is acceptable.
 
-A plan is shown for approval only at **9/10 or higher**. Below that, keep closing the gaps you
-named before you ask. Examples of closing a gap:
+The rating has no minimum. It exists to show the real risks, so a low number with a precise list of
+what remains weak is worth more than a high one: never raise it to get approval. Close the gaps you
+can close before asking, for example:
 - verify an assumption in the pinned source;
 - turn a manual check into a gate check;
 - replace a timing-based assertion with a deterministic one.
 
-Rate honestly: a first rating of 9 that a stricter re-read lowers is worse than an honest 7. If the
-owner answers the approval request with "Оціни план від 1 до 10" ("rate the plan from 1 to 10"), the
-self-assessment was missing or not convincing. Review the plan again, raise the rating only for gaps
-that were actually fixed, and ask for approval again.
+If the owner answers the approval request with "Оціни план від 1 до 10" ("rate the plan from 1 to
+10"), the self-assessment was missing or not convincing. Review the plan again, change the rating
+only for gaps that were actually fixed, and ask for approval again.
 
 ## What does not belong
 
