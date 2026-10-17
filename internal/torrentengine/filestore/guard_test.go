@@ -120,7 +120,7 @@ func guarded(t *testing.T, f *fakeInner) (*TorrentStorage, storage.PieceImpl, *S
 	t.Helper()
 	root := t.TempDir()
 	var session Session
-	s, err := newTorrentStorage(f, root, &session)
+	s, err := newGuard(f, root, &session, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestASaveFolderThatIsNotAnExistingCleanAbsoluteFolderIsRefused(t *testing.T
 		"empty":       "",
 		"a trailing/": t.TempDir() + "/",
 	} {
-		if _, err := newTorrentStorage(newFake(), root, &Session{}); err == nil {
+		if _, err := newGuard(newFake(), root, &Session{}, nil); err == nil {
 			t.Errorf("%s: %q was accepted", name, root)
 		}
 	}
@@ -207,7 +207,7 @@ func TestAnOpenFailureOfTheEngineStorageIsReturnedAndRecorded(t *testing.T) {
 	f.openErr = errors.New("cannot open")
 	root := t.TempDir()
 	var session Session
-	s, err := newTorrentStorage(f, root, &session)
+	s, err := newGuard(f, root, &session, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestAnEngineStorageWithMoreThanPieceAndCloseIsRefusedBecauseTheGuardCouldNo
 		f.impl = impl
 		closed := false
 		f.closeFunc = func() error { closed = true; return nil }
-		s, err := newTorrentStorage(f, t.TempDir(), &Session{})
+		s, err := newGuard(f, t.TempDir(), &Session{}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -246,7 +246,7 @@ func TestAnEngineStorageWithMoreThanPieceAndCloseIsRefusedBecauseTheGuardCouldNo
 func TestACloseOfTheEngineTorrentStorageIsForwardedAndAMissingOneIsHarmless(t *testing.T) {
 	f := newFake()
 	root := t.TempDir()
-	s, _ := newTorrentStorage(f, root, &Session{})
+	s, _ := newGuard(f, root, &Session{}, nil)
 	impl, err := s.OpenTorrent(context.Background(), testInfo, metainfo.Hash{})
 	if err != nil || impl.Close == nil {
 		t.Fatalf("OpenTorrent = %v, Close missing: %v", err, impl.Close == nil)

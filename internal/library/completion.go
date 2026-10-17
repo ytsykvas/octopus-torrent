@@ -42,9 +42,10 @@ func OpenCompletion(ctx context.Context, path string) (*CompletionStore, error) 
 }
 
 func ensureCompletionSchema(tx Tx) error {
-	var version, tables int
+	var version, tables, ours int
 	err := tx.QueryRow(`SELECT (SELECT user_version FROM pragma_user_version),
-		(SELECT COUNT(*) FROM sqlite_master WHERE type = 'table')`).Scan(&version, &tables)
+		(SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'),
+		(SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'piece_completion')`).Scan(&version, &tables, &ours)
 	empty := version == 0 && tables == 0
 	if err == nil && empty {
 		_, err = tx.Exec(fmt.Sprintf(`CREATE TABLE piece_completion(
@@ -55,7 +56,7 @@ func ensureCompletionSchema(tx Tx) error {
 	if err != nil {
 		return err
 	}
-	if empty || version == completionVersion && tables == 1 {
+	if empty || version == completionVersion && tables == 1 && ours == 1 {
 		return nil
 	}
 	return fmt.Errorf("%w: user_version %d, %d tables", ErrUnsupportedVersion, version, tables)

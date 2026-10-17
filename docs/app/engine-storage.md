@@ -16,7 +16,8 @@ chosen folder (UI → bridge → Go, validated by 020)
   → client.AddTorrentOpt{InfoHash, Storage} + SetInfoBytes(info)
         payload goes to <saveRoot>/<name>[/…]; marks go to <dataDir>/piece-completion.sqlite
   → quit: Client.Close → Stop → Completion.Close → Seal  → files.Record
-  → next start: files.Decide(record, …) → Completion.Distrust(pieces) → the engine hashes only those
+  → next start: files.Decide(record, saveRoot, filestore.Ranges(…), …) → Completion.Distrust(pieces)
+        → the engine hashes only those pieces
 ```
 
 - The payload is written only below the folder the user chose. The engine's data, and the marks, live in
@@ -52,17 +53,18 @@ The decision and the alternatives are in the ADR [engine-storage](../decisions/e
 
 | API | Contract |
 |---|---|
-| `classicio.Require(Process)` | nil when the variable is `classic`; an error for another value; otherwise restarts the process with it set |
-| `library.OpenCompletion`, `LoadMarks`, `SaveMarks`, `Close` | Marks per (infohash, piece); a batch is one transaction; `ErrUnsupportedVersion` for another version or purpose |
-| `filestore.OpenCompletion`, `NewCompletion` | `storage.PieceCompletion`; reads a torrent once; batches of ≤ 256 rows every 250 ms; sticky `Err`; `Persistent()` false; `Distrust`; `Close` flushes |
-| `filestore.NewTorrentStorage` | A guarded engine storage for one torrent. A relative, unclean, missing or non-folder path, and an HFS+ folder, are errors |
-| `TorrentStorage.Stop`, `Reads`, `Baseline`, `Seal` | Refuse and await operations; count piece reads; keep the files an earlier run left; sync and return the record (after `Stop`) |
-| `filestore.Layout(saveRoot, info)` | The content root and every file path, by the engine's rule |
+| `classicio.Require(Process)` | nil when the variable is `classic`; an error for another value, and for a restarted process that lost it; otherwise restarts the process with the variable and a marker set |
+| `library.OpenCompletion`, `LoadMarks`, `SaveMarks`, `Close` | Marks per (infohash, piece); a batch is one transaction; `ErrUnsupportedVersion` for another version or purpose, also for another table at the same version |
+| `filestore.OpenCompletion`, `NewCompletion` | `storage.PieceCompletion`; reads a torrent once, with no lock held; batches of ≤ 256 rows every 250 ms; sticky `Err`; `Persistent()` false; `Distrust`, `Unresolved`, `Closed`; `Close` flushes |
+| `filestore.NewTorrentStorage` | A guarded engine storage for one torrent. A relative, unclean, missing or non-folder path, and an HFS+ folder, are errors. A nil logger discards the engine's logs |
+| `TorrentStorage.Stop`, `Reads`, `Baseline`, `Seal` | Refuse and await operations (a timed-out `Stop` makes the session unclean); count piece reads; keep the files an earlier run left trusted or missing; sync and return the record (after a drained `Stop` and closed marks) |
+| `filestore.Layout`, `Ranges` | The content root and every file path by the engine's rule; with the pieces each file covers |
 | `filestore.Refusing()` | The client's default storage |
-| `files.Record`, `files.Decide`, `files.Decision` | What a run leaves; the rule; `VerifyAll`, `VerifyPieces`, `Trusted`, `Missing` |
+| `files.Record`, `files.Decide`, `files.Decision` | What a run leaves; the rule, given the torrent's own layout; `VerifyAll`, `VerifyPieces`, `Trusted`, `Missing` |
+| `files.Stat`, `IdentityOf`, `FileSystem`, `Probe` | Fingerprint of a file (size, mtime, ctime, inode); identity of a folder or volume root (device, inode, creation time); the file system type; the seam |
 
-Errors: `ErrRootChanged`, `ErrStopped`, `ErrNotStopped`, `ErrFileSystem`, `ErrNoSaveFolder`, `ErrClosed`,
-`library.ErrUnsupportedVersion`. A failed write of marks is reported by `Err` and by every later `Set`.
+Errors: `ErrRootChanged`, `ErrStopped`, `ErrNotStopped`, `ErrNotClosed`, `ErrFileSystem`, `ErrUnsafePath`,
+`ErrNoSaveFolder`, `ErrClosed`, `library.ErrUnsupportedVersion`. A failed write of marks is reported by `Err` and by every later `Set`.
 
 ## Scenarios and TDD
 
@@ -83,8 +85,12 @@ The scenarios, all on the real engine in a closed loopback swarm:
 `trust.go`. `internal/library/completion.go`. Test support: `swarm.MainClassicIO`, `swarm.Options`
 (`DefaultStorage`, `DataDir`), `internal/testutil/volume`.
 
-Invariants: no operation reaches the engine once the save folder is not the recorded one; a mark is
-trusted only through `Decide`; a session with any problem never produces a clean record.
+Invariants:
+- Once the guard has noticed that the save folder is not the recorded one, no operation reaches the engine.
+  The check and the engine's open are two steps, so one operation can still get through in between.
+- A mark is trusted only through `Decide`, and only for a file that is exactly as the earlier clean run left it
+  and has no piece still waiting to be verified.
+- A session with any problem never produces a clean record.
 
 ## Checks and 100% coverage
 
@@ -96,9 +102,19 @@ needed because the product does not link them. `.app` scenarios and shutdown wit
 
 ## Refactoring and debt check
 
-No debt left. The prototype is the base of 018, not a stub: it is the code the adapter keeps. Open items
-are owned by tasks: persistence of the record (014/029), the user messages (020/030), the `.app` re-exec
-(018), the remedy for finding 22 (010).
+No stub is left in the code: the prototype is the base of 018. What is open is owned:
+
+| Open item | Owner |
+|---|---|
+| The quit drain: a condition for "the writes in flight have landed" (the tests wait for 200 ms without payload) | 018, 028 |
+| Persisting the record and the "not clean" marker; `DeleteMarks` for a removed torrent | 014, 029, 031 |
+| The user messages for `ErrFileSystem`, `ErrUnsafePath`, `Missing` | 020, 030 |
+| The `.app` restart, crash and quit; the re-exec in the bundle; shutdown with discovery on | 018, 029, 052 |
+| The remedy for the transfer that sometimes stands still (finding 22) | 010 |
+| Quit time for a torrent with many files (one fsync per written file) | 028 |
+
+Limits of the design (the ADR lists them in full): the window between the guard's check and the engine's open;
+an outside edit that is absorbed while writes to one file overlap; bit rot on a trusted file; power loss.
 
 ## Usage and recovery
 

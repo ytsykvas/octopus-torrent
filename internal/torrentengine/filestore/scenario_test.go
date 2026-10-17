@@ -96,6 +96,7 @@ type runOptions struct {
 	trustMarks bool          // skip the rule: believe every stored mark (to show why the rule exists)
 	completion Options
 	marks      Marks // a test double for the marks store; nil is the real one in dataDir
+	logger     *slog.Logger
 }
 
 // decide applies the rehash rule to what the earlier run left.
@@ -105,7 +106,11 @@ func decide(t *testing.T, mi *metainfo.MetaInfo, saveRoot string, prev *files.Re
 	if err != nil {
 		t.Fatal(err)
 	}
-	return files.Decide(prev, saveRoot, info.NumPieces(), files.System{}), info.NumPieces()
+	ranges, err := Ranges(saveRoot, &info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files.Decide(prev, saveRoot, ranges, info.NumPieces(), files.System{}), info.NumPieces()
 }
 
 // start begins a run: it adds the torrent with its info and its own storage, and asks for all of it,
@@ -119,7 +124,7 @@ func start(t *testing.T, mi *metainfo.MetaInfo, saveRoot, dataDir string, o runO
 	} else if r.completion, err = OpenCompletion(deadline(t, closeLimit), dataDir, r.session, o.completion); err != nil {
 		t.Fatal(err)
 	}
-	if r.storage, err = NewTorrentStorage(saveRoot, r.completion, r.session, nil); err != nil {
+	if r.storage, err = NewTorrentStorage(saveRoot, r.completion, r.session, o.logger); err != nil {
 		t.Fatal(err)
 	}
 	if !o.trustMarks {
@@ -255,12 +260,31 @@ func (r *run) quit() []error {
 	return problems
 }
 
+// quiet waits until the torrent has received no payload for 200 ms in a row: the writes that were in
+// flight when the download was disallowed have landed. The engine gives no signal for this; it is the
+// step the application takes before it closes the engine (an open primitive for 018 and 028).
+func quiet(t *testing.T, tor *torrent.Torrent) {
+	t.Helper()
+	ctx := deadline(t, transferLimit)
+	last, since := swarm.Count(tor).PayloadRead, time.Now()
+	for time.Since(since) < 200*time.Millisecond {
+		select {
+		case <-ctx.Done():
+			t.Fatal("the transfer never went quiet")
+		case <-time.After(10 * time.Millisecond):
+		}
+		if now := swarm.Count(tor).PayloadRead; now != last {
+			last, since = now, time.Now()
+		}
+	}
+}
+
 // quitCleanly stops the download first and lets the writes in flight finish, as the application does
 // before it closes the engine, so that nothing reaches the storage after Stop.
 func (r *run) quitCleanly() {
 	r.t.Helper()
 	r.torrent.DisallowDataDownload()
-	time.Sleep(300 * time.Millisecond)
+	quiet(r.t, r.torrent)
 	if problems := r.quit(); len(problems) != 0 {
 		r.t.Fatalf("session problems: %v", problems)
 	}
@@ -400,11 +424,122 @@ func TestTheEngineReportsAStorageErrorOnlyThroughSetInfoBytes(t *testing.T) {
 	if err := tor.SetInfoBytes(mi.InfoBytes); err == nil || !strings.Contains(err.Error(), ErrNoSaveFolder.Error()) {
 		t.Fatalf("SetInfoBytes = %v, want the storage error %q", err, ErrNoSaveFolder)
 	}
+
+	// with the info in the options the engine does not even set it, and says nothing
+	withInfo, isNew := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: metainfo.Hash{7}, InfoBytes: mi.InfoBytes})
+	select {
+	case <-withInfo.GotInfo():
+		t.Fatal("AddTorrentOpt set the info it was given: finding 15 no longer holds")
+	default:
+	}
+	if !isNew || withInfo.Info() != nil {
+		t.Fatalf("AddTorrentOpt with InfoBytes = new %v, info %v; want a new torrent without info and no error", isNew, withInfo.Info())
+	}
 }
 
-// Engine fact: the engine follows a symlink at <save folder>/<name>: the payload lands wherever it
-// points (finding 16). 020 and 023 must refuse such a path before the add.
-func TestAnEngineWritesThroughASymlinkAtTheTorrentPath(t *testing.T) {
+// countingStorage counts how often the engine opens a torrent's storage.
+type countingStorage struct {
+	inner storage.ClientImpl
+	opens atomic.Int64
+}
+
+func (c *countingStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, h metainfo.Hash) (storage.TorrentImpl, error) {
+	c.opens.Add(1)
+	return c.inner.OpenTorrent(ctx, info, h)
+}
+
+// Engine fact (finding 15): a storage that opens is opened once, whether it is given with the torrent
+// or is the client's default; a storage that refuses is asked a second time. So the number of opens
+// is not something to count on.
+func TestTheEngineOpensAWorkingStorageOnceAndARefusingOneTwice(t *testing.T) {
+	_, mi := named(t, "v1-single")
+	_, otherMI := named(t, "v1-large")
+	explicit := &countingStorage{inner: plainStorage(t.TempDir(), storage.NewMapPieceCompletion())}
+	working := &countingStorage{inner: plainStorage(t.TempDir(), storage.NewMapPieceCompletion())}
+	refusing := &countingStorage{inner: Refusing()}
+
+	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: working, DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)) })
+	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: explicit})
+	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Add(otherMI); err != nil {
+		t.Fatal(err)
+	}
+	q, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: refusing, DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = q.Close(deadline(t, closeLimit)) })
+	if _, err := q.Add(mi); err == nil {
+		t.Fatal("a refusing storage accepted a torrent")
+	}
+	for name, c := range map[string]struct {
+		got  int64
+		want int64
+	}{"explicit": {explicit.opens.Load(), 1}, "default that works": {working.opens.Load(), 1}, "default that refuses": {refusing.opens.Load(), 2}} {
+		if c.got != c.want {
+			t.Errorf("the %s storage was opened %d times, want %d", name, c.got, c.want)
+		}
+	}
+}
+
+// unreadableMarks is a completion whose reads fail.
+type unreadableMarks struct{}
+
+func (unreadableMarks) Get(metainfo.PieceKey) (storage.Completion, error) {
+	return storage.Completion{}, errors.New("the marks cannot be read")
+}
+func (unreadableMarks) Set(metainfo.PieceKey, bool) error { return nil }
+func (unreadableMarks) Close() error                      { return nil }
+
+// Engine fact (finding 23): when the completion cannot be read, the engine disallows download: the
+// failure is explicit and the transfer does not start, instead of the pieces being hashed or fetched.
+func TestAnUnreadableCompletionStopsTheEnginesDownload(t *testing.T) {
+	fx, mi := named(t, "v1-single")
+	seed := seeder(t, fx, mi, swarm.Options{})
+	plain := plainStorage(t.TempDir(), unreadableMarks{})
+	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)); _ = plain.Close() })
+	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
+	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
+		t.Fatal(err)
+	}
+	tor.DownloadAll()
+	swarm.Connect(tor, seed)
+	time.Sleep(1500 * time.Millisecond)
+	if got := swarm.Count(tor).PayloadRead; got != 0 || len(completePieces(tor)) != 0 {
+		t.Fatalf("the engine downloaded %d bytes with an unreadable completion: finding 23 no longer holds", got)
+	}
+	if !strings.Contains(p.Logs(), "error getting piece completion") {
+		t.Errorf("the engine did not log the unreadable completion:\n%s", p.Logs())
+	}
+}
+
+// Engine fact (finding 24): with part files off the engine still tries to flush "<name>.part" at every
+// completed file and logs a warning that names the local path.
+func TestWithPartFilesOffTheEngineStillWarnsAboutAMissingPartFile(t *testing.T) {
+	fx, mi := named(t, "v1-single")
+	seed := seeder(t, fx, mi, swarm.Options{})
+	var logs lockedBuffer
+	r := start(t, mi, t.TempDir(), t.TempDir(), runOptions{logger: slog.New(slog.NewTextHandler(&logs, nil))})
+	r.download(seed)
+	r.quitCleanly()
+	if !strings.Contains(logs.String(), "error flushing file before promotion") || !strings.Contains(logs.String(), ".part") {
+		t.Fatalf("the storage's log does not show the part-file warning:\n%s", logs.String())
+	}
+}
+
+// Engine fact (finding 16): the engine follows a symlink at <save folder>/<name>: the payload lands
+// wherever it points. The guard refuses such a torrent (next test); this is what happens without it.
+func TestAnEngineWithoutTheGuardWritesThroughASymlinkAtTheTorrentPath(t *testing.T) {
 	fx, mi := named(t, "v1-single")
 	seed := seeder(t, fx, mi, swarm.Options{})
 	saveRoot, outside := t.TempDir(), t.TempDir()
@@ -412,19 +547,78 @@ func TestAnEngineWritesThroughASymlinkAtTheTorrentPath(t *testing.T) {
 	if err := os.WriteFile(target, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	link := fx.FilePath(saveRoot, fx.Files[0])
-	if err := os.Symlink(target, link); err != nil {
+	if err := os.Symlink(target, fx.FilePath(saveRoot, fx.Files[0])); err != nil {
 		t.Fatal(err)
 	}
+	plain := plainStorage(saveRoot, storage.NewMapPieceCompletion())
+	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)); _ = plain.Close() })
+	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
+	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
+		t.Fatal(err)
+	}
+	tor.DownloadAll()
+	connectPlain(t, tor, seed)
+	if err := swarm.WaitComplete(deadline(t, transferLimit), tor); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, fx.Content(fx.Files[0])) {
+		t.Fatalf("the symlink target holds %d bytes (%v); the engine should have written through the link", len(got), err)
+	}
+}
+
+func TestTheGuardRefusesWhatWouldLeadThroughASymlinkOrTruncateAUsersFile(t *testing.T) {
+	fx, mi := named(t, "v1-tree") // its folder tree/ holds an empty file, empty.dat
+	for name, prepare := range map[string]func(t *testing.T, saveRoot, outside string) (watch string){
+		"a symlink at a file": func(t *testing.T, saveRoot, outside string) string {
+			mustMkdir(t, filepath.Join(saveRoot, "tree", "docs"))
+			target := filepath.Join(outside, "x")
+			mustWrite(t, target, "user data")
+			if err := os.Symlink(target, filepath.Join(saveRoot, "tree", "docs", "readme.txt")); err != nil {
+				t.Fatal(err)
+			}
+			return target
+		},
+		"a symlink at the torrent's folder": func(t *testing.T, saveRoot, outside string) string {
+			if err := os.Symlink(outside, filepath.Join(saveRoot, "tree")); err != nil {
+				t.Fatal(err)
+			}
+			return filepath.Join(outside, "empty.dat")
+		},
+		"a user's file where the torrent has an empty one": func(t *testing.T, saveRoot, outside string) string {
+			mustMkdir(t, filepath.Join(saveRoot, "tree"))
+			path := filepath.Join(saveRoot, "tree", "empty.dat")
+			mustWrite(t, path, "precious")
+			return path
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			saveRoot, outside := t.TempDir(), t.TempDir()
+			watch := prepare(t, saveRoot, outside)
+			before, _ := os.ReadFile(watch)
+			r := start(t, mi, saveRoot, t.TempDir(), runOptions{})
+			if !errors.Is(r.addErr, ErrUnsafePath) {
+				t.Fatalf("adding the torrent = %v, want ErrUnsafePath", r.addErr)
+			}
+			if after, _ := os.ReadFile(watch); !bytes.Equal(after, before) {
+				t.Fatalf("the user's data changed from %q to %q", before, after)
+			}
+			_ = fx
+			r.quit()
+		})
+	}
+	// an empty regular file where the torrent has one is fine: nothing would be lost
+	saveRoot := t.TempDir()
+	mustMkdir(t, filepath.Join(saveRoot, "tree"))
+	mustWrite(t, filepath.Join(saveRoot, "tree", "empty.dat"), "")
 	r := start(t, mi, saveRoot, t.TempDir(), runOptions{})
 	if r.addErr != nil {
-		t.Fatal(r.addErr)
+		t.Fatalf("an empty file in place was refused: %v", r.addErr)
 	}
-	r.download(seed)
 	r.quit()
-	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, fx.Content(fx.Files[0])) {
-		t.Fatalf("the symlink target holds %d bytes (%v); the payload should have been written through the link", len(got), err)
-	}
 }
 
 // Engine fact (finding 17): with classic file IO, WriteTo returns io.ErrShortWrite for a piece that

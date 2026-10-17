@@ -53,6 +53,8 @@ Respect the boundaries of own DTO, repository and engine adapter. An error has a
 
 **Basis for technical decisions:** [Client config](https://raw.githubusercontent.com/anacrolix/torrent/master/config.go). Cross-check signatures and limitations against the pinned version; reading the API is not a passed integration check.
 
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): whether uTP stays is yours: the build tags `nosqlite,noboltdb` already remove the engine's C SQLite and bbolt, and `disable_libutp` would remove the last cgo package of the engine. A transfer on the closed loopback swarm sometimes stands still for good (finding 22, 4.3% of fresh transfers with classic IO and 1.7% with mmap under `-race`); expect it when you measure seeding and network recovery.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.

@@ -51,10 +51,6 @@ func settle(t *testing.T, tor *torrent.Torrent) {
 	}
 }
 
-func completeSet(tor *torrent.Torrent) []int {
-	return completePieces(tor)
-}
-
 // badPieces lists the pieces whose bytes on disk do not hash to the torrent's hash, judged without
 // the engine: the files are read in torrent order, and a missing or short file is padded with zeros.
 func badPieces(t *testing.T, info *metainfo.Info, saveRoot string) []int {
@@ -130,7 +126,7 @@ func TestACleanRestartTrustsTheMarksAndReadsNothing(t *testing.T) {
 		t.Fatalf("decision %+v, want the five files of the torrent trusted and nothing else", d)
 	}
 	settle(t, second.torrent)
-	if got := completeSet(second.torrent); !slices.Equal(got, all(second.torrent.NumPieces())) {
+	if got := completePieces(second.torrent); !slices.Equal(got, all(second.torrent.NumPieces())) {
 		t.Fatalf("complete pieces after the restart = %v, want all", got)
 	}
 	second.connect(seed)
@@ -155,7 +151,7 @@ func TestAPartialDownloadResumesWithoutReadingOrFetchingWhatIsAlreadyThere(t *te
 	waitPieces(t, first.torrent, 20)
 	first.torrent.DisallowDataDownload()
 	time.Sleep(300 * time.Millisecond)
-	have := completeSet(first.torrent)
+	have := completePieces(first.torrent)
 	first.quitCleanly()
 
 	second := start(t, mi, saveRoot, dataDir, runOptions{prev: &first.record})
@@ -163,7 +159,7 @@ func TestAPartialDownloadResumesWithoutReadingOrFetchingWhatIsAlreadyThere(t *te
 		t.Fatalf("decision %+v, want the one file trusted", d)
 	}
 	settle(t, second.torrent)
-	if got := completeSet(second.torrent); !slices.Equal(got, have) {
+	if got := completePieces(second.torrent); !slices.Equal(got, have) {
 		t.Fatalf("complete pieces after the restart = %v, want the %d the first run had: %v", got, len(have), have)
 	}
 	if reads := second.storage.Reads(); reads != 0 {
@@ -181,9 +177,21 @@ func TestAPartialDownloadResumesWithoutReadingOrFetchingWhatIsAlreadyThere(t *te
 // The child process of the crash test: a leecher that is killed while it works.
 func TestLeechChild(t *testing.T) {
 	spec := os.Getenv(childEnv)
-	if spec != "" {
-		leechUntilKilled(t, strings.Split(spec, "|"))
+	if spec == "" {
+		return // an ordinary run of the package: the crash test starts this one as a child
 	}
+	parts := strings.Split(spec, "|")
+	if len(parts) != 3 {
+		t.Fatalf("%s=%q is not <save folder>|<data folder>|<address>", childEnv, spec)
+	}
+	// A variable left in the developer's shell must not make this process write anywhere else.
+	temp := filepath.Clean(os.TempDir()) + string(filepath.Separator)
+	for _, folder := range parts[:2] {
+		if !strings.HasPrefix(folder, temp) {
+			t.Fatalf("%s names %q, which is not under the temporary folder %s", childEnv, folder, temp)
+		}
+	}
+	leechUntilKilled(t, parts)
 }
 
 // leechUntilKilled leeches the torrent from the seeder at addr and prints each piece it completes. It
@@ -216,6 +224,7 @@ func TestAKilledProcessLeavesNothingTrustedAndNothingValidIsDownloadedAgain(t *t
 	fx, mi := named(t, "v1-large")
 	seed := seeder(t, fx, mi, swarm.Options{RateLimit: slowRate})
 	saveRoot, dataDir := t.TempDir(), t.TempDir()
+	lib := libraryIn(t, dataDir)
 
 	cmd := exec.Command(os.Args[0], "-test.run=^TestLeechChild$", "-test.count=1", "-test.timeout=60s")
 	cmd.Env = append(os.Environ(), childEnv+"="+strings.Join([]string{saveRoot, dataDir, seed.ListenAddrs()[0].String()}, "|"))
@@ -251,7 +260,7 @@ func TestAKilledProcessLeavesNothingTrustedAndNothingValidIsDownloadedAgain(t *t
 		t.Fatalf("decision %+v, want everything verified", second.decision)
 	}
 	settle(t, second.torrent)
-	have := completeSet(second.torrent)
+	have := completePieces(second.torrent)
 	for p := range reported {
 		if !slices.Contains(have, p) {
 			t.Errorf("piece %d was complete in the killed process but is not after the restart", p)
@@ -271,6 +280,7 @@ func TestAKilledProcessLeavesNothingTrustedAndNothingValidIsDownloadedAgain(t *t
 	}
 	second.quitCleanly()
 	assertPayload(t, fx, saveRoot)
+	lib.intact()
 }
 
 // damage is a change made to the file between two runs.
@@ -337,7 +347,7 @@ func TestEveryChangedFileIsVerifiedAndNoOtherPieceIsRead(t *testing.T) {
 			}
 			settle(t, second.torrent)
 			bad := badPieces(t, second.torrent.Info(), saveRoot)
-			if got, want := completeSet(second.torrent), without(all(second.torrent.NumPieces()), bad); !slices.Equal(got, want) {
+			if got, want := completePieces(second.torrent), without(all(second.torrent.NumPieces()), bad); !slices.Equal(got, want) {
 				t.Fatalf("complete pieces = %v, want %v (bad pieces: %v)", got, want, bad)
 			}
 			if reads := second.storage.Reads(); reads != 1 {
@@ -374,6 +384,31 @@ func TestAFileThatWasMovedAwayIsReportedMissingAndNothingIsAdded(t *testing.T) {
 	}
 }
 
+func TestAFileMovedBeforeACrashIsStillMissingAndNothingIsDownloadedInItsPlace(t *testing.T) {
+	fx, mi := named(t, "v1-tree")
+	seed := seeder(t, fx, mi, swarm.Options{})
+	saveRoot, dataDir := t.TempDir(), t.TempDir()
+	first := start(t, mi, saveRoot, dataDir, runOptions{})
+	first.download(seed)
+	first.quitCleanly()
+
+	// the next run began (its record is "not clean": 029 writes that before the first payload write),
+	// the owner moved a file, and the process was killed
+	crashed := first.record
+	crashed.Clean = false
+	victim := fx.FilePath(saveRoot, fx.Files[0])
+	if err := os.Rename(victim, victim+".moved"); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := decide(t, mi, saveRoot, &crashed)
+	if !d.VerifyAll || !slices.Equal(d.Missing, []string{victim}) {
+		t.Fatalf("decision %+v, want everything verified and the moved file missing", d)
+	}
+	if _, err := os.Stat(victim); err == nil {
+		t.Fatal("deciding recreated the file")
+	}
+}
+
 // Engine fact (finding 20): the engine believes a stored mark over a file of the right size and
 // does not hash. It cannot see a same-size rewrite, and it re-downloads, without hashing, a file that
 // is short or gone. This is why a mark is never trusted on its own.
@@ -392,7 +427,7 @@ func TestTrustedMarksAreBlindToASameSizeRewrite(t *testing.T) {
 	if bad := badPieces(t, believing.torrent.Info(), saveRoot); !slices.Equal(bad, []int{0}) {
 		t.Fatalf("bad pieces = %v, want piece 0", bad)
 	}
-	if got := completeSet(believing.torrent); !slices.Equal(got, all(n)) {
+	if got := completePieces(believing.torrent); !slices.Equal(got, all(n)) {
 		t.Fatalf("complete pieces = %v: the engine no longer believes the marks over a same-size rewrite", got)
 	}
 	if reads := believing.storage.Reads(); reads != 0 {
@@ -428,7 +463,7 @@ func TestAnEditMadeWhileTheApplicationRunsIsVerifiedAtTheNextStart(t *testing.T)
 		t.Fatalf("decision %+v, want piece 0 verified", third.decision)
 	}
 	settle(t, third.torrent)
-	if got, want := completeSet(third.torrent), []int{1, 2}; !slices.Equal(got, want) {
+	if got, want := completePieces(third.torrent), []int{1, 2}; !slices.Equal(got, want) {
 		t.Fatalf("complete pieces = %v, want %v", got, want)
 	}
 	third.quit()
@@ -473,7 +508,7 @@ func TestOnlyAPFSVolumesAreTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
 				t.Fatalf("decision %+v, want everything verified", second.decision)
 			}
 			settle(t, second.torrent)
-			if got := completeSet(second.torrent); !slices.Equal(got, all(second.torrent.NumPieces())) {
+			if got := completePieces(second.torrent); !slices.Equal(got, all(second.torrent.NumPieces())) {
 				t.Fatalf("complete pieces = %v", got)
 			}
 			if reads := second.storage.Reads(); reads != int64(second.torrent.NumPieces()) {

@@ -29,7 +29,7 @@ func sealed(t *testing.T) (s *TorrentStorage, pieces [3]storage.PieceImpl, sessi
 	root = t.TempDir()
 	session = &Session{}
 	var err error
-	if s, err = newTorrentStorage(f, root, session); err != nil {
+	if s, err = newGuard(f, root, session, nil); err != nil {
 		t.Fatal(err)
 	}
 	impl, err := s.OpenTorrent(context.Background(), multiInfo, metainfo.Hash{})
@@ -94,11 +94,11 @@ func TestTheRecordDescribesEveryFileWithItsPiecesAndOnlyTheOnesTheRunLeftArePres
 	}
 	fa, fb := fileState(t, rec, a), fileState(t, rec, b)
 	wantFP, _ := files.Stat(a)
-	if !fa.Present || fa.Fingerprint != wantFP || fa.FirstPiece != 0 || fa.EndPiece != 2 {
-		t.Fatalf("a = %+v, want the fingerprint %+v over pieces [0,2)", fa, wantFP)
+	if !fa.Present || fa.Fingerprint != wantFP {
+		t.Fatalf("a = %+v, want present with the fingerprint %+v", fa, wantFP)
 	}
-	if fb.Present || fb.FirstPiece != 1 || fb.EndPiece != 3 {
-		t.Fatalf("b = %+v, want absent over pieces [1,3)", fb)
+	if fb.Present {
+		t.Fatalf("b = %+v, want absent: the run never wrote it", fb)
 	}
 }
 
@@ -147,8 +147,8 @@ func TestAFileTheRunNeverTouchedKeepsTheFingerprintTheEarlierRunLeftIfItWasTrust
 	fa, _ := files.Stat(a)
 	fb, _ := files.Stat(b)
 	earlier := &files.Record{Clean: true, Files: []files.FileState{
-		{Path: a, Present: true, Fingerprint: fa, FirstPiece: 0, EndPiece: 2},
-		{Path: b, Present: true, Fingerprint: fb, FirstPiece: 1, EndPiece: 3},
+		{Path: a, Present: true, Fingerprint: fa},
+		{Path: b, Present: true, Fingerprint: fb},
 	}}
 	// b is trusted and kept; a is not trusted (it is to be verified), so it is not carried over
 	s.Baseline(earlier, files.Decision{Trusted: []string{b}})
@@ -204,30 +204,23 @@ func TestAFileThatVanishedBeforeTheSyncMakesTheRunUncleanAndSealReportsIt(t *tes
 	}
 }
 
-func TestTheFilesOfAHybridTorrentAreRecordedWithTheirPieceRanges(t *testing.T) {
-	info := &metainfo.Info{Name: "m", PieceLength: 16, Pieces: make([]byte, 40), Length: 24}
-	f := newFake()
+func TestRangesGiveEveryFileItsPathAndItsPieces(t *testing.T) {
 	root := t.TempDir()
-	s, err := newTorrentStorage(f, root, &Session{})
-	if err != nil {
-		t.Fatal(err)
+	got, err := Ranges(root, multiInfo)
+	want := []files.FileRange{
+		{Path: filepath.Join(root, "m", "a"), First: 0, End: 2},
+		{Path: filepath.Join(root, "m", "b"), First: 1, End: 3},
 	}
-	if _, err := s.OpenTorrent(context.Background(), info, metainfo.Hash{}); err != nil {
-		t.Fatal(err)
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("Ranges = %v, %v; want %v", got, err, want)
 	}
-	if err := s.Stop(context.Background()); err != nil {
-		t.Fatal(err)
+	single := &metainfo.Info{Name: "m", PieceLength: 16, Pieces: make([]byte, 40), Length: 24}
+	got, err = Ranges(root, single)
+	if err != nil || len(got) != 1 || got[0] != (files.FileRange{Path: filepath.Join(root, "m"), First: 0, End: 2}) {
+		t.Fatalf("Ranges of a single file = %v, %v", got, err)
 	}
-	rec, err := s.Seal()
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := files.FileState{Path: filepath.Join(root, "m"), FirstPiece: 0, EndPiece: 2}
-	if len(rec.Files) != 1 || rec.Files[0] != want {
-		t.Fatalf("record files = %+v, want %+v", rec.Files, want)
-	}
-	if !slices.Equal([]int{rec.Files[0].FirstPiece, rec.Files[0].EndPiece}, []int{0, 2}) {
-		t.Fatal("range")
+	if _, err := Ranges(root, &metainfo.Info{Name: "m", Files: []metainfo.FileInfo{{Length: 1, Path: []string{"..", "..", "x"}}}}); err == nil {
+		t.Fatal("Ranges accepted a path outside the save folder")
 	}
 }
 
@@ -243,11 +236,9 @@ func TestClosingTheMarksStoreWithAnErrorMakesTheSessionUnclean(t *testing.T) {
 	}
 }
 
-func TestATorrentWithAPathOutsideTheSaveFolderIsRefusedAndItsStorageClosed(t *testing.T) {
+func TestATorrentWithAPathOutsideTheSaveFolderIsRefusedBeforeTheEngineSeesIt(t *testing.T) {
 	f := newFake()
-	closed := false
-	f.closeFunc = func() error { closed = true; return nil }
-	s, err := newTorrentStorage(f, t.TempDir(), &Session{})
+	s, err := newGuard(f, t.TempDir(), &Session{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,8 +247,8 @@ func TestATorrentWithAPathOutsideTheSaveFolderIsRefusedAndItsStorageClosed(t *te
 	if _, err := s.OpenTorrent(context.Background(), escape, metainfo.Hash{}); err == nil {
 		t.Fatal("a torrent that writes outside the save folder was opened")
 	}
-	if !closed {
-		t.Fatal("the refused torrent's storage was not closed")
+	if calls := f.callList(); len(calls) != 0 {
+		t.Fatalf("the engine's storage was reached: %v", calls)
 	}
 }
 

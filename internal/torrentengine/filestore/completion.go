@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -28,11 +29,11 @@ type Marks interface {
 	Close() error
 }
 
-// Options tune how marks are written; the zero value gives the defaults.
+// Options tune how marks are read and written; the zero value gives the defaults.
 type Options struct {
-	FlushEvery   time.Duration // default 250 ms
-	FlushRows    int           // default 256: the most rows of one batch; this many queued marks wake the writer at once
-	WriteTimeout time.Duration // default 30 s: one batch
+	FlushEvery time.Duration // default 250 ms
+	FlushRows  int           // default 256: the most rows of one batch; this many queued marks wake the writer at once
+	Timeout    time.Duration // default 30 s: one read of a torrent's marks, or one batch
 }
 
 func (o Options) withDefaults() Options {
@@ -42,8 +43,8 @@ func (o Options) withDefaults() Options {
 	if o.FlushRows == 0 {
 		o.FlushRows = 256
 	}
-	if o.WriteTimeout == 0 {
-		o.WriteTimeout = 30 * time.Second
+	if o.Timeout == 0 {
+		o.Timeout = 30 * time.Second
 	}
 	return o
 }
@@ -62,7 +63,7 @@ type Completion struct {
 	opts    Options
 
 	mu         sync.Mutex
-	loaded     map[[20]byte]map[int]bool
+	loads      map[[20]byte]*load
 	distrusted map[[20]byte]map[int]bool
 	pending    []library.Mark
 	err        error
@@ -90,7 +91,7 @@ func OpenCompletion(ctx context.Context, dataDir string, session *Session, opts 
 func NewCompletion(marks Marks, session *Session, opts Options) *Completion {
 	c := &Completion{
 		marks: marks, session: session, opts: opts.withDefaults(),
-		loaded:     map[[20]byte]map[int]bool{},
+		loads:      map[[20]byte]*load{},
 		distrusted: map[[20]byte]map[int]bool{},
 		kick:       make(chan struct{}, 1),
 		quit:       make(chan struct{}),
@@ -123,31 +124,47 @@ func (c *Completion) Distrust(infoHash [20]byte, pieces []int) {
 	}
 }
 
+// load is the first read of one torrent's marks. Whoever asks first reads; the others wait for it, with no
+// lock held, so a slow read of one torrent holds up no other.
+type load struct {
+	done  chan struct{}
+	marks map[int]bool
+	err   error
+}
+
 // Get answers from memory; the first call for a torrent reads its marks. A store that cannot be read
-// is an error, which makes the engine disallow download.
+// is an error, the same for every later call, which makes the engine disallow download.
 func (c *Completion) Get(pk metainfo.PieceKey) (storage.Completion, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	marks, err := c.torrentLocked(pk.InfoHash)
+	l, err := c.torrent(pk.InfoHash)
 	if err != nil {
 		return storage.Completion{}, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		c.session.Fail(ErrClosed)
+		return storage.Completion{}, ErrClosed
 	}
 	if c.distrusted[pk.InfoHash][pk.Index] {
 		return storage.Completion{}, nil
 	}
-	complete, known := marks[pk.Index]
+	complete, known := l.marks[pk.Index]
 	return storage.Completion{Ok: known, Complete: complete}, nil
 }
 
 // Set records the engine's verdict on a piece.
 func (c *Completion) Set(pk metainfo.PieceKey, complete bool) error {
-	c.mu.Lock()
-	marks, err := c.torrentLocked(pk.InfoHash)
+	l, err := c.torrent(pk.InfoHash)
 	if err != nil {
-		c.mu.Unlock()
 		return err
 	}
-	marks[pk.Index] = complete
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		c.session.Fail(ErrClosed)
+		return ErrClosed
+	}
+	l.marks[pk.Index] = complete
 	delete(c.distrusted[pk.InfoHash], pk.Index)
 	c.pending = append(c.pending, library.Mark{InfoHash: pk.InfoHash, Piece: pk.Index, Complete: complete})
 	wake, failed := len(c.pending) >= c.opts.FlushRows, c.err
@@ -161,25 +178,54 @@ func (c *Completion) Set(pk metainfo.PieceKey, complete bool) error {
 	return failed
 }
 
-// torrentLocked returns a torrent's marks, reading them on first use. c.mu is held.
-func (c *Completion) torrentLocked(infoHash [20]byte) (map[int]bool, error) {
+// torrent returns a torrent's marks, reading them on first use. It holds no lock while it reads.
+func (c *Completion) torrent(infoHash [20]byte) (*load, error) {
+	c.mu.Lock()
 	if c.closed {
+		c.mu.Unlock()
 		c.session.Fail(ErrClosed)
 		return nil, ErrClosed
 	}
-	if marks, ok := c.loaded[infoHash]; ok {
-		return marks, nil
+	l, found := c.loads[infoHash]
+	if !found {
+		l = &load{done: make(chan struct{})}
+		c.loads[infoHash] = l
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.WriteTimeout)
+	c.mu.Unlock()
+	if found {
+		<-l.done
+		return l, l.err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
-	marks, err := c.marks.LoadMarks(ctx, infoHash)
-	if err != nil {
-		err = fmt.Errorf("read the piece marks: %w", err)
-		c.session.Fail(err)
-		return nil, err
+	l.marks, l.err = c.marks.LoadMarks(ctx, infoHash)
+	if l.err != nil {
+		l.err = fmt.Errorf("read the piece marks: %w", l.err)
+		c.session.Fail(l.err)
 	}
-	c.loaded[infoHash] = marks
-	return marks, nil
+	close(l.done)
+	return l, l.err
+}
+
+// Unresolved lists the pieces of the torrent that were distrusted and that the engine has not yet
+// verified: their marks in the store are stale. A record sealed while any is left must not describe
+// their files as trusted.
+func (c *Completion) Unresolved(infoHash [20]byte) []int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	pieces := make([]int, 0, len(c.distrusted[infoHash]))
+	for p := range c.distrusted[infoHash] {
+		pieces = append(pieces, p)
+	}
+	slices.Sort(pieces)
+	return pieces
+}
+
+// Closed reports whether Close has run.
+func (c *Completion) Closed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
 }
 
 // Err is the first failed write of marks, or nil.
@@ -218,7 +264,7 @@ func (c *Completion) flush() {
 		if len(batch) == 0 || failed {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), c.opts.WriteTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 		err := c.marks.SaveMarks(ctx, batch)
 		cancel()
 		if err != nil {

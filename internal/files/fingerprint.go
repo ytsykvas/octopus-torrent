@@ -35,6 +35,26 @@ func Stat(path string) (Fingerprint, error) {
 	}, nil
 }
 
+// Identity names a folder or volume root: device, inode and creation time. Two volumes that were
+// mounted one after the other at the same place can have the same device and inode numbers (the system
+// reissues the number it just freed, and every APFS root is inode 2); their creation times differ.
+type Identity struct {
+	Dev   uint64
+	Inode uint64
+	Birth int64 // Unix nanoseconds
+	Dir   bool
+}
+
+// IdentityOf is the identity of what path names, following a symlink.
+func IdentityOf(path string) (Identity, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return Identity{}, err
+	}
+	st := info.Sys().(*syscall.Stat_t)
+	return Identity{Dev: uint64(st.Dev), Inode: st.Ino, Birth: st.Birthtimespec.Nano(), Dir: info.IsDir()}, nil
+}
+
 // FileSystem is the type name of the file system holding path, such as "apfs", "hfs" or "exfat".
 func FileSystem(path string) (string, error) {
 	var st syscall.Statfs_t

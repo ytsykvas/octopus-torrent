@@ -192,7 +192,9 @@ func TestFillStopsOnAnyErrorButAFullVolume(t *testing.T) {
 	// /dev/full-like: a file whose writes fail with a different error than "no space left".
 	old := chunkWrite
 	chunkWrite = func(f *os.File, b []byte) (int, error) { return 0, errors.New("input/output error") }
-	t.Cleanup(func() { chunkWrite = old })
+	oldLimit := fillLimit
+	fillLimit = 1 << 62
+	t.Cleanup(func() { chunkWrite, fillLimit = old, oldLimit })
 	r := newRecorder(t)
 	if !r.attempt(func() { Fill(r, t.TempDir()) }) || !r.said("filling the volume") {
 		t.Fatalf("Fill = %v", r.failures)
@@ -251,3 +253,57 @@ func TestMainFailsOnAnImageOfAnEndedRunAndOnImagesTheRunLeft(t *testing.T) {
 type runnerFunc func() int
 
 func (f runnerFunc) Run() int { return f() }
+
+func TestFillRefusesAFolderOnABigFileSystem(t *testing.T) {
+	r := newRecorder(t)
+	if !r.attempt(func() { Fill(r, t.TempDir()) }) || !r.said("refuses") {
+		t.Fatalf("Fill on the disk of the temporary folder = %v, want a refusal: it would fill the whole disk", r.failures)
+	}
+}
+
+func TestADetachedVolumeCannotBeDetachedAgain(t *testing.T) {
+	fake(t, func([]string) ([]byte, error) { return nil, nil })
+	r := newRecorder(t)
+	v := New(r, Options{Size: "8m", FS: "HFS+", Name: "X"})
+	v.Detach()
+	if !r.attempt(v.Detach) || !r.said("not attached") {
+		t.Fatalf("a second Detach = %v, want a refusal: the mount point is then a plain folder", r.failures)
+	}
+}
+
+func TestAVolumeCanBeMountedAtAnotherFolder(t *testing.T) {
+	var mounts []string
+	fake(t, func(args []string) ([]byte, error) {
+		if args[0] == "attach" {
+			mounts = append(mounts, args[len(args)-2])
+		}
+		return nil, nil
+	})
+	r := newRecorder(t)
+	v := New(r, Options{Size: "8m", FS: "HFS+", Name: "X"})
+	first := v.Mount
+	v.Detach()
+	other := filepath.Join(t.TempDir(), "elsewhere")
+	if err := os.Mkdir(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	v.AttachAt(other)
+	if v.Mount != other || len(mounts) != 2 || mounts[0] != first || mounts[1] != other {
+		t.Fatalf("mount points %v, Mount %q; want the image attached first at %q, then at %q", mounts, v.Mount, first, other)
+	}
+}
+
+func TestFillFailsInAFolderItCannotCreateTheFillerIn(t *testing.T) {
+	oldLimit := fillLimit
+	fillLimit = 1 << 62
+	t.Cleanup(func() { fillLimit = oldLimit })
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	r := newRecorder(t)
+	if !r.attempt(func() { Fill(r, dir) }) || !r.said("create the filler") {
+		t.Fatalf("Fill in a read-only folder = %v", r.failures)
+	}
+}

@@ -60,7 +60,7 @@ Deletion by the name of the download folder is forbidden: we work with a verifie
 
 **From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): an incomplete torrent's files can exist on disk only as `<name>.part` (the engine's default part-file mode, finding 13). The Trash journal must list and move the part-file names too, and never a user's file the engine renamed (DEL-02, DEL-04).
 
-**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): with part files off the engine writes no `.part` file, but a torrent run by an earlier version, or a failed piece check on a file that already existed, can leave `<name>.part` names (finding 13); keep them in the deletion list. Stop the torrent's `TorrentStorage` first so no write races the move to the Trash.
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): stop the torrent's `TorrentStorage` (`Stop`) before any file action, so no write races the move to the Trash. The storage runs with part files off, so it creates no `.part` names; a `<name>.part` can still exist from the engine's default storage in earlier tests or from another client, and from finding 13 elsewhere, so keep such names in the deletion list.
 
 ## Mandatory TDD cycle and architecture review
 

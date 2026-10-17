@@ -56,7 +56,7 @@ func TestWhenUnsetTheProcessRestartsItselfWithTheVariableAndTheSameArguments(t *
 	if c.path != "/apps/OctopusTorrent" || !slices.Equal(c.argv, []string{"OctopusTorrent", "-flag", "value"}) {
 		t.Fatalf("exec %q %q, want the same executable and arguments", c.path, c.argv)
 	}
-	want := []string{"HOME=/home/x", "PATH=/usr/bin", Variable + "=classic"}
+	want := []string{"HOME=/home/x", "PATH=/usr/bin", Variable + "=classic", Restarted + "=1"}
 	if !slices.Equal(c.env, want) {
 		t.Fatalf("environment %q, want %q", c.env, want)
 	}
@@ -84,5 +84,21 @@ func TestCurrentIsTheRealProcess(t *testing.T) {
 	}
 	if path, err := p.Executable(); err != nil || path == "" {
 		t.Fatalf("Executable = %q, %v", path, err)
+	}
+}
+
+func TestAProcessRestartedOnceDoesNotRestartAgainWhenTheVariableWasDropped(t *testing.T) {
+	var calls []exec
+	err := Require(process(map[string]string{Restarted: "1"}, &calls, nil))
+	if err == nil || len(calls) != 0 {
+		t.Fatalf("Require = %v with %d exec calls, want an error and no second restart", err, len(calls))
+	}
+}
+
+func TestAnExecThatReturnsWithoutAnErrorIsStillAnError(t *testing.T) {
+	var calls []exec
+	err := Require(process(nil, &calls, nil))
+	if err == nil || len(calls) != 1 {
+		t.Fatalf("Require = %v with %d exec calls; a process that was not replaced must not carry on", err, len(calls))
 	}
 }

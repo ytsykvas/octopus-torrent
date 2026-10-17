@@ -6,6 +6,7 @@
 package classicio
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -13,6 +14,10 @@ import (
 
 // Variable is the environment variable the engine reads.
 const Variable = "TORRENT_STORAGE_DEFAULT_FILE_IO"
+
+// Restarted marks a process that Require has already started again, so that a launcher which drops
+// Variable cannot make the process restart for ever.
+const Restarted = "OCTOPUS_CLASSIC_IO_RESTARTED"
 
 // Process is what Require needs from the running process, so a test can replace it.
 type Process struct {
@@ -36,9 +41,13 @@ func Current() Process {
 }
 
 // Require returns nil when the process already runs with classic file IO. When the variable is not
-// set, it starts the same executable again with the same arguments and the variable added; Exec
-// does not return then, and Require returns only an error of that attempt. Any other value is an
-// error: the product does not run on mmap.
+// set, it starts the same executable again with the same arguments, the variable and a marker added;
+// Exec does not return then, and Require returns only an error of that attempt. Any other value is
+// an error: the product does not run on mmap. A process that carries the marker but not the variable
+// is an error too.
+//
+// The engine's own init functions have run before Require does. A caller that refuses GOPPROF must do
+// so before it calls Require, and the restarted process inherits what the first one had.
 func Require(p Process) error {
 	value, set := p.LookupEnv(Variable)
 	if set {
@@ -47,10 +56,16 @@ func Require(p Process) error {
 		}
 		return nil
 	}
+	if _, restarted := p.LookupEnv(Restarted); restarted {
+		return fmt.Errorf("the process was restarted with %s=classic, but %s is not set: something removed it", Variable, Variable)
+	}
 	path, err := p.Executable()
 	if err != nil {
 		return fmt.Errorf("restart with %s=classic: find the executable: %w", Variable, err)
 	}
-	env := append(append([]string(nil), p.Environ...), Variable+"=classic")
-	return fmt.Errorf("restart with %s=classic: %w", Variable, p.Exec(path, p.Args, env))
+	env := append(append([]string(nil), p.Environ...), Variable+"=classic", Restarted+"=1")
+	if err := p.Exec(path, p.Args, env); err != nil {
+		return fmt.Errorf("restart with %s=classic: %w", Variable, err)
+	}
+	return errors.New("the process was not replaced by its restart")
 }

@@ -108,3 +108,35 @@ func TestSystemIsTheProbeOfTheRealFileSystem(t *testing.T) {
 		t.Fatalf("FileSystem = %q, %v", name, err)
 	}
 }
+
+func TestAnIdentityTellsTwoFoldersApartByTheirCreationTimeToo(t *testing.T) {
+	dir := t.TempDir()
+	first, err := IdentityOf(dir)
+	if err != nil || first.Dev == 0 || first.Inode == 0 || first.Birth == 0 || !first.Dir {
+		t.Fatalf("IdentityOf = %+v, %v", first, err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(dir, link); err != nil {
+		t.Fatal(err)
+	}
+	if viaLink, err := IdentityOf(link); err != nil || viaLink != first {
+		t.Fatalf("IdentityOf a symlink = %+v, %v; want the folder it points to: %+v", viaLink, err, first)
+	}
+	if file, _ := IdentityOf(writeFileIn(t, dir)); file.Dir {
+		t.Fatal("a file has the identity of a folder")
+	}
+	other, _ := IdentityOf(t.TempDir())
+	if other == first {
+		t.Fatal("two folders have the same identity")
+	}
+	if _, err := IdentityOf(filepath.Join(dir, "missing")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("IdentityOf a missing path = %v", err)
+	}
+}
+
+func writeFileIn(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "plain")
+	write(t, path, "x")
+	return path
+}

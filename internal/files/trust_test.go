@@ -37,13 +37,24 @@ func fp(size, mtime, ctime int64) Fingerprint {
 // old is a modification time: the file was last written long ago.
 const old = int64(1_700_000_000_000_000_000)
 
-// cleanRecord is a clean quit with three files over 10 pieces: a [0,4), b [4,7), c [7,10).
+// layout is the torrent's three files over 10 pieces: a [0,4), b [4,7), c [7,10).
+var layout = []FileRange{
+	{Path: "/Downloads/t/a", First: 0, End: 4},
+	{Path: "/Downloads/t/b", First: 4, End: 7},
+	{Path: "/Downloads/t/c", First: 7, End: 10},
+}
+
+// cleanRecord is a clean quit that left a and b, and never wrote c.
 func cleanRecord() *Record {
 	return &Record{Clean: true, FileSystem: "apfs", Dev: 42, Files: []FileState{
-		{Path: "/Downloads/t/a", Present: true, Fingerprint: fp(100, old, old), FirstPiece: 0, EndPiece: 4},
-		{Path: "/Downloads/t/b", Present: true, Fingerprint: fp(200, old, old), FirstPiece: 4, EndPiece: 7},
-		{Path: "/Downloads/t/c", Present: false, FirstPiece: 7, EndPiece: 10},
+		{Path: "/Downloads/t/a", Present: true, Fingerprint: fp(100, old, old)},
+		{Path: "/Downloads/t/b", Present: true, Fingerprint: fp(200, old, old)},
+		{Path: "/Downloads/t/c"},
 	}}
+}
+
+func decide(rec *Record, probe Probe) Decision {
+	return Decide(rec, root, layout, 10, probe)
 }
 
 // unchanged is a disk where everything is as the clean record left it.
@@ -57,7 +68,7 @@ func unchanged() fakeProbe {
 }
 
 func TestEverythingAsTheCleanQuitLeftItIsTrusted(t *testing.T) {
-	d := Decide(cleanRecord(), root, 10, unchanged())
+	d := decide(cleanRecord(), unchanged())
 	if d.VerifyAll || len(d.VerifyPieces) != 0 || len(d.Missing) != 0 || d.Reason != "" {
 		t.Fatalf("Decide = %+v, want trust", d)
 	}
@@ -73,7 +84,7 @@ func TestWithoutACleanQuitEverythingIsVerified(t *testing.T) {
 	unclean := cleanRecord()
 	unclean.Clean = false
 	for name, rec := range map[string]*Record{"no record": nil, "an unclean quit": unclean} {
-		d := Decide(rec, root, 10, unchanged())
+		d := decide(rec, unchanged())
 		if !d.VerifyAll || d.Reason == "" {
 			t.Errorf("%s: Decide = %+v, want VerifyAll with a reason", name, d)
 		}
@@ -98,7 +109,7 @@ func TestAFileSystemThatCannotBeTrustedForTimestampsAndInodesMeansEverythingIsVe
 	} {
 		probe, rec := unchanged(), cleanRecord()
 		tc.mutate(&probe, rec)
-		if d := Decide(rec, root, 10, probe); !d.VerifyAll || d.Reason == "" {
+		if d := decide(rec, probe); !d.VerifyAll || d.Reason == "" {
 			t.Errorf("%s: Decide = %+v, want VerifyAll", name, d)
 		}
 	}
@@ -131,15 +142,15 @@ func TestOnlyTheChangedFilesAreVerified(t *testing.T) {
 	} {
 		probe := unchanged()
 		tc.change(&probe)
-		d := Decide(cleanRecord(), root, 10, probe)
+		d := decide(cleanRecord(), probe)
 		if d.VerifyAll || len(d.Missing) != 0 || !slices.Equal(d.VerifyPieces, tc.want) {
 			t.Errorf("%s: Decide = %+v, want pieces %v only", name, d, tc.want)
 		}
-		for _, f := range cleanRecord().Files {
+		for _, f := range layout {
 			if !slices.Contains(d.Trusted, f.Path) {
 				continue
 			}
-			for piece := f.FirstPiece; piece < f.EndPiece; piece++ {
+			for piece := f.First; piece < f.End; piece++ {
 				if slices.Contains(d.VerifyPieces, piece) {
 					t.Errorf("%s: piece %d of the trusted file %s is also to be verified", name, piece, f.Path)
 				}
@@ -154,7 +165,7 @@ func TestOnlyTheChangedFilesAreVerified(t *testing.T) {
 func TestAFileThatWasThereAndIsGoneIsMissingNotVerified(t *testing.T) {
 	probe := unchanged()
 	delete(probe.stats, "/Downloads/t/b")
-	d := Decide(cleanRecord(), root, 10, probe)
+	d := decide(cleanRecord(), probe)
 	if d.VerifyAll || !slices.Equal(d.Missing, []string{"/Downloads/t/b"}) || len(d.VerifyPieces) != 0 {
 		t.Fatalf("Decide = %+v, want exactly b missing", d)
 	}
@@ -162,7 +173,7 @@ func TestAFileThatWasThereAndIsGoneIsMissingNotVerified(t *testing.T) {
 
 func TestAFileNeverWrittenIsNotMissing(t *testing.T) {
 	// c is absent in the record and absent now: a file of a partial download
-	d := Decide(cleanRecord(), root, 10, unchanged())
+	d := decide(cleanRecord(), unchanged())
 	if len(d.Missing) != 0 || len(d.VerifyPieces) != 0 {
 		t.Fatalf("Decide = %+v", d)
 	}
@@ -174,26 +185,79 @@ func TestOnlyAPFSIsTrustedForTimestampsAndInodes(t *testing.T) {
 		rec.FileSystem = fsType
 		probe := unchanged()
 		probe.fsType = fsType
-		if d := Decide(rec, root, 10, probe); !d.VerifyAll || d.Reason == "" {
+		if d := decide(rec, probe); !d.VerifyAll || d.Reason == "" {
 			t.Errorf("%s: Decide = %+v, want VerifyAll", fsType, d)
 		}
 	}
 }
 
 func TestRangesAreMergedSortedAndKeptInsideTheTorrent(t *testing.T) {
-	rec := &Record{Clean: true, FileSystem: "apfs", Dev: 42, Files: []FileState{
-		{Path: "/Downloads/x", Present: true, Fingerprint: fp(1, old, old), FirstPiece: 3, EndPiece: 6},
-		{Path: "/Downloads/y", Present: true, Fingerprint: fp(1, old, old), FirstPiece: 5, EndPiece: 8},
-		{Path: "/Downloads/z", Present: true, Fingerprint: fp(1, old, old), FirstPiece: 8, EndPiece: 8},  // empty file
-		{Path: "/Downloads/w", Present: true, Fingerprint: fp(1, old, old), FirstPiece: 9, EndPiece: 14}, // past the end
-	}}
-	probe := fakeProbe{fsType: "apfs", stats: map[string]Fingerprint{
-		root:           {Dev: 42},
-		"/Downloads/x": fp(2, old, old), "/Downloads/y": fp(2, old, old),
-		"/Downloads/z": fp(2, old, old), "/Downloads/w": fp(2, old, old),
-	}}
-	d := Decide(rec, root, 10, probe)
+	expected := []FileRange{
+		{Path: "/Downloads/x", First: 3, End: 6},
+		{Path: "/Downloads/y", First: 5, End: 8},
+		{Path: "/Downloads/z", First: 8, End: 8},   // an empty file covers no piece
+		{Path: "/Downloads/w", First: 9, End: 14},  // past the end of the torrent
+		{Path: "/Downloads/v", First: -2, End: -1}, // before its start
+	}
+	var files []FileState
+	stats := map[string]Fingerprint{root: {Dev: 42}}
+	for _, f := range expected {
+		files = append(files, FileState{Path: f.Path, Present: true, Fingerprint: fp(1, old, old)})
+		stats[f.Path] = fp(2, old, old)
+	}
+	d := Decide(&Record{Clean: true, FileSystem: "apfs", Dev: 42, Files: files}, root, expected, 10, fakeProbe{fsType: "apfs", stats: stats})
 	if want := []int{3, 4, 5, 6, 7, 9}; !slices.Equal(d.VerifyPieces, want) {
 		t.Fatalf("VerifyPieces = %v, want %v", d.VerifyPieces, want)
+	}
+}
+
+func TestTheRangesComeFromTheTorrentNotFromTheRecord(t *testing.T) {
+	// a record that understates what a changed file covers must not shrink the verification
+	probe := unchanged()
+	probe.stats["/Downloads/t/a"] = fp(1, old, old)
+	d := decide(cleanRecord(), probe)
+	if !slices.Equal(d.VerifyPieces, []int{0, 1, 2, 3}) {
+		t.Fatalf("VerifyPieces = %v, want the whole range of a from the layout", d.VerifyPieces)
+	}
+}
+
+func TestAFileTheRecordDoesNotKnowIsVerifiedAndNeverTrusted(t *testing.T) {
+	rec := cleanRecord()
+	rec.Files = rec.Files[:1] // b and c are not in the record, though b exists
+	d := decide(rec, unchanged())
+	if d.VerifyAll || !slices.Equal(d.VerifyPieces, []int{4, 5, 6}) || slices.Contains(d.Trusted, "/Downloads/t/b") {
+		t.Fatalf("Decide = %+v, want b verified and not trusted", d)
+	}
+	empty := &Record{Clean: true, FileSystem: "apfs", Dev: 42}
+	if d := decide(empty, unchanged()); !slices.Equal(d.VerifyPieces, []int{0, 1, 2, 3, 4, 5, 6}) || len(d.Trusted) != 0 {
+		t.Fatalf("an empty record trusted something: %+v", d)
+	}
+}
+
+func TestARecordOfAnotherTorrentIsNeverTrusted(t *testing.T) {
+	rec := cleanRecord()
+	rec.Files = append(rec.Files, FileState{Path: "/Downloads/other/file", Present: true, Fingerprint: fp(1, old, old)})
+	if d := decide(rec, unchanged()); !d.VerifyAll || d.Reason == "" {
+		t.Fatalf("Decide = %+v, want everything verified", d)
+	}
+}
+
+func TestAMovedFileIsMissingEvenAfterACrash(t *testing.T) {
+	probe := unchanged()
+	delete(probe.stats, "/Downloads/t/b")
+	crashed := cleanRecord()
+	crashed.Clean = false
+	d := decide(crashed, probe)
+	if !d.VerifyAll || !slices.Equal(d.Missing, []string{"/Downloads/t/b"}) {
+		t.Fatalf("Decide = %+v, want everything verified and b missing: nothing may be downloaded in its place", d)
+	}
+	other := unchanged()
+	delete(other.stats, "/Downloads/t/b")
+	other.fsType = "exfat"
+	if d := decide(cleanRecord(), other); !d.VerifyAll || !slices.Equal(d.Missing, []string{"/Downloads/t/b"}) {
+		t.Fatalf("on another file system Decide = %+v, want b missing too", d)
+	}
+	if d := decide(nil, probe); !d.VerifyAll || len(d.Missing) != 0 {
+		t.Fatalf("with no record nothing is known to be missing: %+v", d)
 	}
 }

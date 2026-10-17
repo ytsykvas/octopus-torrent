@@ -173,8 +173,8 @@ Linking the engine into the product and the Wails build tags (018); persisting t
 | B — library marks, volume package | `5631f10` | `pass` |
 | C1 — placement and the guard | `c239f71` | `pass` |
 | C2 — restart, crash, mismatches | `9bc9859` | `pass` |
-| C3 — volumes | stage C3 commit | `pass` |
-| D — documents, review, `done` | — | `not_run` |
+| C3 — volumes | `7336e27` | `pass` |
+| D — documents, review, final gate, `done` | stage D commit | `pass` (below) |
 
 ## Stage A — measurements
 
@@ -387,7 +387,8 @@ flags, and the profile it writes covers `filestore`.
 ## Stage C3 — refused writes and volumes
 
 The four scenarios passed at their first run (RED was the missing test; the code under test existed from
-stages C1–C2). Command: `go test -race -count=1 -v -run 'RefusedMarkWrites|MarksFolderOnAFullVolume|VolumePulled'
+stages C1–C2). That a test which never failed can fail was shown afterwards, by mutation (see "Mutation
+checks"). Command: `go test -race -count=1 -v -run 'RefusedMarkWrites|MarksFolderOnAFullVolume|VolumePulled'
 ./internal/torrentengine/filestore`, `pass` in 12.5 s.
 
 | Scenario | Result |
@@ -399,3 +400,113 @@ stages C1–C2). Command: `go test -race -count=1 -v -run 'RefusedMarkWrites|Mar
 
 The engine log of the first scenario contains the contrast to the engine's silence: it logs each refused
 mark at error level and goes on (see ADR, "Verified grounds").
+
+## Stage D — review, rework, final checks
+
+### Review (`/branch-review`) and what changed
+
+Three reviewers read the branch against `main` on 17 October 2026: code-reviewer (architecture and
+quality), security-reviewer (data safety) and tech-lead (design and readiness). None found a critical defect
+in what the product ships (it does not link this code before 018). They found real defects in the
+foundation 018 adopts, and gaps in the evidence. Every finding was fixed in this stage, or the limit is
+written down in the ADR.
+
+| Finding | Reviewer | Resolution |
+|---|---|---|
+| **A clean quit during verification blesses an edited file**: `Distrust` was memory-only, a verified piece fingerprinted the whole file, and the next start trusted the stale marks | security (high) | `Seal` records a file as absent while any of its pieces is distrusted and unresolved (`Completion.Unresolved`); test, and a mutation check that shows the file trusted without it |
+| The guard follows symlinks and lets the engine truncate an existing file at a zero-length path | security | `OpenTorrent` refuses both (`ErrUnsafePath`), on every open; the engine's behaviour stays as two fact tests; the window between check and open is documented |
+| An outside edit between the run's own writes is absorbed | security | A file is compared with what the run left before a write; a foreign change taints it (recorded as absent); skipped while writes to the file overlap; documented as a limit |
+| Two volumes at one mount point have the same device and inode | security | The identity includes the creation time (`files.IdentityOf`); a white-box test and the volume-swap helper |
+| `Decide` trusts the record's own file list and ranges | security | `Decide` gets the torrent's layout (`filestore.Ranges`), ignores the record's ranges, treats unknown files as "another torrent's" and unlisted files as unknown |
+| `Layout` returns the save folder as the torrent's folder | security | Refused for `""`, `.`, `a/..` |
+| `Stop` can hang on a stalled volume; `Seal` runs after a timed-out `Stop` or before the marks are closed | security, code, tech-lead | `stopped` is checked under the lock and the folder outside it; the waiter is made once; a timed-out `Stop` fails the session; `Seal` needs a drained `Stop` (`ErrNotStopped`) and closed marks (`ErrNotClosed`) |
+| Moved file after a crash is not `Missing`, so the engine would download it again | tech-lead | `Missing` is computed first, whatever the clean flag says; test |
+| A missing file is dropped from the next record | code | `Baseline` keeps missing files too; test |
+| `classicio` could restart for ever; `%w` of a nil exec result | security, code | A marker variable; an exec that returns without an error is an error; the `GOPPROF` order is written down for 018 |
+| The schema check accepts any single table at `user_version` 1 | code, security | The table name is checked; test |
+| Marks read under one lock for up to 30 s; a failed read retried and re-reported | code | Per-torrent single read with no lock held; a failed read is cached; test with a slow read |
+| `Session.Fail` grows without bound | code | First 100 kept, the rest counted |
+| `guard.go` has three roles; duplicated `Stat_t` casts; untyped op kinds; two constructors differing by case | code | Split into `guard.go`, `track.go`, `seal.go`, `safepath.go`; `files.IdentityOf`; `opKind`; `newGuard` |
+| Test support: `Fill` could fill the boot disk, `Detach` on a plain folder, child process trusts its environment, `syncFile` blocks on a pipe, error text matching | security, code | `Fill` refuses a file system over 1 GiB; `Detach` needs an attached volume; the child's paths must be under the temporary folder; `O_NONBLOCK` and a regular-file check; `ENOSPC` |
+| Engine storage logs absolute paths | security | `NewTorrentStorage` discards the log unless a logger is given; guard errors with paths are for the UI only (ADR, 018 note) |
+| "Keep the library" had no test | tech-lead | A stand-in library database in the data folder is byte for byte unchanged and opens in the refused-writes, full-volume, crash and both pulled-volume scenarios |
+| Documents claimed more than the tests prove | tech-lead | The ADR separates "test" from "source"; fact tests added for the dropped `AddTorrentOpt` info, the unreadable completion, the open count, the constructors' placement and the part-file warning; finding 22's method is recorded |
+| Finding 18 framing (`/Volumes` is not user-writable) | tech-lead | Reworded in the ADR and the test comment |
+| The 032 note was wrong; 026 and 052 had none | tech-lead | Corrected; notes added |
+| Stage D `not_run`, no final gate, "No debt left" | code, tech-lead | This section; the open items are listed with owners in the feature document |
+| Timing: `Sleep` in `quitCleanly`, shadowed `deadline`, an alias `completeSet`, mixed imports | code | A "no payload for 200 ms" wait; renamed; removed; tidied. The absence checks keep a fixed window: showing that nothing happens needs one |
+| Per-chunk cost of the guard (two `Lstat` per write under one lock) | code | Not measured separately; stage A measured one `stat` at 1 µs, and every scenario transfer completes at the speed of the loopback swarm. Accepted; 018 measures the product |
+| Hybrid, symlink, `Present=false` semantics, APFS-only trust, record-keyed trust | tech-lead | Accepted and written in the ADR |
+
+### Mutation checks
+
+| Mutation (reverted at once) | Result |
+|---|---|
+| The save-folder check removed from `enter` | `fail`: the vanished-folder test (both variants), the pulled-while-leeching test, the unit test of a gone folder (both variants) and the volume-swap test; the pulled-while-seeding test hangs until the timeout. |
+| `Seal` ignores unresolved pieces | `fail`: `TestSealWaitsForTheMarksToBeClosedAndKeepsFilesWithUnverifiedPiecesOutOfTheRecord` shows both files recorded as present, and `Decide` trusting `a` with pieces 1–2 still to be verified |
+
+### Product build tags
+
+`go vet -tags nosqlite,noboltdb ./internal/torrentengine/... ./internal/files ./internal/library ./internal/testutil/...`
+`pass`. `go list -tags nosqlite,noboltdb -test -deps ./internal/torrentengine/filestore` lists no crawshaw,
+bbolt or llsqlite package; the only cgo packages are `runtime/cgo` and `go-libutp`.
+`go test -tags nosqlite,noboltdb -race ./internal/torrentengine/filestore` `pass` (47 s). The two fact tests
+in `internal/torrentengine/storage_test.go` about the engine's *own* stores fail under those tags, as they
+should: the stores are not linked. They run in the default build, which the gate uses.
+
+### Findings 23 and 24 (found while closing the evidence gaps)
+
+23. **An unreadable completion disallows the engine's download.** `TestAnUnreadableCompletionStopsTheEnginesDownload`:
+    with a `Get` that fails, a connected seeder delivers 0 payload bytes in 1.5 s and the engine logs
+    "error getting piece completion". The failure is explicit; nothing is hashed or fetched.
+24. **With part files off the engine still warns about a missing `<name>.part` at every completed file,**
+    naming the local path (`TestWithPartFilesOffTheEngineStillWarnsAboutAMissingPartFile`).
+
+Finding 15 was corrected: a storage that opens is opened once, whether given with the torrent or as the
+default; one that refuses is asked twice (`TestTheEngineOpensAWorkingStorageOnceAndARefusingOneTwice`).
+
+### What was not run
+
+| Item | Why | Owner |
+|---|---|---|
+| Power-loss durability | cannot be forced or tested here; the rule verifies everything after any unclean end | — |
+| `.app` restart, crash and quit scenarios | the product does not link the engine before 018 | 029, 052 |
+| Re-exec of `classicio` inside the `.app` bundle | needs the adapter in the bundle | 018 |
+| Shutdown with discovery on | the swarm is closed | 018 |
+| That "not clean" is written before the first payload write | the record lives in memory in 009 | 028, 029 |
+| Quit time with many files | not measured | 028 |
+| `/qa` of the `.app` | no product behaviour changed | — |
+| Engine integration and test-bridge UI tests | gate steps owned by 018 and 035 | 018, 035 |
+
+### Refactoring and debt
+
+- **Refactoring:** the `hdiutil` helpers of `internal/library/disk_test.go` became `internal/testutil/volume`;
+  `swarm.Main` shares its body with `swarm.MainClassicIO`; `guard.go` was split by role; one `IdentityOf`
+  replaced two hand-written `Stat_t` casts; the marker, session cap and lock changes above.
+- **Debt:** none left in the code the task touched. The open items (quit drain, persistence of the record,
+  user messages, `.app` scenarios, the stalled transfer, quit time) belong to named tasks and are listed in
+  the [feature document](../app/engine-storage.md#refactoring-and-debt-check). The limits of the design are
+  in the ADR.
+
+### Final gate
+
+`go tool devtool check` from the repository root on the stage D tree, exit code 0:
+
+| Step | Result |
+|---|---|
+| npm ci, npm cooldown, go env, typecheck, lint, frontend build, gofmt, go vet | `pass` |
+| frontend tests | `pass`: 22 own files at 100% lines, statements, functions and branches |
+| bindings | `pass`: OctopusTorrent `frontend/wailsjs/` (6 files), EngineSpike `frontend/spike/wailsjs/` (6 files) |
+| go tests | `pass`: `go test -race -count=1 -covermode=atomic -coverpkg=./... ./...` |
+| `.app` coverage run | `pass`: OctopusTorrent (pid 41107) and EngineSpike (pid 41204) launched and quit |
+| go coverage | `pass`: every block of every own Go file is covered (unit tests + `.app` runs); the new packages (`internal/files`, `internal/library`, `internal/testutil/volume`, `internal/torrentengine/classicio`, `internal/torrentengine/filestore`) are among them |
+| escape hatches, scripts | `pass`: no skipped test, no ignore directive |
+| product isolation | `pass`: the product links none of the spike, test support or the engine (314 packages) |
+| release build, docs, plan | `pass` |
+| release age, npm audit, govulncheck | `pass` |
+| updates | `pass`, informational: `github.com/anacrolix/chansync` v0.7.0 → v0.8.0 is out of quarantine; not taken, the engine decides it |
+| engine integration | `not_run`: task 018 |
+| test-bridge UI tests | `not_run`: task 035 |
+| single code version | `pass` |
+
+**Result:** `GATE PASSED`. `go.mod` and `go.sum` are unchanged by this task.

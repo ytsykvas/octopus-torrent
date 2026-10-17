@@ -114,9 +114,9 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 
 			vanish(t, saveRoot)
 
-			deadline := time.Now().Add(5 * time.Second)
+			noticed := time.Now().Add(5 * time.Second)
 			for r.session.Clean() {
-				if time.Now().After(deadline) {
+				if time.Now().After(noticed) {
 					t.Fatal("the loss of the save folder was not noticed")
 				}
 				time.Sleep(10 * time.Millisecond)

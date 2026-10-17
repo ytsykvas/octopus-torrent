@@ -4,6 +4,7 @@
 package volume
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +29,8 @@ var (
 	}
 	output     io.Writer = os.Stderr
 	chunkWrite           = func(f *os.File, b []byte) (int, error) { return f.Write(b) }
+	// fillLimit is the largest file system Fill will fill: a mistaken folder must not fill the boot disk.
+	fillLimit = int64(1 << 30)
 )
 
 // Options describe a new volume.
@@ -78,9 +81,21 @@ func (v *Volume) Attach() {
 	v.attached = true
 }
 
-// Detach removes the volume at once, as when a drive is pulled: open files do not hold it.
+// AttachAt mounts the image at another, existing folder, as when another drive takes the place of the
+// one that was pulled. Detach the volume first.
+func (v *Volume) AttachAt(mount string) {
+	v.tb.Helper()
+	v.Mount = mount
+	v.Attach()
+}
+
+// Detach removes the volume at once, as when a drive is pulled: open files do not hold it. A volume
+// that is not attached is an error: its mount point is then a plain folder.
 func (v *Volume) Detach() {
 	v.tb.Helper()
+	if !v.attached {
+		v.tb.Fatalf("Detach: the volume is not attached")
+	}
 	v.detach(v.tb.Fatalf)
 }
 
@@ -104,6 +119,13 @@ func (v *Volume) hdiutil(args ...string) {
 // file's path. It writes in shrinking chunks, so not even a few blocks stay free.
 func Fill(tb testing.TB, dir string) string {
 	tb.Helper()
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(dir, &st); err != nil {
+		tb.Fatalf("size of the file system of %s: %v", dir, err)
+	}
+	if size := int64(st.Blocks) * int64(st.Bsize); size > fillLimit {
+		tb.Fatalf("Fill refuses a file system of %d bytes: it is for small test volumes", size)
+	}
 	path := filepath.Join(dir, "filler")
 	f, err := os.Create(path)
 	if err != nil {
@@ -114,7 +136,7 @@ func Fill(tb testing.TB, dir string) string {
 		chunk := make([]byte, size)
 		for {
 			if _, err := chunkWrite(f, chunk); err != nil {
-				if !strings.Contains(err.Error(), "no space left") {
+				if !errors.Is(err, syscall.ENOSPC) {
 					tb.Fatalf("filling the volume: %v", err)
 				}
 				break

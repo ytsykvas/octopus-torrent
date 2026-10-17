@@ -2,6 +2,7 @@ package filestore
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 )
@@ -37,5 +38,19 @@ func TestProblemsMayBeReportedFromManyGoroutines(t *testing.T) {
 	wg.Wait()
 	if n := len(s.Problems()); n != 50 {
 		t.Fatalf("%d problems, want 50", n)
+	}
+}
+
+func TestASessionKeepsTheFirstProblemsAndCountsTheRest(t *testing.T) {
+	var s Session
+	for i := range maxProblems + 25 {
+		s.Fail(fmt.Errorf("problem %d", i))
+	}
+	got := s.Problems()
+	if len(got) != maxProblems || got[0].Error() != "problem 0" || got[maxProblems-1].Error() != fmt.Sprintf("problem %d", maxProblems-1) {
+		t.Fatalf("%d problems kept, first %v", len(got), got[0])
+	}
+	if s.Dropped() != 25 || s.Clean() {
+		t.Fatalf("dropped %d, clean %v", s.Dropped(), s.Clean())
 	}
 }

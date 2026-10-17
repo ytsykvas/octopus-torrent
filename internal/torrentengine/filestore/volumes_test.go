@@ -31,6 +31,7 @@ func TestRefusedMarkWritesAreReportedWhileTheEngineGoesOnAndTheNextStartVerifies
 	fx, mi := named(t, "v1-large")
 	seed := seeder(t, fx, mi, swarm.Options{})
 	saveRoot, dataDir := t.TempDir(), t.TempDir()
+	lib := libraryIn(t, dataDir)
 
 	first := start(t, mi, saveRoot, dataDir, runOptions{marks: refusingMarks{}, completion: Options{FlushRows: 4}})
 	first.download(seed) // the engine only logs a failed mark and completes the torrent
@@ -59,7 +60,7 @@ func TestRefusedMarkWritesAreReportedWhileTheEngineGoesOnAndTheNextStartVerifies
 	}
 	settle(t, second.torrent)
 	n := second.torrent.NumPieces()
-	if got := completeSet(second.torrent); !slices.Equal(got, all(n)) || second.storage.Reads() != int64(n) {
+	if got := completePieces(second.torrent); !slices.Equal(got, all(n)) || second.storage.Reads() != int64(n) {
 		t.Fatalf("complete %d of %d pieces with %d reads, want all verified by reading", len(got), n, second.storage.Reads())
 	}
 	second.connect(seed)
@@ -68,11 +69,13 @@ func TestRefusedMarkWritesAreReportedWhileTheEngineGoesOnAndTheNextStartVerifies
 		t.Fatalf("%d payload bytes downloaded again", payload)
 	}
 	second.quitCleanly()
+	lib.intact()
 }
 
 func TestAMarksFolderOnAFullVolumeIsAnErrorBeforeAnythingIsWritten(t *testing.T) {
 	vol := volume.New(t, volume.Options{Size: "8m", FS: "APFS", Name: "OctoFull"})
-	volume.Fill(t, vol.Mount)
+	lib := libraryIn(t, vol.Mount)
+	filler := volume.Fill(t, vol.Mount)
 	saveRoot := t.TempDir()
 	var session Session
 	c, err := OpenCompletion(deadline(t, closeLimit), vol.Mount, &session, Options{})
@@ -82,6 +85,11 @@ func TestAMarksFolderOnAFullVolumeIsAnErrorBeforeAnythingIsWritten(t *testing.T)
 	if got := listFiles(t, saveRoot); len(got) != 0 {
 		t.Fatalf("the payload folder holds %v", got)
 	}
+	lib.unchanged() // the library on the full volume was not touched by the failed attempt
+	if err := os.Remove(filler); err != nil {
+		t.Fatal(err)
+	}
+	lib.intact()
 }
 
 // onVolume makes a run on an APFS volume: the payload goes into <volume>/Downloads and the marks into
@@ -100,16 +108,17 @@ func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothing
 	fx, mi := named(t, "v1-large")
 	seed := seeder(t, fx, mi, swarm.Options{RateLimit: slowRate})
 	vol, saveRoot, dataDir := onVolume(t, "OctoLeech")
+	lib := libraryIn(t, dataDir)
 
 	first := start(t, mi, saveRoot, dataDir, runOptions{})
 	first.connect(seed)
 	waitPieces(t, first.torrent, 8)
-	have := completeSet(first.torrent)
+	have := completePieces(first.torrent)
 
 	vol.Detach()
-	deadline := time.Now().Add(5 * time.Second)
+	noticed := time.Now().Add(5 * time.Second)
 	for first.session.Clean() {
-		if time.Now().After(deadline) {
+		if time.Now().After(noticed) {
 			t.Fatal("the pulled volume was not noticed")
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -137,7 +146,7 @@ func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothing
 		t.Fatalf("decision %+v, want everything verified after an unclean run", second.decision)
 	}
 	settle(t, second.torrent)
-	got := completeSet(second.torrent)
+	got := completePieces(second.torrent)
 	for _, p := range have {
 		if !slices.Contains(got, p) {
 			t.Errorf("piece %d was complete before the volume was pulled and is not after it came back", p)
@@ -149,12 +158,14 @@ func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothing
 	}
 	second.quitCleanly()
 	assertPayload(t, fx, saveRoot)
+	lib.intact()
 }
 
 func TestAVolumePulledWhileSeedingIsNotRecreatedAndTheMarksSurvive(t *testing.T) {
 	fx, mi := named(t, "v1-large")
 	source := seeder(t, fx, mi, swarm.Options{})
 	vol, saveRoot, dataDir := onVolume(t, "OctoSeed")
+	lib := libraryIn(t, dataDir)
 	first := start(t, mi, saveRoot, dataDir, runOptions{})
 	first.download(source)
 	first.quitCleanly()
@@ -210,9 +221,10 @@ func TestAVolumePulledWhileSeedingIsNotRecreatedAndTheMarksSurvive(t *testing.T)
 		t.Fatalf("decision %+v, want everything verified", third.decision)
 	}
 	settle(t, third.torrent)
-	if got := completeSet(third.torrent); !slices.Equal(got, all(third.torrent.NumPieces())) {
+	if got := completePieces(third.torrent); !slices.Equal(got, all(third.torrent.NumPieces())) {
 		t.Fatalf("%d pieces complete after the volume came back, want all", len(got))
 	}
 	third.quitCleanly()
 	assertPayload(t, fx, saveRoot)
+	lib.intact()
 }

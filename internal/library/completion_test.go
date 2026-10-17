@@ -151,6 +151,10 @@ func TestAStoreOfAnotherVersionOrPurposeIsNeverCorruptAndNeverChanged(t *testing
 		"tables of another purpose": func(s *Store) {
 			must(t, s, "CREATE TABLE torrents(id INTEGER PRIMARY KEY)")
 		},
+		"another table at the same version": func(s *Store) {
+			must(t, s, "CREATE TABLE torrents(id INTEGER PRIMARY KEY)")
+			must(t, s, "PRAGMA user_version = 1")
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "piece-completion.sqlite")

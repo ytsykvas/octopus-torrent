@@ -3,7 +3,9 @@ package filestore
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -67,7 +69,10 @@ func (d *doubleMarks) SaveMarks(_ context.Context, marks []library.Mark) error {
 		}
 		d.stored[m.InfoHash][m.Piece] = m.Complete
 	}
-	d.saved <- struct{}{}
+	select { // a notification for tests that wait for a write; it must never hold the writer
+	case d.saved <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
@@ -195,9 +200,9 @@ func TestAFailedWriteIsStickyAndReportedByEveryLaterCall(t *testing.T) {
 	if err := c.Set(key(hashA, 0), true); err != nil {
 		t.Fatalf("the first Set cannot know about the write yet: %v", err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	noticed := time.Now().Add(5 * time.Second)
 	for c.Err() == nil {
-		if time.Now().After(deadline) {
+		if time.Now().After(noticed) {
 			t.Fatal("the failed write was not reported")
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -233,6 +238,12 @@ func TestAMarksStoreThatCannotLoadIsAnExplicitError(t *testing.T) {
 	c, s := completion(t, d, slowFlush)
 	if _, err := c.Get(key(hashA, 0)); !errors.Is(err, d.loadErr) {
 		t.Fatalf("Get = %v, want the load failure", err)
+	}
+	if _, err := c.Get(key(hashA, 1)); !errors.Is(err, d.loadErr) {
+		t.Fatalf("a second Get = %v, want the same failure, not another read", err)
+	}
+	if d.loads != 1 || len(s.Problems()) != 1 {
+		t.Fatalf("%d reads and %d problems for one failed load, want 1 and 1", d.loads, len(s.Problems()))
 	}
 	if err := c.Set(key(hashA, 0), true); !errors.Is(err, d.loadErr) {
 		t.Fatalf("Set = %v, want the load failure", err)
@@ -359,7 +370,7 @@ func TestTheRealStoreKeepsMarksAcrossAClosedAndReopenedCompletion(t *testing.T) 
 	if err := c.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := filepathStat(filepath.Join(dir, CompletionFile)); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, CompletionFile)); err != nil {
 		t.Fatal(err)
 	}
 	again, err := OpenCompletion(ctx, dir, &s, slowFlush)
@@ -393,11 +404,113 @@ func TestACompletionThatCannotBeOpenedIsAnErrorAndNeverFallsBackToMemory(t *test
 
 func TestTheDefaultsOfTheOptionsAreSetWhereNoneIsGiven(t *testing.T) {
 	got := Options{}.withDefaults()
-	if got.FlushEvery != 250*time.Millisecond || got.FlushRows != 256 || got.WriteTimeout != 30*time.Second {
+	if got.FlushEvery != 250*time.Millisecond || got.FlushRows != 256 || got.Timeout != 30*time.Second {
 		t.Fatalf("defaults = %+v", got)
 	}
-	given := Options{FlushEvery: time.Second, FlushRows: 7, WriteTimeout: time.Minute}
+	given := Options{FlushEvery: time.Second, FlushRows: 7, Timeout: time.Minute}
 	if given.withDefaults() != given {
 		t.Fatalf("given options were changed: %+v", given.withDefaults())
+	}
+}
+
+func TestTheUnverifiedPiecesAreListedUntilTheEngineSaysSomething(t *testing.T) {
+	c, _ := completion(t, newDouble(), slowFlush)
+	if got := c.Unresolved(hashA); len(got) != 0 {
+		t.Fatalf("Unresolved with no distrust = %v", got)
+	}
+	c.Distrust(hashA, []int{5, 2, 9})
+	if got := c.Unresolved(hashA); !slices.Equal(got, []int{2, 5, 9}) {
+		t.Fatalf("Unresolved = %v, want [2 5 9]", got)
+	}
+	if err := c.Set(key(hashA, 5), false); err != nil { // a failed check is a verdict too
+		t.Fatal(err)
+	}
+	if got := c.Unresolved(hashA); !slices.Equal(got, []int{2, 9}) {
+		t.Fatalf("Unresolved after a verdict = %v, want [2 9]", got)
+	}
+	if c.Closed() {
+		t.Fatal("Closed before Close")
+	}
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !c.Closed() {
+		t.Fatal("not Closed after Close")
+	}
+	if got := c.Unresolved(hashA); !slices.Equal(got, []int{2, 9}) {
+		t.Fatalf("Unresolved after Close = %v: the record is sealed after the marks are closed", got)
+	}
+}
+
+// slowLoad is a marks double whose reads of one torrent wait for release.
+type slowLoad struct {
+	*doubleMarks
+	slow    [20]byte
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s slowLoad) LoadMarks(ctx context.Context, h [20]byte) (map[int]bool, error) {
+	if h == s.slow {
+		s.started <- struct{}{}
+		<-s.release
+	}
+	return s.doubleMarks.LoadMarks(ctx, h)
+}
+
+func TestASlowReadOfOneTorrentHoldsUpNoOtherAndEachIsReadOnce(t *testing.T) {
+	d := newDouble()
+	d.stored[hashB] = map[int]bool{0: true}
+	slow := slowLoad{doubleMarks: d, slow: hashA, started: make(chan struct{}, 8), release: make(chan struct{})}
+	var s Session
+	c := NewCompletion(slow, &s, slowFlush)
+	t.Cleanup(func() { _ = c.Close() })
+
+	var wg sync.WaitGroup
+	for range 4 { // four callers ask for the slow torrent at once
+		wg.Add(1)
+		go func() { defer wg.Done(); _, _ = c.Get(key(hashA, 0)) }()
+	}
+	<-slow.started // one of them is reading
+	got := make(chan error, 1)
+	go func() { _, err := c.Get(key(hashB, 0)); got <- err }()
+	select {
+	case err := <-got:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a read of another torrent waited for the slow one")
+	}
+	close(slow.release)
+	wg.Wait()
+	if d.loads != 2 {
+		t.Fatalf("%d reads for 2 torrents asked by 5 callers", d.loads)
+	}
+}
+
+func TestACloseDuringTheFirstReadOfATorrentRefusesTheCallThatWasReading(t *testing.T) {
+	for name, call := range map[string]func(c *Completion) error{
+		"Get": func(c *Completion) error { _, err := c.Get(key(hashA, 0)); return err },
+		"Set": func(c *Completion) error { return c.Set(key(hashA, 1), true) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			slow := slowLoad{doubleMarks: newDouble(), slow: hashA, started: make(chan struct{}, 4), release: make(chan struct{})}
+			var s Session
+			c := NewCompletion(slow, &s, slowFlush)
+			result := make(chan error, 1)
+			go func() { result <- call(c) }()
+			<-slow.started // this call is reading the marks
+			if err := c.Close(); err != nil {
+				t.Fatal(err)
+			}
+			close(slow.release)
+			if err := <-result; !errors.Is(err, ErrClosed) {
+				t.Errorf("%s that was reading when Close ran = %v, want ErrClosed", name, err)
+			}
+			if s.Clean() {
+				t.Error("a call after Close left the session clean")
+			}
+		})
 	}
 }
