@@ -18,7 +18,6 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/storage"
 
 	"octopustorrent/internal/files"
 	"octopustorrent/internal/testutil/volume"
@@ -409,33 +408,6 @@ func TestAFileMovedBeforeACrashIsStillMissingAndNothingIsDownloadedInItsPlace(t 
 	}
 }
 
-// Engine fact (finding 20): the engine believes a stored mark over a file of the right size and
-// does not hash. It cannot see a same-size rewrite, and it re-downloads, without hashing, a file that
-// is short or gone. This is why a mark is never trusted on its own.
-func TestTrustedMarksAreBlindToASameSizeRewrite(t *testing.T) {
-	fx, mi := named(t, "v1-tree")
-	seed := seeder(t, fx, mi, swarm.Options{})
-	saveRoot, dataDir := t.TempDir(), t.TempDir()
-	first := start(t, mi, saveRoot, dataDir, runOptions{})
-	first.download(seed)
-	first.quitCleanly()
-	readWrite(t, fx.FilePath(saveRoot, fx.Files[0]), func(b []byte) { b[len(b)/2] ^= 0xff })
-
-	believing := start(t, mi, saveRoot, dataDir, runOptions{trustMarks: true})
-	settle(t, believing.torrent)
-	n := believing.torrent.NumPieces()
-	if bad := badPieces(t, believing.torrent.Info(), saveRoot); !slices.Equal(bad, []int{0}) {
-		t.Fatalf("bad pieces = %v, want piece 0", bad)
-	}
-	if got := completePieces(believing.torrent); !slices.Equal(got, all(n)) {
-		t.Fatalf("complete pieces = %v: the engine no longer believes the marks over a same-size rewrite", got)
-	}
-	if reads := believing.storage.Reads(); reads != 0 {
-		t.Fatalf("%d pieces were read", reads)
-	}
-	believing.quit()
-}
-
 // An outside edit made while the application runs is not taken for the run's own work: the next
 // start sees the earlier fingerprint, which no longer matches.
 func TestAnEditMadeWhileTheApplicationRunsIsVerifiedAtTheNextStart(t *testing.T) {
@@ -516,34 +488,6 @@ func TestOnlyAPFSVolumesAreTrustedAndAReplugIsNotAMissingFile(t *testing.T) {
 			}
 			second.quitCleanly()
 		})
-	}
-}
-
-// Engine fact (finding 21): on HFS+ the engine's classic file IO cannot hash a piece, because it
-// seeks with SEEK_DATA, which HFS+ lacks. Every piece fails its check and the download never
-// completes. The guard refuses such a save folder; this test shows what happens without it.
-func TestOnHFSPlusTheEngineCannotHashAnyPiece(t *testing.T) {
-	fx, mi := named(t, "v1-single")
-	seed := seeder(t, fx, mi, swarm.Options{})
-	vol := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctoHFS"})
-	plain := plainStorage(vol.Mount, storage.NewMapPieceCompletion())
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)); _ = plain.Close() })
-	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
-	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
-		t.Fatal(err)
-	}
-	tor.DownloadAll()
-	connectPlain(t, tor, seed)
-	time.Sleep(2 * time.Second)
-	if n := len(completePieces(tor)); n != 0 {
-		t.Fatalf("%d pieces completed on HFS+: the engine can hash there now (finding 21)", n)
-	}
-	if !strings.Contains(p.Logs(), "inappropriate ioctl for device") {
-		t.Fatalf("the engine's log does not show the SEEK_DATA failure:\n%s", p.Logs())
 	}
 }
 

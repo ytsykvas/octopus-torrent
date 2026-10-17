@@ -53,13 +53,6 @@ func TestMainFailsWhenTheTestsLeftAnEngineRunning(t *testing.T) {
 	}
 }
 
-func TestClientIsTheEngineClientOfThePeer(t *testing.T) {
-	p := peer(t, Options{})
-	if p.Client() == nil || p.Client() != p.client {
-		t.Fatal("Client does not return the peer's engine client")
-	}
-}
-
 func fakeProcess(env map[string]string, execErr error, calls *int) classicio.Process {
 	return classicio.Process{
 		LookupEnv:  func(k string) (string, bool) { v, ok := env[k]; return v, ok },

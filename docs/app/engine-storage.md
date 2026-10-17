@@ -123,8 +123,9 @@ an outside edit that is absorbed while writes to one file overlap; bit rot on a 
 
 ## Usage and recovery
 
-For tests: `swarm.MainClassicIO` in `TestMain`; the scenario harness in
-`internal/torrentengine/filestore/scenario_test.go` shows a whole run (`start`, `download`, `end`).
+For tests: `swarm.MainClassicIO` in `TestMain`; the run harness in
+`internal/torrentengine/filestore/run_test.go` shows a whole run (`start`, `download`, `end`). The tripwires
+for the pinned engine (findings 15–24) are together in `enginefacts_test.go`.
 Recovery: an unclean record or an unreadable marks store means "verify everything"; the marks of a torrent
 are advisory and can always be rebuilt by hashing.
 

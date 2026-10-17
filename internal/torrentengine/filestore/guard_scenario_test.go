@@ -10,7 +10,6 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/storage"
 
 	"octopustorrent/internal/library"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
@@ -157,45 +156,6 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 				}
 			}
 		})
-	}
-}
-
-// Engine fact (finding 18): without the guard, classic IO recreates a deleted save folder and goes on
-// writing the payload there. For a detached volume that folder is the mount point, on the disk of
-// the application.
-func TestWithoutTheGuardTheEngineRecreatesADeletedSaveFolder(t *testing.T) {
-	fx, mi := named(t, "v1-large")
-	seed := seeder(t, fx, mi, swarm.Options{RateLimit: slowRate})
-	saveRoot := filepath.Join(t.TempDir(), "Downloads")
-	if err := os.Mkdir(saveRoot, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	plain := plainStorage(saveRoot, storage.NewMapPieceCompletion())
-	p, err := swarm.NewPeer(t.TempDir(), swarm.Options{DefaultStorage: Refusing(), DataDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = p.Close(deadline(t, closeLimit)); _ = plain.Close() })
-	tor, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes(), Storage: plain})
-	if err := tor.SetInfoBytes(mi.InfoBytes); err != nil {
-		t.Fatal(err)
-	}
-	tor.DownloadAll()
-	connectPlain(t, tor, seed)
-	waitPieces(t, tor, 8)
-	if err := os.RemoveAll(saveRoot); err != nil {
-		t.Fatal(err)
-	}
-	ctx := deadline(t, transferLimit)
-	for {
-		if _, err := os.Stat(fx.FilePath(saveRoot, fx.Files[0])); err == nil {
-			return // the folder and the file are back: the engine wrote the payload on
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatal("the engine did not recreate the deleted save folder; the guard may no longer be needed (finding 18)")
-		case <-time.After(10 * time.Millisecond):
-		}
 	}
 }
 

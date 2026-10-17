@@ -633,3 +633,10 @@ func TestAPeerCanTakeItsDefaultStorageAndItsDataDirFromTheCaller(t *testing.T) {
 		t.Fatalf("the recording storage saw %v", rec.opened)
 	}
 }
+
+func TestClientIsTheEngineClientOfThePeer(t *testing.T) {
+	p := peer(t, Options{})
+	if p.Client() == nil || p.Client() != p.client {
+		t.Fatal("Client does not return the peer's engine client")
+	}
+}
