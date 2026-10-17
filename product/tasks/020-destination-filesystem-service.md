@@ -61,6 +61,8 @@ Verifying the destination folder does not invoke the Trash. Spike 012 may be use
 
 **From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): a failed piece check renames every existing file of that piece to `<name>.part`, including a user's file that only collides with a torrent path, and the download that follows writes the torrent's bytes into it (finding 13: the user's bytes are lost, `TestPinnedEngineOverwritesAUsersFileAtATorrentPathWhenItDownloads`). The collision check covers every file of the torrent, not only the zero-length ones, and runs before the add.
 
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): the engine cannot hash a piece on an HFS+ volume (`SEEK_DATA`, finding 21), so the download would never complete; `NewTorrentStorage` refuses such a save folder with `ErrFileSystem`, and this service must show it to the owner before an import is confirmed. Refuse a path whose torrent folder or file is a symlink (finding 16: the engine follows it). APFS volumes get fast restarts; FAT, exFAT and others work but are verified in full at every start. The paths come from `filestore.Layout`, the engine's own rule. A pulled or replaced save folder is detected by the guard (`ErrRootChanged`) and is not recreated.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

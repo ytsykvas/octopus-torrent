@@ -173,7 +173,7 @@ Linking the engine into the product and the Wails build tags (018); persisting t
 | B — library marks, volume package | `5631f10` | `pass` |
 | C1 — placement and the guard | `c239f71` | `pass` |
 | C2 — restart, crash, mismatches | `9bc9859` | `pass` |
-| C3 — volumes | — | `not_run` |
+| C3 — volumes | stage C3 commit | `pass` |
 | D — documents, review, `done` | — | `not_run` |
 
 ## Stage A — measurements
@@ -383,3 +383,19 @@ flags, and the profile it writes covers `filestore`.
     test helper `keepMoving` switches the seeder's upload off and on 50 ms apart when the seeder uploaded
     nothing for 1.5 s, and logs the count; the package passed six runs in a row under `-race`. The
     product's remedy is 010's.
+
+## Stage C3 — refused writes and volumes
+
+The four scenarios passed at their first run (RED was the missing test; the code under test existed from
+stages C1–C2). Command: `go test -race -count=1 -v -run 'RefusedMarkWrites|MarksFolderOnAFullVolume|VolumePulled'
+./internal/torrentengine/filestore`, `pass` in 12.5 s.
+
+| Scenario | Result |
+|---|---|
+| Mark writes refused (a **test double** of the marks store that refuses every `SaveMarks`) during a full download | `pass`: the engine only logs "error marking piece complete" and completes the torrent; `Completion.Err()` reports the refusal; the record is unclean; the next start verifies all 64 pieces by reading and downloads 0 payload bytes |
+| A marks folder on a volume filled to the last byte | `pass`: `OpenCompletion` returns an explicit error and no store; the payload folder is untouched |
+| APFS volume **pulled while leeching** (`hdiutil detach -force`, 8 pieces done) | `pass`: the guard notices (`ErrRootChanged` is the first problem), the mount point on the internal disk stays empty, every mark seen complete survives in memory and in the store, the record is unclean; after the volume is plugged in again the next run verifies everything, every piece complete before the pull is complete after it, and only the missing bytes are downloaded |
+| APFS volume **pulled while seeding** to a plain leecher (slow upload) | `pass`: nothing recreated at the mount point, **no mark wiped by the failed reads**, the record is unclean; the next run verifies all pieces and finds them all complete |
+
+The engine log of the first scenario contains the contrast to the engine's silence: it logs each refused
+mark at error level and goes on (see ADR, "Verified grounds").

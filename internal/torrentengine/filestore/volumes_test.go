@@ -1,0 +1,218 @@
+package filestore
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"octopustorrent/internal/library"
+	"octopustorrent/internal/testutil/volume"
+	"octopustorrent/internal/torrentengine/testutil/swarm"
+)
+
+// refusingMarks is a test double for the marks store, and it is named as one: it reads nothing and
+// refuses every write, as a store on a full disk does.
+type refusingMarks struct{}
+
+var errDiskFull = errors.New("the disk holding the marks is full")
+
+func (refusingMarks) LoadMarks(context.Context, [20]byte) (map[int]bool, error) {
+	return map[int]bool{}, nil
+}
+func (refusingMarks) SaveMarks(context.Context, []library.Mark) error { return errDiskFull }
+func (refusingMarks) Close() error                                    { return nil }
+
+func TestRefusedMarkWritesAreReportedWhileTheEngineGoesOnAndTheNextStartVerifies(t *testing.T) {
+	fx, mi := named(t, "v1-large")
+	seed := seeder(t, fx, mi, swarm.Options{})
+	saveRoot, dataDir := t.TempDir(), t.TempDir()
+
+	first := start(t, mi, saveRoot, dataDir, runOptions{marks: refusingMarks{}, completion: Options{FlushRows: 4}})
+	first.download(seed) // the engine only logs a failed mark and completes the torrent
+	for first.completion.Err() == nil {
+		select {
+		case <-deadline(t, transferLimit).Done():
+			t.Fatal("the refused write was never reported")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if !errors.Is(first.completion.Err(), errDiskFull) {
+		t.Fatalf("Err = %v", first.completion.Err())
+	}
+	if !strings.Contains(first.peer.Logs(), "error marking piece complete") {
+		t.Error("the engine did not log the refused mark: the contrast with its silence is gone")
+	}
+	problems, err := first.end()
+	if !errors.Is(err, errDiskFull) || len(problems) == 0 || first.record.Clean {
+		t.Fatalf("end = %v, %v, clean %v; want the refused write reported and an unclean record", problems, err, first.record.Clean)
+	}
+	assertPayload(t, fx, saveRoot)
+
+	second := start(t, mi, saveRoot, dataDir, runOptions{prev: &first.record})
+	if !second.decision.VerifyAll {
+		t.Fatalf("decision %+v, want everything verified", second.decision)
+	}
+	settle(t, second.torrent)
+	n := second.torrent.NumPieces()
+	if got := completeSet(second.torrent); !slices.Equal(got, all(n)) || second.storage.Reads() != int64(n) {
+		t.Fatalf("complete %d of %d pieces with %d reads, want all verified by reading", len(got), n, second.storage.Reads())
+	}
+	second.connect(seed)
+	time.Sleep(300 * time.Millisecond)
+	if payload := swarm.Count(second.torrent).PayloadRead; payload != 0 {
+		t.Fatalf("%d payload bytes downloaded again", payload)
+	}
+	second.quitCleanly()
+}
+
+func TestAMarksFolderOnAFullVolumeIsAnErrorBeforeAnythingIsWritten(t *testing.T) {
+	vol := volume.New(t, volume.Options{Size: "8m", FS: "APFS", Name: "OctoFull"})
+	volume.Fill(t, vol.Mount)
+	saveRoot := t.TempDir()
+	var session Session
+	c, err := OpenCompletion(deadline(t, closeLimit), vol.Mount, &session, Options{})
+	if err == nil || c != nil || !errors.Is(err, library.ErrCannotOpen) && !errors.Is(err, library.ErrFull) {
+		t.Fatalf("OpenCompletion on a full volume = %v, %v; want an explicit error and no store", c, err)
+	}
+	if got := listFiles(t, saveRoot); len(got) != 0 {
+		t.Fatalf("the payload folder holds %v", got)
+	}
+}
+
+// onVolume makes a run on an APFS volume: the payload goes into <volume>/Downloads and the marks into
+// a data folder on the internal disk.
+func onVolume(t *testing.T, label string) (vol *volume.Volume, saveRoot, dataDir string) {
+	t.Helper()
+	vol = volume.New(t, volume.Options{Size: "32m", FS: "APFS", Name: label})
+	saveRoot = filepath.Join(vol.Mount, "Downloads")
+	if err := os.Mkdir(saveRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return vol, saveRoot, t.TempDir()
+}
+
+func TestAVolumePulledWhileLeechingLeavesNothingOnTheInternalDiskAndLosesNothingValid(t *testing.T) {
+	fx, mi := named(t, "v1-large")
+	seed := seeder(t, fx, mi, swarm.Options{RateLimit: slowRate})
+	vol, saveRoot, dataDir := onVolume(t, "OctoLeech")
+
+	first := start(t, mi, saveRoot, dataDir, runOptions{})
+	first.connect(seed)
+	waitPieces(t, first.torrent, 8)
+	have := completeSet(first.torrent)
+
+	vol.Detach()
+	deadline := time.Now().Add(5 * time.Second)
+	for first.session.Clean() {
+		if time.Now().After(deadline) {
+			t.Fatal("the pulled volume was not noticed")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if entries, err := os.ReadDir(vol.Mount); err != nil || len(entries) != 0 {
+		t.Fatalf("the mount point on the internal disk holds %v (%v): the engine wrote beside the pulled volume", entries, err)
+	}
+	for _, p := range have {
+		if c, err := first.completion.Get(metaKey(mi, p)); err != nil || !c.Ok || !c.Complete {
+			t.Fatalf("the mark of piece %d was lost: %+v %v", p, c, err)
+		}
+	}
+	problems, err := first.end()
+	if len(problems) == 0 || !errors.Is(problems[0], ErrRootChanged) || err == nil || first.record.Clean {
+		t.Fatalf("end = %v, %v, clean %v; want ErrRootChanged and an unclean record", problems, err, first.record.Clean)
+	}
+	if got := storedMarks(t, dataDir, mi); len(got) < len(have) {
+		t.Fatalf("%d marks survived in the store, want at least the %d seen complete", len(got), len(have))
+	}
+
+	vol.Attach()
+	second := start(t, mi, saveRoot, dataDir, runOptions{prev: &first.record})
+	if !second.decision.VerifyAll {
+		t.Fatalf("decision %+v, want everything verified after an unclean run", second.decision)
+	}
+	settle(t, second.torrent)
+	got := completeSet(second.torrent)
+	for _, p := range have {
+		if !slices.Contains(got, p) {
+			t.Errorf("piece %d was complete before the volume was pulled and is not after it came back", p)
+		}
+	}
+	second.download(seed)
+	if payload, want := swarm.Count(second.torrent).PayloadRead, int64(second.torrent.NumPieces()-len(got))*16<<10; payload > want {
+		t.Errorf("downloaded %d payload bytes, want at most the %d missing", payload, want)
+	}
+	second.quitCleanly()
+	assertPayload(t, fx, saveRoot)
+}
+
+func TestAVolumePulledWhileSeedingIsNotRecreatedAndTheMarksSurvive(t *testing.T) {
+	fx, mi := named(t, "v1-large")
+	source := seeder(t, fx, mi, swarm.Options{})
+	vol, saveRoot, dataDir := onVolume(t, "OctoSeed")
+	first := start(t, mi, saveRoot, dataDir, runOptions{})
+	first.download(source)
+	first.quitCleanly()
+
+	// the second run seeds from the volume, slowly, to a plain leecher
+	second := start(t, mi, saveRoot, dataDir, runOptions{prev: &first.record, rateLimit: slowRate})
+	if second.decision.VerifyAll {
+		t.Fatalf("decision %+v, want the complete payload trusted", second.decision)
+	}
+	leecher, err := swarm.NewPeer(t.TempDir(), swarm.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = leecher.Close(deadline(t, closeLimit)) })
+	lt, err := leecher.Leech(mi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swarm.Connect(lt, second.peer)
+	keepMoving(t, second.peer, mi.HashInfoBytes())
+	for swarm.Count(lt).PayloadRead == 0 {
+		select {
+		case <-deadline(t, transferLimit).Done():
+			t.Fatal("nothing was uploaded from the volume")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	vol.Detach()
+	for second.session.Clean() {
+		select {
+		case <-deadline(t, transferLimit).Done():
+			t.Fatal("the pulled volume was not noticed while seeding")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if entries, err := os.ReadDir(vol.Mount); err != nil || len(entries) != 0 {
+		t.Fatalf("the mount point holds %v (%v)", entries, err)
+	}
+	for p := range second.torrent.NumPieces() {
+		if c, err := second.completion.Get(metaKey(mi, p)); err != nil || !c.Ok || !c.Complete {
+			t.Fatalf("the mark of piece %d was wiped by the failed reads: %+v %v", p, c, err)
+		}
+	}
+	problems, _ := second.end()
+	if len(problems) == 0 || !errors.Is(problems[0], ErrRootChanged) || second.record.Clean {
+		t.Fatalf("problems %v, clean %v; want ErrRootChanged and an unclean record", problems, second.record.Clean)
+	}
+
+	vol.Attach()
+	third := start(t, mi, saveRoot, dataDir, runOptions{prev: &second.record})
+	if !third.decision.VerifyAll {
+		t.Fatalf("decision %+v, want everything verified", third.decision)
+	}
+	settle(t, third.torrent)
+	if got := completeSet(third.torrent); !slices.Equal(got, all(third.torrent.NumPieces())) {
+		t.Fatalf("%d pieces complete after the volume came back, want all", len(got))
+	}
+	third.quitCleanly()
+	assertPayload(t, fx, saveRoot)
+}

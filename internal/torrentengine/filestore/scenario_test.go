@@ -95,6 +95,7 @@ type runOptions struct {
 	prev       *files.Record // what the earlier run left; nil is "no clean quit"
 	trustMarks bool          // skip the rule: believe every stored mark (to show why the rule exists)
 	completion Options
+	marks      Marks // a test double for the marks store; nil is the real one in dataDir
 }
 
 // decide applies the rehash rule to what the earlier run left.
@@ -113,7 +114,9 @@ func start(t *testing.T, mi *metainfo.MetaInfo, saveRoot, dataDir string, o runO
 	t.Helper()
 	r := &run{t: t, session: &Session{}}
 	var err error
-	if r.completion, err = OpenCompletion(deadline(t, closeLimit), dataDir, r.session, o.completion); err != nil {
+	if o.marks != nil {
+		r.completion = NewCompletion(o.marks, r.session, o.completion)
+	} else if r.completion, err = OpenCompletion(deadline(t, closeLimit), dataDir, r.session, o.completion); err != nil {
 		t.Fatal(err)
 	}
 	if r.storage, err = NewTorrentStorage(saveRoot, r.completion, r.session, nil); err != nil {
@@ -223,8 +226,8 @@ func (r *run) download(seeder *swarm.Peer) {
 
 // end ends the run the way the application does: the client first, then the storage (waiting for
 // operations in flight), then the marks, then the seal of the record. It returns the problems of the
-// session and the error of Seal.
-func (r *run) end() (problems []error, sealErr error) {
+// session and the errors of closing the marks and of Seal.
+func (r *run) end() (problems []error, err error) {
 	r.t.Helper()
 	if r.stopMoving != nil {
 		r.stopMoving()
@@ -236,19 +239,18 @@ func (r *run) end() (problems []error, sealErr error) {
 	if err := r.storage.Stop(ctx); err != nil {
 		r.t.Error(err)
 	}
-	if err := r.completion.Close(); err != nil {
-		r.t.Error(err)
-	}
+	closeErr := r.completion.Close()
+	var sealErr error
 	r.record, sealErr = r.storage.Seal()
-	return r.session.Problems(), sealErr
+	return r.session.Problems(), errors.Join(closeErr, sealErr)
 }
 
 // quit is end for a run that is expected to leave cleanly: any problem fails the test.
 func (r *run) quit() []error {
 	r.t.Helper()
-	problems, sealErr := r.end()
-	if sealErr != nil {
-		r.t.Error(sealErr)
+	problems, err := r.end()
+	if err != nil {
+		r.t.Error(err)
 	}
 	return problems
 }

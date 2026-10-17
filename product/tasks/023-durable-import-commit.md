@@ -59,6 +59,8 @@ Creating the entry, the storage and the engine object passes through several sep
 
 **From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): besides truncation at zero-length paths, a failed piece check renames existing files of that piece to `<name>.part` and the download then overwrites them (finding 13): validate the full path plan before the engine sees the torrent. The commit stores an infohash beside info bytes, and the engine would accept a mismatching pair (finding 11): verify the pair before it is stored and when it is read back.
 
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): in the same transaction that commits the import, store the torrent's record for the rehash rule (initially none, so the first start verifies) and the "not clean" marker. The marks of the new torrent are advisory and live in `piece-completion.sqlite`, not in the library.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

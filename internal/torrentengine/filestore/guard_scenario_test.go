@@ -140,14 +140,14 @@ func TestASaveFolderThatVanishesMidTransferIsNotRecreatedAndTheMarksSurvive(t *t
 					t.Errorf("the mark of piece %d was lost: %+v %v", piece, c, err)
 				}
 			}
-			problems, sealErr := r.end()
+			problems, endErr := r.end()
 			if len(problems) == 0 || !errors.Is(problems[0], ErrRootChanged) {
 				t.Fatalf("problems %v, want ErrRootChanged first", problems)
 			}
 			if r.record.Clean {
 				t.Error("the record of a run that lost its save folder is clean")
 			}
-			if sealErr == nil {
+			if endErr == nil {
 				t.Error("Seal did not report the lost save folder")
 			}
 			marks := storedMarks(t, dataDir, mi)

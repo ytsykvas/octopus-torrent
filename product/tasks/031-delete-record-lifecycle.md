@@ -63,6 +63,8 @@ Stay within the boundaries of our own DTOs, repository and engine adapter. An er
 
 **From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): an incomplete torrent's files can exist on disk only as `<name>.part` (the engine's default part-file mode, finding 13). A deletion list built from the metainfo paths alone misses them; include the part-file names (DEL-02, DEL-04).
 
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): the marks of a removed torrent stay in `piece-completion.sqlite`; 009 built no delete for them, so add a `DeleteMarks(infohash)` to `library.CompletionStore` and call it with the record's removal. Stop the torrent's `TorrentStorage` before any file action.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

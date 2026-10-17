@@ -55,6 +55,8 @@ Checking the disk after a crash does not mean downloading again from the network
 
 **From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): restore re-adds torrents from stored info bytes, and the engine accepts bytes that do not match the stored infohash (finding 11): verify the pair before the add. A recheck of a file whose bytes changed makes the engine rename that file to `<name>.part` and later overwrite it (finding 13): check existing bytes with the application's own hashing before the engine sees the folder.
 
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): the rule is `files.Decide(record, saveRoot, pieces, files.System{})` and its output goes to `Completion.Distrust`; nothing here needs a hand-written recheck. Marks are trusted only for files of a clean earlier run on APFS whose fingerprint is unchanged; after a crash, a storage problem or a late operation everything is verified; a vanished file is `Missing` and goes to 030 (nothing is added, nothing is downloaded). An unreadable marks store is an explicit error; rebuilding it is a separate, explicit action. A newer-version store is `ErrUnsupportedVersion` and must not be rebuilt. The `.app` restart and crash scenarios were `not_run` in 009 and are yours.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.

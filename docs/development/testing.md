@@ -83,6 +83,14 @@ real SQLite, never a fake:
   (`hdiutil` disk image, detached in `t.Cleanup`). A seam is for a failure SQLite cannot be made to
   produce.
 - A refusal must leave the file as it was: compare its SHA-256 and inode before and after.
+- A volume for a test (`internal/testutil/volume`): `volume.New` attaches a small `hdiutil` image (APFS,
+  HFS+, ExFAT or MS-DOS; an ExFAT label has at most 11 characters), `Detach` pulls it, `Attach` plugs it
+  again, `Fill` fills it to the last byte. Close every store opened on a volume before it goes away: SQLite
+  keys its locks by device and inode, and a new volume can get the same numbers. A package that attaches
+  volumes uses `volume.Main` in `TestMain`, which fails on an image left by an ended run.
+- Engine tests that write files run under classic file IO: `swarm.MainClassicIO` in `TestMain`.
+  A transfer on a closed loopback swarm sometimes stands still under `-race` (finding 22); the scenario
+  harness of `internal/torrentengine/filestore` wakes it and logs the count.
 - Statements run through `library.Tx`, so they honour the operation's context.
 
 ## Commands

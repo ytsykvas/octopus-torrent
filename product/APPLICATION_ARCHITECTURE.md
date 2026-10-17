@@ -61,8 +61,10 @@ internal/torrentengine/         interface and anacrolix adapter
 internal/torrentengine/testutil/ fixture (own v1/v2/hybrid test torrents), swarm (closed loopback swarm) (exists, 006)
 internal/torrentengine/          engine contract tests on the pinned version (exist, 007); the adapter comes in 018
 cmd/engine-spike/, internal/enginespike/, frontend/src/spike/   temporary EngineSpike.app (exists, 007; deleted by 034)
-internal/library/               SQLite: Open/Write/Read and error kinds (008); repositories and migrations
-internal/files/                 access, paths, folders, deletion
+internal/library/               SQLite: Open/Write/Read and error kinds (008), the piece-completion marks (009); repositories and migrations
+internal/torrentengine/filestore/   the engine storage: guard, marks completion, session record (prototype from 009; 018 builds on it)
+internal/torrentengine/classicio/   restarts the process with classic file IO (009)
+internal/files/                 the rehash rule and file fingerprints (009); access, paths, folders, deletion
 internal/automation/            rules and watch folder
 internal/platform/              Wails runtime, Finder, URL, system dialogs
 internal/diagnostics/            local errors and logs
@@ -136,7 +138,7 @@ The application uses explicit SQL migrations and transactions through the reposi
 
 **Data directory.** The library is `~/Library/Application Support/dev.tsykvas.octopustorrent/library.sqlite`. `OCTOPUS_DATA_DIR` (an absolute folder, validated in Go) replaces the folder: `go tool devtool workspace run` sets it per workspace, the gate's `.app` run sets it to a temporary folder, and tests use their own temporary folders, so none of them opens the owner's library. The first task that reads the data directory (014 or 028) implements this. Payload lives in the selected folder; the library and internal engine data live in the data directory.
 
-Piece completion belongs to the engine's storage backend and does not replace our own SQLite library. Its database is not edited by React or the product repository. Our manualPaused/wanted are stored and restored explicitly through the SQLite repository. Foreign or stale completion markers do not replace checking the actual files.
+Piece completion is its own file in the data directory, `piece-completion.sqlite`, opened by `library.Open` and used through `filestore.Completion` (task 009, [ADR](../docs/decisions/engine-storage.md)). It does not replace our library and is not edited by React or the product repository. Our manualPaused/wanted are stored and restored explicitly through the SQLite repository. A mark never decides on its own that data is correct: at startup `files.Decide` believes the marks only of files that are exactly as the last clean run left them (APFS, same fingerprint), has the engine hash the rest, and reports a missing file; after a crash everything is hashed. The engine's own stores are not linked (`nosqlite,noboltdb`), because their constructors fall back to memory silently.
 
 On startup: open and migrate the DB → load records → check folders → add them with payload forbidden → restore wanted and global policy → allow transfer only for the records that need it. A missing folder produces an error and a choice of a new location, not a new download into a random folder. A crash is tested separately from a normal quit.
 

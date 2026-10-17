@@ -147,18 +147,23 @@ Two constraints shape the answer:
     `mattn/go-isatty` v0.0.24, `dustin/go-humanize` v1.0.1, and a new `ncruces/go-strftime`
     v1.0.0. All are older than 14 days.
   - The product binary now links the driver.
-- **Two SQLite engines in one process are expected** once 018 links the engine: crawshaw's for the
-  engine's piece completion, unless 009 chooses otherwise, and modernc's for the library.
-  - They must never open the same file.
-  - crawshaw's 3.49.1 is within the WAL-reset range, but the engine opens its `.torrent.db` with
-    one connection in the default rollback journal, which the bug does not affect. 009 keeps it
-    that way or replaces it.
+- **One SQLite engine in the product.** The engine's own C SQLite (crawshaw, 3.49.1) is not linked:
+  [009](engine-storage.md) keeps the verified-piece marks in our own file, opened by `library.Open`
+  (`<dataDir>/piece-completion.sqlite`), and the product builds with `nosqlite,noboltdb`.
+  - **Correction (009):** this ADR first said the engine opens `.torrent.db` in the default rollback
+    journal, which the WAL-reset bug does not affect. That is wrong: crawshaw opens with
+    `OpenFlagsDefault`, which includes WAL (`crawshaw/openflags.go:52-54`, `sqlite.go:133,173-185`), and
+    3.49.1 is inside the bug's range. It does not matter now, because that store is not used.
+  - If a second SQLite engine ever returns, the two must never open the same file.
 - **The gate's data-directory duty**, from [quality-gate](quality-gate.md#consequences), moves to the
   first reader of the data directory, 014 or 028. It now has a concrete form: `open --env
   OCTOPUS_DATA_DIR=<temporary folder>`, and the gate fails if the folder stays empty while the
   default folder changes.
 - **`fullfsync` is a deliberate cost.** Bulk writes must batch rows into one transaction (014/015),
-  not commit row by row.
+  not commit row by row. 009 measured a commit at 4–11 ms whatever its size, so the marks store writes
+  batches of up to 256 rows from one goroutine.
+- **A second database through `library.Open`:** the marks file `piece-completion.sqlite` (table
+  `piece_completion`, `user_version` 1), opened by `library.OpenCompletion`.
 - **Close may report `ErrBusy`** while another process reads the WAL, and `ErrFull` on a full disk.
   In both cases nothing is lost: the WAL stays and the next `Open` uses it.
 - **016 builds backup on what 008 verified:**

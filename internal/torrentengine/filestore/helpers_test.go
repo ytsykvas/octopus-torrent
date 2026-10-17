@@ -1,6 +1,7 @@
 package filestore
 
 import (
+	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 	"os"
 	"path/filepath"
@@ -25,4 +26,9 @@ func plainStorage(dir string, completion storage.PieceCompletion) storage.Client
 	opts := storage.NewFileClientOpts{ClientBaseDir: dir, PieceCompletion: completion}
 	opts.UsePartFiles.Set(false)
 	return storage.NewFileOpts(opts)
+}
+
+// metaKey is the key of a piece of the torrent in the marks.
+func metaKey(mi *metainfo.MetaInfo, piece int) metainfo.PieceKey {
+	return metainfo.PieceKey{InfoHash: mi.HashInfoBytes(), Index: piece}
 }
