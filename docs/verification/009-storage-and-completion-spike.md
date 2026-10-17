@@ -174,7 +174,7 @@ Linking the engine into the product and the Wails build tags (018); persisting t
 | C1 — placement and the guard | `c239f71` | `pass` |
 | C2 — restart, crash, mismatches | `9bc9859` | `pass` |
 | C3 — volumes | `7336e27` | `pass` |
-| D — documents, review, final gate, `done` | stage D commit | `pass` (below) |
+| D — documents, review, final gate, `done` | `ce40bed` | `pass` (below) |
 
 ## Stage A — measurements
 
