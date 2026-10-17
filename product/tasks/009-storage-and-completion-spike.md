@@ -1,6 +1,6 @@
 # 009 — Check file placement and persistence of verified-piece state
 
-**Status:** `planned`  
+**Status:** `in_progress`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** Gate/spike with a recorded result  
