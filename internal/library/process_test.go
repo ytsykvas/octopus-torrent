@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,6 +22,17 @@ const (
 	lockChildEnv   = "OCTOPUS_LIBRARY_LOCK_CHILD"
 	commitChildEnv = "OCTOPUS_LIBRARY_COMMIT_CHILD"
 )
+
+// childPath returns the database path a parent test passed through marker, or "" in the parent. A
+// path outside the temporary folder (a variable left in the developer's shell) fails the test before
+// anything opens it.
+func childPath(t *testing.T, marker string) string {
+	path := os.Getenv(marker)
+	if path != "" && !strings.HasPrefix(path, filepath.Clean(os.TempDir())+string(filepath.Separator)) {
+		t.Fatalf("%s=%q is not under the temporary folder %s", marker, path, os.TempDir())
+	}
+	return path
+}
 
 // child starts this test binary as a child running only the named test, with marker=path set. Its
 // stdout is returned line by line; it is killed when the test ends.
@@ -60,12 +72,12 @@ func await(t *testing.T, lines *bufio.Scanner, prefix string) string {
 }
 
 func TestAnotherProcessHoldingTheLockMakesAWriteBusy(t *testing.T) {
-	if path := os.Getenv(lockChildEnv); path != "" {
+	if path := childPath(t, lockChildEnv); path != "" {
 		holdLock(t, path)
 		return
 	}
-	replace(t, &busyTimeout, 200*time.Millisecond)
-	s, path := withTable(t)
+	const busy = 200 * time.Millisecond
+	s, path := withTableUsing(t, shortBusy(busy))
 	cmd, stdin, lines := child(t, "TestAnotherProcessHoldingTheLockMakesAWriteBusy", lockChildEnv, path)
 	await(t, lines, "locked")
 	start := time.Now()
@@ -74,8 +86,8 @@ func TestAnotherProcessHoldingTheLockMakesAWriteBusy(t *testing.T) {
 	if !errors.Is(err, ErrBusy) {
 		t.Fatalf("Write while another process holds the lock = %v, want ErrBusy", err)
 	}
-	if took < busyTimeout || took > 2*time.Second {
-		t.Errorf("ErrBusy after %v, want between %v and 2s", took, busyTimeout)
+	if took < busy || took > 2*time.Second {
+		t.Errorf("ErrBusy after %v, want between %v and 2s", took, busy)
 	}
 	// Closing stdin lets the child commit its row and exit.
 	if err := stdin.Close(); err != nil {
@@ -93,7 +105,7 @@ func TestAnotherProcessHoldingTheLockMakesAWriteBusy(t *testing.T) {
 // holdLock is the lock child: it takes the write lock, says so, and commits one row once its stdin
 // is closed.
 func holdLock(t *testing.T, path string) {
-	s := open(t, path)
+	s := openStore(t, path)
 	err := s.Write(context.Background(), func(tx Tx) error {
 		fmt.Println("locked")
 		_, _ = io.Copy(io.Discard, os.Stdin)
@@ -106,7 +118,7 @@ func holdLock(t *testing.T, path string) {
 }
 
 func TestEveryAcknowledgedCommitSurvivesAKilledProcess(t *testing.T) {
-	if path := os.Getenv(commitChildEnv); path != "" {
+	if path := childPath(t, commitChildEnv); path != "" {
 		commitForever(t, path)
 		return
 	}
@@ -131,7 +143,7 @@ func TestEveryAcknowledgedCommitSurvivesAKilledProcess(t *testing.T) {
 	if err := cmd.Wait(); err == nil {
 		t.Fatal("the child exited normally, want killed")
 	}
-	again := open(t, path)
+	again := openStore(t, path)
 	var missing int
 	err := again.Read(deadline(t, 5*time.Second), func(tx Tx) error {
 		return tx.QueryRow("SELECT ? - COUNT(*) FROM rows WHERE n BETWEEN 1 AND ?", acknowledged, acknowledged).Scan(&missing)

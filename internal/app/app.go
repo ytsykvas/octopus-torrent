@@ -14,29 +14,33 @@ import (
 	"octopustorrent/internal/app/operations"
 )
 
-// RuntimeInfo describes the Go runtime compiled into the running application.
+// RuntimeInfo describes the Go runtime and the SQLite compiled into the running application.
 // It is a bridge DTO: JSON field names are the TypeScript contract.
 type RuntimeInfo struct {
 	GoVersion string `json:"goVersion"` // e.g. "go1.27.2"
 	OS        string `json:"os"`        // GOOS, e.g. "darwin"
 	Arch      string `json:"arch"`      // GOARCH, e.g. "arm64"
+	// SQLiteVersion is sqlite_version() of the SQLite compiled into the binary, e.g. "3.53.4".
+	SQLiteVersion string `json:"sqliteVersion"`
 }
 
 // App is the facade bound to the frontend through Wails. Every exported method is callable from
 // JavaScript, so lifecycle hooks (shutdown) live outside it.
 type App struct {
-	ledger *operations.Ledger
+	ledger        *operations.Ledger
+	sqliteVersion string
 }
 
-// New creates the facade; ledger runs and records its operations and owns the runtime ID.
-func New(ledger *operations.Ledger) *App {
-	return &App{ledger: ledger}
+// New creates the facade; ledger runs and records its operations and owns the runtime ID, and
+// sqliteVersion is the bundled SQLite's version, read once at start.
+func New(ledger *operations.Ledger, sqliteVersion string) *App {
+	return &App{ledger: ledger, sqliteVersion: sqliteVersion}
 }
 
-// GetRuntimeInfo reports the Go runtime embedded in the binary. It proves the
+// GetRuntimeInfo reports the Go runtime and the SQLite embedded in the binary. It proves the
 // React → bindings → Go path in a packaged .app without any external process.
 func (a *App) GetRuntimeInfo() RuntimeInfo {
-	return RuntimeInfo{GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH}
+	return RuntimeInfo{GoVersion: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, SQLiteVersion: a.sqliteVersion}
 }
 
 // GetLibrarySnapshot returns the full state of the library, authoritative for this runtime. No

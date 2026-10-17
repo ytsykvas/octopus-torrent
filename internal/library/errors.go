@@ -18,10 +18,8 @@ var (
 	ErrCanceled   = errors.New("the library operation was cancelled")
 	ErrConstraint = errors.New("the library change breaks a constraint")
 	ErrCorrupt    = errors.New("the library database is damaged or not a database")
+	ErrReplaced   = errors.New("the library database file was deleted, moved or replaced while open")
 )
-
-// kinds lists every kind, for the tests.
-var kinds = []error{ErrBusy, ErrFull, ErrCannotOpen, ErrReadOnly, ErrCanceled, ErrConstraint, ErrCorrupt}
 
 // kindError is a classified error: the kind, and what caused it.
 type kindError struct{ kind, cause error }

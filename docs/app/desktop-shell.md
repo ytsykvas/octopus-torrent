@@ -8,7 +8,7 @@
 
 ## Goal and behavior
 
-The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window (system WebView) shows a local React UI with a **Check Go connection** button. Clicking it calls a Go method through the generated bindings and shows the response `Go go1.27.2 · darwin/arm64`. A call error is shown as `role="alert"` with the reason text. The UI is embedded in the binary and works without internet; the finished package does not need Go, Node.js or the Wails CLI.
+The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window (system WebView) shows a local React UI with a **Check Go connection** button. Clicking it calls a Go method through the generated bindings and shows the response `Go go1.27.2 · darwin/arm64 · SQLite 3.53.4`; the SQLite part, added by [008](../../product/tasks/008-sqlite-driver-durability-spike.md), is the version compiled into the binary. A call error is shown as `role="alert"` with the reason text. The UI is embedded in the binary and works without internet; the finished package does not need Go, Node.js or the Wails CLI.
 
 Only this proof of the path is implemented. The torrent list, themes, i18n and the rest are in later tasks (prototype texts are in English; localization is added by 041).
 
@@ -36,7 +36,7 @@ Finder / `open` → OctopusTorrent.app/Contents/MacOS/OctopusTorrent
 ## Architecture analysis before the change
 
 - The first code in the repository; nothing to reuse. Boundaries are taken from [architecture §2–§3](../../product/APPLICATION_ARCHITECTURE.md#2-components-and-dependency-directions): facade in `internal/app`, own bridge in `frontend/src/bridge`, UI in `frontend/src/features`.
-- There is no state or side effects in Go; `GetRuntimeInfo` is a pure function of the embedded runtime. The Wails context (`OnStartup`) is not needed, so it was not added.
+- There is no state or side effects in Go; `GetRuntimeInfo` returns the embedded runtime and the SQLite version that `run` read once at start from an in-memory database (`library.SQLiteVersion`; no file, no data directory). If that read fails, the application does not start: `run` writes the reason to stderr and returns 1. The Wails context (`OnStartup`) is not needed, so it was not added.
 - The `main` entry point is reduced to a single line without branches; all logic is in `run(start, stderr)` with an explicit `start` dependency (`wails.Run` in the product), which makes it testable without a window. Task 005 added the operation ledger (which owns the runtime ID) as a further explicit parameter ([bridge-contract](../bridge/contract.md)).
 - The React component receives `loadRuntimeInfo` as a prop; only `App` wires up the real bridge. Tests work with a fake function, without Wails.
 
@@ -45,7 +45,7 @@ Finder / `open` → OctopusTorrent.app/Contents/MacOS/OctopusTorrent
 | Go (`internal/app`) | JSON / TS (`frontend/src/bridge/runtimeInfo.ts`) |
 |---|---|
 | `func (*App) GetRuntimeInfo() RuntimeInfo` | `getRuntimeInfo(): Promise<RuntimeInfo>` |
-| `RuntimeInfo{GoVersion, OS, Arch string}` | `{ goVersion: string; os: string; arch: string }` |
+| `RuntimeInfo{GoVersion, OS, Arch, SQLiteVersion string}` | `{ goVersion: string; os: string; arch: string; sqliteVersion: string }` |
 
 The bridge returns its own plain object, not the generated `app.RuntimeInfo` class. A rejected promise is passed on unchanged; the component turns an `Error` into its `message`, any other value into `String(value)`.
 
@@ -103,4 +103,5 @@ Commands are in the [README](../../README.md#build-and-check-commands); actual r
 | Date | Change | Evidence |
 |---|---|---|
 | 2026-10-15 | Moved from `docs/features/desktop-shell-build.md`; startup and quit section; `run` takes the operation ledger, `OnShutdown` stops it, errors cross as AppError JSON (task 005) | [report 005](../verification/005-domain-dto-and-bridge-contract.md) |
+| 2026-10-17 | The runtime check also shows the bundled SQLite version | [report 008](../verification/008-sqlite-driver-durability-spike.md), ADR [sqlite-driver](../decisions/sqlite-driver.md) |
 | 2026-10-14 | First `.app`, `GetRuntimeInfo` facade, bridge, check UI, 100% Go/TS coverage | [report 003](../verification/003-wails-macos-build-spike.md), ADR [toolchain-versions](../decisions/toolchain-versions.md), [macos-target](../decisions/macos-target.md) |

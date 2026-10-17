@@ -53,8 +53,10 @@ Decisions: ADR [sqlite-driver](../decisions/sqlite-driver.md).
 
 | Stage | Commit | Result |
 |---|---|---|
-| A — driver probes, the choice | stage A+B commit | `pass`: modernc.org/sqlite v1.60.1 |
-| B — `internal/library` | stage A+B commit | `pass`, 100% of statements |
+| A — driver probes, the choice | `342b63d` | `pass`: modernc.org/sqlite v1.60.1 |
+| B — `internal/library` | `342b63d` | `pass`, 100% of statements |
+| C — the version from the built product | stage C+D commit | `pass`; `.app` QA 5/5 |
+| D — review fixes, documents | stage C+D commit | `pass`, `GATE PASSED` (below) |
 
 ## Stage A — driver probes and the choice
 
@@ -180,7 +182,7 @@ therefore issue it, not just accept the PRAGMA.
 | Existing WAL database, read-only folder | pass | `ErrReadOnly` (`SQLITE_READONLY_DIRECTORY`); bytes and inode unchanged |
 | Read-only WAL file | pass | opens and reads; the write gives `ErrReadOnly`; bytes and inode unchanged |
 | Read-only non-WAL file | pass | `ErrReadOnly` from the WAL switch; unchanged |
-| **Full volume** | pass | 8 MiB HFS+ image from `hdiutil create -fs HFS+ -layout NONE`, attached `-nobrowse`: `ErrFull: database or disk is full (13)`; `Close` also `ErrFull`; after the filler is removed, 20 rows, integrity `ok`, same inode |
+| **Full volume** | pass | 8 MiB HFS+ image from `hdiutil create -fs HFS+ -layout NONE`, attached `-nobrowse`: `ErrFull: database or disk is full (13)`; `Close` also `ErrFull` (asserted; 5 of 5 runs with `-count=5`); after the filler is removed, 20 rows, integrity `ok`, same inode |
 | `max_page_count` limit | pass | `ErrFull`; 1 row kept |
 | Not a database | pass | `ErrCorrupt`; bytes unchanged; no `-wal`/`-shm` created |
 | Damaged page | pass | `ErrCorrupt` on reading the table |
@@ -190,3 +192,182 @@ therefore issue it, not just accept the PRAGMA.
 
 `TestMain` refuses to run, and fails afterwards, while an `octopus-library-full-*` disk image is
 attached. No image was left after any run (`hdiutil info`).
+
+## Stage C — the SQLite version from the built product
+
+**RED:**
+- `go vet . ./internal/app`: `too many arguments in call to New`. The tests expected
+  `app.New(ledger, "3.53.4")`, `RuntimeInfo.SQLiteVersion`, and `run(start, stderr, ledger, version)`,
+  which refuses to start when the version cannot be read.
+- `npm --prefix frontend test -- src/bridge/runtimeInfo.test.ts src/features/runtime-check src/App.test.tsx`:
+  4 failed, because the DTO had no `sqliteVersion` and the text had no `· SQLite 3.53.4`.
+
+**GREEN:**
+- `RuntimeInfo` gains `sqliteVersion` (`json:"sqliteVersion"`).
+- `run` reads `library.SQLiteVersion` once, before `start`, from `:memory:`, and passes it to
+  `app.New`. If it fails, the reason goes to stderr and `run` returns 1.
+- `main()` stays branch-free.
+- Bindings were regenerated with `go tool wails generate module`; only `models.ts` changed.
+- `getRuntimeInfo` and `RuntimeCheck` carry the field and show it.
+- Results: `go test -race` of `.` and `./internal/app` `ok`; the 8 TS tests pass; `typecheck` and
+  `lint` clean.
+
+**Deviations from the plan:**
+- `runtimeInfo.ts` has no decoder to make stricter; it passes the field through like the other
+  three.
+- The planned test that "the driver appears in the product's dependency list" was not written.
+  `main.go` imports `internal/library` directly, and `go version -m` below shows the module in the
+  binary.
+
+### Build evidence
+
+Working directory: the repository root.
+
+```sh
+npm --prefix frontend run build && go tool wails build -clean -trimpath
+otool -L build/bin/OctopusTorrent.app/Contents/MacOS/OctopusTorrent
+go version -m build/bin/OctopusTorrent.app/Contents/MacOS/OctopusTorrent
+```
+
+- **`otool -L`:** only `/usr/lib/libresolv.9.dylib`, `/usr/lib/libobjc.A.dylib`,
+  `/usr/lib/libSystem.B.dylib`, and `/System/Library/Frameworks/` UniformTypeIdentifiers (weak),
+  Foundation, Cocoa, WebKit, UserNotifications (weak), AppKit, CoreFoundation, Security and
+  CoreGraphics. Nothing under `/opt/homebrew` or `/usr/local`.
+- **`go version -m`:** `dep modernc.org/sqlite v1.60.1`, `-tags=desktop,wv2runtime.download,production`,
+  `CGO_ENABLED=1`.
+- **Binary size:** 12 567 952 B.
+
+### `.app` QA (`macos-qa`, the real `OctopusTorrent.app`; Accessibility only, no screenshots)
+
+| # | Scenario | Result | Evidence |
+|---|---|---|---|
+| 1 | Before launch: no `~/Library/Application Support/dev.tsykvas.octopustorrent` | pass | `test -e` → absent; the folder listing (126 entries) saved as the baseline |
+| 2 | Click "Check Go connection" and read the output | pass | `Go go1.27.2 · darwin/arm64 · SQLite 3.53.4`, checked byte by byte (`od -c`): the **`sqlite_version()` of the built program** is 3.53.4, equal to the probe's |
+| 3 | No database file open while running | pass | `lsof -p <pid>`: nothing under Application Support, no `.sqlite`. WebKit's own `WebsiteData/…/EnhancedSecuritySites.db` is the system WebView's store. No network socket. |
+| 4 | Quit with the Apple Event | pass | process gone in under 1 s; the Application Support listing is identical to the baseline: no folder or file created |
+| 5 | `otool -L` | pass | only `/usr/lib` and `/System` paths (above) |
+
+## Review (`/branch-review`) and what changed
+
+Three reviewers read `git diff 552e486` (code-reviewer, security-reviewer, tech-lead). There were
+no critical findings. Each finding was fixed or answered as follows.
+
+| Finding | Lens | Resolution |
+|---|---|---|
+| **M1:** a new reader connection (the driver opens `READWRITE|CREATE`) recreates a 0-byte `library.sqlite` if the file is deleted while open; the writer still commits into the deleted inode and returns nil; a reader could `PRAGMA query_only=0` and write | security | Readers open with `mode=ro`. `Write`/`Read` first compare the path's device and inode with the file `Open` opened, and return the new kind `ErrReplaced`. Tests: deleted file, replaced file, reader trying to write (RED: all three `nil`). |
+| **M2:** `Open` over a 0-byte main file silently discards a WAL holding commits (SQLite deletes it) | security | `Open` refuses an empty or missing main file beside a non-empty WAL with `ErrCorrupt` and touches nothing. Test with both variants (RED: `nil`). |
+| L1: a NUL byte truncates the path; `.`/`..` accepted | security | `Open` requires `filepath.Clean(path) == path` and no NUL. Test with four paths (RED: all opened). |
+| L2: the database is created `0644`; the override folder is not specified | security | `Open` creates the file itself, `0600` with `O_EXCL`; SQLite copies the mode to `-wal`/`-shm`. Test (RED: `-rw-r--r--`). The ADR now specifies the `OCTOPUS_DATA_DIR` validation, for 014/028. A dangling symlink is refused and its target is not created (test). |
+| L3: a valid SQLite file of another application would be switched to WAL | security | Handed to 014 (`application_id`) and 016 (`_defensive`, `trusted_schema=OFF` for files the owner picks). |
+| L4: the gate's isolation of the owner's library is a note, not a test | security | The 014 note now asks for a failing test as soon as the default path exists. |
+| L5: the child-process marker accepted any path; tests' raw `sql.Open` skipped escaping; `hdiutil` came from `PATH` | security | The child refuses a path outside `os.TempDir()` (checked with `OCTOPUS_LIBRARY_COMMIT_CHILD=/etc/passwd`: the test fails before opening it); tests use the escaped DSN; `/usr/bin/hdiutil`. |
+| Writes were described as ordered; database/sql hands a freed connection to a random waiter | tech-lead | Corrected everywhere to "serialized, not FIFO". Per-torrent order (STACK-03) belongs to the service's queue (015 note, architecture §6, ADR, `Write` doc). |
+| "On any error nothing is kept" overclaims: an I/O error from `COMMIT` has an unknown outcome | tech-lead | Reworded in code and docs; `SQLITE_IOERR` stays unclassified, and 015 maps it and re-reads. |
+| The read-only and full-disk checks' "the application shows the reason" | tech-lead | `not_run` in 008: the app opens no file database. Handed to 014/028 explicitly. |
+| modernc's rollback after a failed commit keeps the single writer usable | tech-lead | Added to the ADR's "recheck on a driver update"; the failed-commit test guards it. |
+| 028: one `Store` per process; quit order; `Close` has no context; probe a read-only WAL file at start | tech-lead, code-reviewer | Added to the 028 note. |
+| Package-variable seams (`busyTimeout`, `walPragma`) | code-reviewer | Replaced by an unexported `settings` passed to `open`; `Open` uses `defaults`. |
+| `kinds` was a production variable for the tests | code-reviewer | Moved to `errors_test.go`. |
+| `Close` on a full disk and on a read-only file was only logged | code-reviewer | Asserted: `ErrFull`, and `nil` respectively. |
+| `TestMain` ran in the child processes, and failed a concurrent run of the package | code-reviewer | Only the parent checks. An image whose name carries a live pid is another run's; only an image of a dead pid is a leftover, and the run's own image at exit fails it. |
+| One test file with many roles | code-reviewer | Split into `helpers_test.go`, `errors_test.go`, `version_test.go`, `safety_test.go`, plus the store, process and disk tests. |
+| `fn`'s error "unchanged" | code-reviewer | Docs say exactly what happens: an error of `fn`'s own comes back unchanged; one from SQLite or the context comes back with its kind. If both cancel and commit fail, cancellation is the kind (commented). |
+| `Connect` and `Close` take no context; `Tx` lifetime | code-reviewer | Documented: both are bounded by `busy_timeout` (5 s); a `Tx` is valid only inside `fn`. |
+| Wails flips runtime file modes | code-reviewer | Restored to `644`; no mode change is committed. |
+
+After the fixes:
+- `go test -race -count=1 ./internal/library`: `ok`, 9.7 s, **100.0% of statements**, no zero block.
+- `-run FullDisk -count=5`: `ok`.
+- `hdiutil info` shows no image left.
+
+## Verified, not yet proven, read in the source only
+
+**Verified by execution** (stages A–C and the gate):
+- the driver links next to the engine's C SQLite, and mattn does not;
+- the bundled SQLite is 3.53.4, in a probe, in the tests and in the built `.app`;
+- the `.app` needs only system libraries;
+- per-connection PRAGMAs;
+- a failed commit is an error;
+- cancellation;
+- busy across processes;
+- readers during writes;
+- checkpoints during writes;
+- SIGKILL keeps acknowledged commits;
+- read-only folders and files;
+- a real full volume;
+- damaged files;
+- a deleted or replaced file;
+- an empty file beside a WAL;
+- private file modes;
+- a hostile-character path.
+
+**Not yet proven:**
+- **Power-loss durability.** Not executable here.
+- **The reason shown to the user** for a read-only folder or a full disk. `not_run`: the app opens no
+  file database until 014/028.
+- **Two application instances on one library.** The single-instance lock belongs to 028.
+- **The backup procedure.** 016.
+- **The `OCTOPUS_DATA_DIR` override and its validation.** 014/028.
+
+**Read in the source only:**
+- `F_FULLFSYNC` in modernc's `_full_fsync`. The 40× commit cost supports it.
+- modernc's rollback after a failed `COMMIT` (`tx.go`). Guarded by a test of its effect.
+- database/sql's random hand-over of a freed connection (`connRequestSet.TakeRandom`).
+- The engine's `.torrent.db` uses one connection in the default rollback journal
+  (`sqlite-piece-completion.go`).
+
+## Acceptance criteria
+
+| Criterion | Evidence | Status |
+|---|---|---|
+| A failed transaction commit returns an error, not success | `TestAFailedCommitIsAnErrorAndKeepsNothing` (deferred foreign key at `COMMIT` → `ErrConstraint`, 0 rows after a reopen, the writer usable); `ErrReplaced` stops a commit into a deleted file | pass |
+| The built program launches without Homebrew libraries | `otool -L` of `OctopusTorrent.app`; `.app` QA scenario 2 | pass |
+| The WAL decision rests on the verified version, concurrent writes and checkpointing | 3.53.4 ≥ 3.51.3 (test and `.app`); readers-vs-writer and writes-during-checkpoints tests; writer-only checkpoint | pass |
+| Checks performed; not-run ones not marked passed | this report: the application-level reason is `not_run` with a handoff, and power loss is not executed | pass |
+| Check: concurrent writes, checkpoints, cancellation, timeouts | stage B table | pass (package level, real SQLite) |
+| Check: a read-only directory and a full disk; the existing database kept | stage B table, file bytes and inode compared | pass at package level; the application showing the reason is `not_run` (014/028) |
+
+## Refactoring and debt check
+
+- **Refactoring done during the task:**
+  - `library.Tx` instead of `*sql.Tx` (the hang in RED);
+  - `settings` instead of package-variable seams;
+  - the test files split by role;
+  - `TestMain` made safe for child processes and concurrent runs;
+  - the reader pool made read-only at the SQLite level;
+  - one `check` for file identity, used by `Write` and `Read`.
+- **Debt check:** no ignore directive, lint disable, skipped test or TODO
+  (`grep -rn "TODO\|nolint\|t.Skip" internal/library` is empty).
+- **Deferred items, each a named, owned handoff and not debt:**
+  - classifying `SQLITE_IOERR` (015);
+  - the data directory (014/028);
+  - `application_id` (014);
+  - backup (016).
+
+## Final gate
+
+`go tool devtool check` (working directory: the repository root), run on the final tree of this
+change: **`GATE PASSED`**, exit 0.
+
+| Step | Result |
+|---|---|
+| npm ci, npm cooldown, go env, typecheck, lint | pass |
+| frontend tests | pass: 22 own files at 100% on lines, statements, functions and branches |
+| frontend build, gofmt, go vet | pass |
+| bindings | pass: OctopusTorrent `frontend/wailsjs/` (6 files), EngineSpike `frontend/spike/wailsjs/` (6 files) |
+| go tests | pass: `go test -race -count=1 -covermode=atomic -coverpkg=./... ./...` |
+| `.app` coverage run | pass: both apps were launched and quit (OctopusTorrent pid 7541, EngineSpike pid 7683) |
+| go coverage | pass: every block of every own Go file is covered, `internal/library` included, by the unit run and the `.app` run |
+| escape hatches, scripts | pass |
+| product isolation | pass: 314 packages; the product links the driver but none of the spike, test support or engine |
+| release build, docs (151 Markdown files), plan | pass |
+| release age | pass: 186 npm versions and 359 Go modules are at least 14 days old; `golang.org/x/net@v0.60.0` is accepted as younger (owner's exception, until 2026-10-22) |
+| npm audit, govulncheck | pass |
+| updates | pass, informational: `anacrolix/chansync` v0.7.0 → v0.8.0 is out of quarantine; not taken (the engine requires v0.7.0) |
+| engine integration, test-bridge UI tests | `not_run` (not implemented yet: 018, 035) |
+| single code version | pass |
+
+**The first full run, before the review fixes, failed only on `docs`.** The cause was 9 dead links in
+the untracked `.agents/skills/source-command-*`: skills that Codex had generated locally from
+`.claude/commands`, whose relative links point nowhere from there. On the owner's decision,
+`/.agents/` is now in `.gitignore`.

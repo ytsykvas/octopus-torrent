@@ -114,6 +114,7 @@ Claude Code. The removal was verified by a probe that the hook no longer interce
   test-first, with [toolchain-versions](toolchain-versions.md) and `frontend/.npmrc`.
 - Task [004](../../product/tasks/004-reproducible-check-commands.md) built the single check command
   and the release-age check in `internal/devtool` ([quality-gate](quality-gate.md)); `/check` runs it.
-- Tasks [008](../../product/tasks/008-sqlite-driver-durability-spike.md) and
-  [014](../../product/tasks/014-sqlite-schema-migrations.md) must give every workspace (and every
-  test) its own library location, never the owner's real library; `workspace run` passes it.
+- Every workspace (and every test) gets its own library location, never the owner's real library.
+  [008](../../product/tasks/008-sqlite-driver-durability-spike.md) fixed the contract
+  ([sqlite-driver](sqlite-driver.md)): `OCTOPUS_DATA_DIR`, which `workspace run` will set per
+  workspace; the first task that reads the data directory (014 or 028) implements both sides.

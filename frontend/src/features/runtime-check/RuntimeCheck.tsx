@@ -18,7 +18,7 @@ function statusText(state: CheckState): string {
     case 'loading':
       return 'Checking…'
     case 'success':
-      return `Go ${state.info.goVersion} · ${state.info.os}/${state.info.arch}`
+      return `Go ${state.info.goVersion} · ${state.info.os}/${state.info.arch} · SQLite ${state.info.sqliteVersion}`
     case 'error':
       return ''
   }

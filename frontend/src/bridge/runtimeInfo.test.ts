@@ -10,10 +10,15 @@ afterEach(() => {
 })
 
 describe('getRuntimeInfo', () => {
-  it('returns the Go facade answer as a plain RuntimeInfo DTO', async () => {
-    stubGoMethod(() => Promise.resolve({ goVersion: 'go1.27.2', os: 'darwin', arch: 'arm64' }))
+  it('returns the Go facade answer, with the bundled SQLite, as a plain RuntimeInfo DTO', async () => {
+    stubGoMethod(() => Promise.resolve({ goVersion: 'go1.27.2', os: 'darwin', arch: 'arm64', sqliteVersion: '3.53.4' }))
 
-    await expect(getRuntimeInfo()).resolves.toStrictEqual({ goVersion: 'go1.27.2', os: 'darwin', arch: 'arm64' })
+    await expect(getRuntimeInfo()).resolves.toStrictEqual({
+      goVersion: 'go1.27.2',
+      os: 'darwin',
+      arch: 'arm64',
+      sqliteVersion: '3.53.4',
+    })
   })
 
   it('propagates a failed Go call', async () => {

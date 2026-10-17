@@ -39,12 +39,15 @@ Two constraints shape the answer:
   | `fullfsync` | `ON`, every connection | On macOS `fsync` does not reach stable storage; `F_FULLFSYNC` does. A commit costs about 4 ms with it and 0.1 ms without |
   | `busy_timeout` | 5000 ms, every connection | Another connection's lock is waited for; then the error is `ErrBusy` |
   | `foreign_keys` | `ON`, every connection | Constraints hold for every write |
-  | `query_only` | `ON` on readers | A reader cannot write by mistake |
+  | `query_only`, `mode=ro` | on readers | A reader cannot write, even if it turns `query_only` off, and cannot create a file |
 
 - **Pool and write order:**
   - **Writer:** one `*sql.DB` with `MaxOpenConns=1`. Its transactions are `BEGIN IMMEDIATE`
-    (`_txlock=immediate`), so every write takes the lock at `BEGIN`. Writes are applied one at a
-    time, in the order they get the connection, and a read lock is never upgraded into a deadlock.
+    (`_txlock=immediate`), so every write takes the lock at `BEGIN` and a read lock is never
+    upgraded into a deadlock. Writes are **serialized, not FIFO**: database/sql hands a freed
+    connection to a random waiter, so two concurrent `Write`s may commit in either order. The order
+    of commands for one torrent (STACK-03) comes from the service's per-torrent queue (013/025), not
+    from the store.
   - **Readers:** a separate pool of 4 read-only connections. Each `Read` is one consistent snapshot.
   - **Checkpoints:** only the writer checkpoints, automatically and with `wal_checkpoint(TRUNCATE)`
     at `Close`. This is a structural guard against the WAL-reset race, in addition to the fixed
@@ -55,22 +58,39 @@ Two constraints shape the answer:
   - `library.Tx` runs every statement under the operation's context, so a cancel interrupts the
     running statement. database/sql's context-free methods would let it run to the end; the spike
     hung on exactly that.
-  - `Write` returns nil only when the commit succeeded. Any error rolls everything back. `fn`'s own
-    error is returned unchanged.
+  - `Write` returns nil only when the commit succeeded. An error before `COMMIT`, or a busy, full or
+    constraint error at `COMMIT`, keeps nothing. An I/O error from `COMMIT` (`SQLITE_IOERR`, not
+    classified yet; 015 maps it) has an unknown outcome: the next open may recover that transaction,
+    so the caller reads the state again. An error of
+    `fn`'s own comes back unchanged; one that SQLite or the context caused comes back with its kind,
+    wrapping the original.
+  - A `Tx` is valid only inside `fn`. Opening a connection runs its PRAGMAs without a context,
+    bounded by `busy_timeout`, and so does `Close`'s checkpoint: both wait at most 5 s.
 - **Errors are classified once**, by SQLite's primary result code:
   `ErrBusy`, `ErrFull`, `ErrCannotOpen`, `ErrReadOnly`, `ErrCanceled`, `ErrConstraint`,
-  `ErrCorrupt` (not a database, or a damaged page). Each wraps the driver's error, so SQLite's own
+  `ErrCorrupt` (not a database, or a damaged page), and `ErrReplaced`, which is not SQLite's: the path no
+  longer names the file `Open` opened. Each wraps the driver's error, so SQLite's own
   message is kept for diagnostics. Mapping to `AppError` belongs to 015.
 - **Never reset a database.**
-  - `Open` creates a file only where none exists, and never deletes or recreates one.
+  - `Open` takes only an absolute, clean path (no `.`/`..`, no doubled separator, no NUL byte).
+  - It creates the file itself, `0600` and with `O_EXCL`, only where nothing exists, so an existing file
+    or a symlink's target is never created or truncated; SQLite gives `-wal` and `-shm` the same mode.
+    It never deletes or recreates a file.
+  - It refuses an empty or missing main file beside a WAL that holds commits (`ErrCorrupt`): SQLite
+    would delete that WAL, and with it the commits.
+  - `Write` and `Read` first check that the path still names the file `Open` opened (device and
+    inode). Otherwise the writer would commit into a deleted inode and report success, and a new
+    reader would find another file; both get `ErrReplaced`.
   - Every refusal leaves the file's bytes and inode unchanged: a file that is not a database, a
-    read-only folder or file, a full disk. Tests prove each case.
+    read-only folder or file, a full disk, an empty file beside a WAL. Tests prove each case.
 - **The data directory contract.** It is recorded here and in
   [architecture §6](../../product/APPLICATION_ARCHITECTURE.md#6-sqlite-and-restore). Its first reader,
   014 or 028, implements it.
   - **Default:** `~/Library/Application Support/dev.tsykvas.octopustorrent/library.sqlite`. The
     folder is named by the bundle ID.
-  - **Override:** `OCTOPUS_DATA_DIR`, an absolute folder validated in Go. The library is
+  - **Override:** `OCTOPUS_DATA_DIR`. Go validates the folder: absolute and clean, symlinks resolved,
+    a directory owned by the current user and not writable by group or others, not inside a torrent
+    save folder. The application creates it `0700`. The library is
     `$OCTOPUS_DATA_DIR/library.sqlite`.
   - **Who sets the override:** `go tool devtool workspace run` sets it per workspace, the gate's
     `.app` run sets it to a temporary folder, and tests always use `t.TempDir()`. A workspace, a test
@@ -145,6 +165,8 @@ Two constraints shape the answer:
   - `VACUUM INTO` gives a consistent copy that passes `integrity_check`;
   - the driver also exposes SQLite's online backup API (`NewBackup`, `NewRestore` on its connection).
   - Copying the active database file alone is never a backup.
-- **Recheck on a driver update:** `TestTheBundledSQLiteHasTheWALResetFix` fails if the bundled
+- **Recheck on a driver update:** modernc's `tx.Commit` rolls the connection back when SQLite leaves
+  a transaction open after a failed `COMMIT`; without that, one failed commit would break the single
+  writer. `TestAFailedCommitIsAnErrorAndKeepsNothing` guards it (the next write must succeed). Also: `TestTheBundledSQLiteHasTheWALResetFix` fails if the bundled
   SQLite drops below 3.51.3. The `F_FULLFSYNC` source check and the commit-cost measurement in the
   report are repeated for a new major driver version.

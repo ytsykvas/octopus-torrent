@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -12,120 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
 	"modernc.org/sqlite"
 )
-
-// The SQLite release that fixed the WAL-reset bug (https://www.sqlite.org/wal.html, section 11).
-var walResetFixed = [3]int{3, 51, 3}
-
-// deadline gives a context that ends with the test.
-func deadline(t *testing.T, limit time.Duration) context.Context {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), limit)
-	t.Cleanup(cancel)
-	return ctx
-}
-
-// replace sets a seam for one test.
-func replace[T any](t *testing.T, seam *T, value T) {
-	t.Helper()
-	old := *seam
-	*seam = value
-	t.Cleanup(func() { *seam = old })
-}
-
-// open opens a store in path and closes it after the test.
-func open(t *testing.T, path string) *Store {
-	t.Helper()
-	s, err := Open(deadline(t, 10*time.Second), path)
-	if err != nil {
-		t.Fatalf("Open(%s): %v", path, err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	return s
-}
-
-// withTable opens a fresh store with a table rows(id, n, data).
-func withTable(t *testing.T) (*Store, string) {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "library.sqlite")
-	s := open(t, path)
-	must(t, s, "CREATE TABLE rows(id INTEGER PRIMARY KEY, n INTEGER, data BLOB)")
-	return s, path
-}
-
-// must runs one statement in its own write transaction.
-func must(t *testing.T, s *Store, query string, args ...any) {
-	t.Helper()
-	err := s.Write(deadline(t, 10*time.Second), func(tx Tx) error {
-		_, err := tx.Exec(query, args...)
-		return err
-	})
-	if err != nil {
-		t.Fatalf("%s: %v", query, err)
-	}
-}
-
-// count reads the number of rows through the read pool.
-func count(t *testing.T, s *Store) int {
-	t.Helper()
-	var n int
-	err := s.Read(deadline(t, 10*time.Second), func(tx Tx) error {
-		return tx.QueryRow("SELECT COUNT(*) FROM rows").Scan(&n)
-	})
-	if err != nil {
-		t.Fatalf("count: %v", err)
-	}
-	return n
-}
-
-// integrity runs the full integrity check.
-func integrity(t *testing.T, s *Store) {
-	t.Helper()
-	var result string
-	err := s.Read(deadline(t, 30*time.Second), func(tx Tx) error {
-		return tx.QueryRow("PRAGMA integrity_check").Scan(&result)
-	})
-	if err != nil || result != "ok" {
-		t.Fatalf("integrity_check = %q, %v", result, err)
-	}
-}
-
-// fileID is what proves a file was not reset: its content and its inode.
-type fileID struct {
-	sum   [32]byte
-	inode uint64
-}
-
-func identify(t *testing.T, path string) fileID {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return fileID{sha256.Sum256(data), info.Sys().(*syscall.Stat_t).Ino}
-}
-
-func names(t *testing.T, dir string) []string {
-	t.Helper()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var out []string
-	for _, e := range entries {
-		out = append(out, e.Name())
-	}
-	return out
-}
 
 func TestEveryConnectionHasTheDurabilitySettings(t *testing.T) {
 	s, _ := withTable(t)
@@ -163,40 +53,6 @@ func TestEveryConnectionHasTheDurabilitySettings(t *testing.T) {
 	}
 }
 
-func TestTheBundledSQLiteHasTheWALResetFix(t *testing.T) {
-	version, err := SQLiteVersion(deadline(t, 5*time.Second))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parts := strings.Split(version, ".")
-	if len(parts) != 3 {
-		t.Fatalf("SQLiteVersion() = %q, want x.y.z", version)
-	}
-	var got [3]int
-	for i, p := range parts {
-		if got[i], err = strconv.Atoi(p); err != nil {
-			t.Fatalf("SQLiteVersion() = %q: %v", version, err)
-		}
-	}
-	for i := range got {
-		if got[i] != walResetFixed[i] {
-			if got[i] < walResetFixed[i] {
-				t.Fatalf("SQLite %s has the WAL-reset bug; at least %d.%d.%d is required", version, walResetFixed[0], walResetFixed[1], walResetFixed[2])
-			}
-			break
-		}
-	}
-	t.Logf("SQLite %s", version)
-}
-
-func TestTheVersionQueryReportsAFailure(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if _, err := SQLiteVersion(ctx); !errors.Is(err, ErrCanceled) {
-		t.Fatalf("SQLiteVersion(cancelled) = %v, want ErrCanceled", err)
-	}
-}
-
 func TestAFailedCommitIsAnErrorAndKeepsNothing(t *testing.T) {
 	s, path := withTable(t)
 	must(t, s, "CREATE TABLE parent(id INTEGER PRIMARY KEY)")
@@ -221,7 +77,7 @@ func TestAFailedCommitIsAnErrorAndKeepsNothing(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, open(t, path)); n != 0 {
+	if n := count(t, openStore(t, path)); n != 0 {
 		t.Fatalf("after a failed commit and a reopen, %d rows exist, want 0", n)
 	}
 }
@@ -280,9 +136,9 @@ func TestACancelledContextIsRefusedBeforeTheTransaction(t *testing.T) {
 }
 
 func TestALockedDatabaseIsBusyAfterTheTimeout(t *testing.T) {
-	replace(t, &busyTimeout, 200*time.Millisecond)
-	s, path := withTable(t)
-	other := open(t, path)
+	const busy = 200 * time.Millisecond
+	s, path := withTableUsing(t, shortBusy(busy))
+	other := openStore(t, path)
 	held, release := make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
@@ -301,8 +157,8 @@ func TestALockedDatabaseIsBusyAfterTheTimeout(t *testing.T) {
 	if !errors.Is(err, ErrBusy) {
 		t.Fatalf("Write while another connection holds the lock = %v, want ErrBusy", err)
 	}
-	if took < busyTimeout || took > 2*time.Second {
-		t.Errorf("ErrBusy after %v, want between %v and 2s", took, busyTimeout)
+	if took < busy || took > 2*time.Second {
+		t.Errorf("ErrBusy after %v, want between %v and 2s", took, busy)
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
@@ -380,10 +236,7 @@ func TestWritesDuringCheckpointsKeepEveryCommit(t *testing.T) {
 	const commits = 300
 	ctx := deadline(t, 60*time.Second)
 	// A second connection checkpoints all the time: the access pattern of the WAL-reset race.
-	other, err := sql.Open("sqlite", "file:"+path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	other := sql.OpenDB(connector{dsn(path, defaults.busyTimeout)})
 	defer other.Close()
 	stop, stopped := make(chan struct{}), make(chan int)
 	go func() {
@@ -420,7 +273,7 @@ func TestWritesDuringCheckpointsKeepEveryCommit(t *testing.T) {
 	if info, err := os.Stat(path + "-wal"); err == nil && info.Size() != 0 {
 		t.Errorf("the WAL holds %d bytes after Close, want it truncated", info.Size())
 	}
-	again := open(t, path)
+	again := openStore(t, path)
 	if n := count(t, again); n != commits {
 		t.Fatalf("%d rows after a reopen, want %d", n, commits)
 	}
@@ -470,7 +323,7 @@ func TestAReadOnlyWALFileOpensAndRefusesTheWrite(t *testing.T) {
 	}
 	// The file is in WAL mode already, so opening it writes nothing and succeeds; it can be read,
 	// and the first write is refused.
-	again := open(t, path)
+	again := openStore(t, path)
 	if n := count(t, again); n != 1 {
 		t.Fatalf("%d rows, want 1", n)
 	}
@@ -481,8 +334,9 @@ func TestAReadOnlyWALFileOpensAndRefusesTheWrite(t *testing.T) {
 	if !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("Write to a read-only file = %v, want ErrReadOnly", err)
 	}
+	// Nothing was written, so the closing checkpoint has nothing to copy.
 	if err := again.Close(); err != nil {
-		t.Logf("Close of a read-only file: %v", err)
+		t.Fatalf("Close of a read-only file = %v", err)
 	}
 	if identify(t, path) != before {
 		t.Fatal("the database file changed")
@@ -491,10 +345,7 @@ func TestAReadOnlyWALFileOpensAndRefusesTheWrite(t *testing.T) {
 
 func TestAReadOnlyFileThatIsNotWALIsRefused(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.sqlite")
-	db, err := sql.Open("sqlite", "file:"+path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := sql.OpenDB(connector{dsn(path, defaults.busyTimeout)})
 	if _, err := db.Exec("CREATE TABLE rows(n)"); err != nil {
 		t.Fatal(err)
 	}
@@ -507,22 +358,13 @@ func TestAReadOnlyFileThatIsNotWALIsRefused(t *testing.T) {
 	}
 	// Switching a read-only file to WAL cannot be written; Open must say so instead of running in
 	// another journal mode with other guarantees.
-	_, err = Open(deadline(t, 5*time.Second), path)
+	_, err := Open(deadline(t, 5*time.Second), path)
 	if !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("Open = %v, want ErrReadOnly", err)
 	}
 	if identify(t, path) != before {
 		t.Fatal("the database file changed")
 	}
-}
-
-// readOnly makes dir read-only until the test ends.
-func readOnly(t *testing.T, dir string) {
-	t.Helper()
-	if err := os.Chmod(dir, 0o500); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 }
 
 func TestAFileThatIsNotADatabaseIsRefusedAndKept(t *testing.T) {
@@ -563,7 +405,7 @@ func TestADamagedPageIsReportedAsCorrupt(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	again := open(t, path)
+	again := openStore(t, path)
 	err = again.Read(deadline(t, 5*time.Second), func(tx Tx) error {
 		var sum int
 		return tx.QueryRow("SELECT SUM(LENGTH(data)) FROM rows").Scan(&sum)
@@ -579,7 +421,7 @@ func TestAPathWithSpecialCharactersIsTheFileOpened(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "library.sqlite")
-	s := open(t, path)
+	s := openStore(t, path)
 	must(t, s, "CREATE TABLE rows(id INTEGER PRIMARY KEY)")
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
@@ -612,23 +454,6 @@ func TestAFunctionsOwnErrorRollsBackAndIsReturnedUnchanged(t *testing.T) {
 	}
 }
 
-func TestAnUnclassifiedSQLiteErrorPassesThrough(t *testing.T) {
-	s, _ := withTable(t)
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
-		_, err := tx.Exec("NOT SQL")
-		return err
-	})
-	var se *sqlite.Error
-	if !errors.As(err, &se) {
-		t.Fatalf("Write = %v, want the driver's error", err)
-	}
-	for _, kind := range kinds {
-		if errors.Is(err, kind) {
-			t.Errorf("a syntax error was classified as %v", kind)
-		}
-	}
-}
-
 func TestClosingTwiceAndUsingAClosedStore(t *testing.T) {
 	s, _ := withTable(t)
 	if err := s.Close(); err != nil {
@@ -646,10 +471,9 @@ func TestClosingTwiceAndUsingAClosedStore(t *testing.T) {
 }
 
 func TestCloseReportsACheckpointBlockedByAnotherReader(t *testing.T) {
-	replace(t, &busyTimeout, 100*time.Millisecond)
-	s, path := withTable(t)
+	s, path := withTableUsing(t, shortBusy(100*time.Millisecond))
 	must(t, s, "INSERT INTO rows(n) VALUES (1)")
-	other := open(t, path)
+	other := openStore(t, path)
 	held, release := make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
@@ -677,15 +501,16 @@ func TestCloseReportsACheckpointBlockedByAnotherReader(t *testing.T) {
 	if err := other.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, open(t, path)); n != 2 {
+	if n := count(t, openStore(t, path)); n != 2 {
 		t.Fatalf("%d rows, want 2", n)
 	}
 }
 
 func TestAJournalModeOtherThanWALIsRefused(t *testing.T) {
 	// Only reads the mode: a new database answers "delete", as SQLite does when it keeps a mode.
-	replace(t, &walPragma, "PRAGMA journal_mode")
-	_, err := Open(deadline(t, 5*time.Second), filepath.Join(t.TempDir(), "library.sqlite"))
+	set := defaults
+	set.walPragma = "PRAGMA journal_mode"
+	_, err := open(deadline(t, 5*time.Second), filepath.Join(t.TempDir(), "library.sqlite"), set)
 	if err == nil || !strings.Contains(err.Error(), `kept journal_mode "delete"`) {
 		t.Fatalf("Open = %v, want the kept mode named", err)
 	}

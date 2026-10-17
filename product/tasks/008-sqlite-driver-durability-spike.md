@@ -1,6 +1,6 @@
 # 008 — Choose the SQLite driver and data durability mode
 
-**Status:** `in_progress`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** Gate/spike with a recorded result  
@@ -35,10 +35,10 @@ Choose the SQLite driver based on the results of building on the Mac, checking p
 
 ## Acceptance criteria
 
-- [ ] A failed transaction commit returns an error, not a message about successful persistence.
-- [ ] The built program launches without libraries installed for the end user via Homebrew.
-- [ ] The WAL decision is based on the verified SQLite version and the results of concurrent writes and journal checkpointing.
-- [ ] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as successful.
+- [x] A failed transaction commit returns an error, not a message about successful persistence.
+- [x] The built program launches without libraries installed for the end user via Homebrew.
+- [x] The WAL decision is based on the verified SQLite version and the results of concurrent writes and journal checkpointing.
+- [x] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as successful.
 
 ## Checks
 
@@ -72,3 +72,51 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Record a short result: what was changed, the exact checks with the statuses `pass`, `fail` or `not_run`, ADRs, actual code change locations and known limitations.
 - For `blocked`, state the concrete reason, the missing evidence/decision, how to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+### Execution result (17 October 2026)
+
+- **Status:** `done`.
+  - Evidence: [report 008](../../docs/verification/008-sqlite-driver-durability-spike.md).
+  - ADR: [sqlite-driver](../../docs/decisions/sqlite-driver.md) (O4 accepted).
+  - Feature: [library store](../../docs/app/library-store.md).
+- **Driver: `modernc.org/sqlite` v1.60.1, with SQLite 3.53.4.** The driver was chosen by rules
+  declared before measuring, after probing three drivers:
+  - `mattn/go-sqlite3` fails to link next to the engine's C SQLite (266 duplicate symbols);
+  - `ncruces/go-sqlite3` passes, but has a v0 API.
+- **Durability:**
+  - WAL;
+  - `synchronous=FULL` and `fullfsync` on every connection; `F_FULLFSYNC` is really issued, at about
+    4 ms per commit;
+  - `busy_timeout` 5 s, foreign keys on;
+  - one `BEGIN IMMEDIATE` writer (serialized, not FIFO) and four `mode=ro` readers;
+  - only the writer checkpoints.
+- **Created:**
+  - `internal/library`: `Open`, `Write`, `Read`, `Close`, `library.Tx`, the error kinds,
+    `SQLiteVersion`;
+  - the product's runtime check shows `SQLite 3.53.4`.
+- **Checks:**
+  - **`go tool devtool check` → `GATE PASSED`** (report, "Final gate").
+  - **`go test -race ./internal/library`: `pass`**, on real SQLite: a failed commit, cancellation,
+    busy from another process, readers during writes, checkpoints, SIGKILL, read-only folders and
+    files, a real full HFS+ volume, damaged files, a deleted or replaced file, an empty file beside a
+    WAL.
+  - **`.app` QA 5/5: `pass`.**
+- **`not_run` (with a handoff):**
+  - power-loss durability;
+  - the reason shown to the user for a read-only folder or a full disk (the app opens no file
+    database until 014/028).
+- **Limitations and handoffs:**
+  - 014/028: the data directory and `OCTOPUS_DATA_DIR`, with its validation and the gate and
+    workspace overrides;
+  - 014: `application_id`;
+  - 015: `SQLITE_IOERR` classification, the `AppError` mapping, enforcing SQL only in the
+    repository;
+  - 016: backup;
+  - 028: one `Store` per process, quit order, a read-only probe at start;
+  - 009: the engine's own C SQLite.
+- **Owner's decisions in this task:**
+  - the plan rating has no minimum (`.claude/docs/planning.md`);
+  - `/.agents/` (Codex's local skills) is ignored by Git.
+- **Next tasks:**
+  - 009 (both dependencies are now `done`), 010, 012, 013, 014, 017, 035;
+  - 015 after 013 and 014.

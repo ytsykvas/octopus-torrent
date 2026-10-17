@@ -6,36 +6,54 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
 
-// imagePrefix names every disk image these tests attach, so a leftover one can be found.
+// imagePrefix names every disk image these tests attach, followed by the test process's pid, so an
+// image whose process is gone can be told apart from one another test run is using right now.
 const imagePrefix = "octopus-library-full-"
 
+// hdiutil is the system's own, never one found through PATH.
+const hdiutil = "/usr/bin/hdiutil"
+
 func TestMain(m *testing.M) {
-	if left := attachedImages(); left != "" {
-		fmt.Fprintf(os.Stderr, "a disk image of an earlier run is still attached; detach it with hdiutil detach -force <mountpoint>:\n%s", left)
+	// The child processes of process_test.go run this binary too; only the parent checks.
+	parent := os.Getenv(lockChildEnv) == "" && os.Getenv(commitChildEnv) == ""
+	if left := leftImages(); parent && left != "" {
+		fmt.Fprintf(os.Stderr, "a disk image of an ended run is still attached; detach it with hdiutil detach -force <mountpoint>:\n%s", left)
 		os.Exit(1)
 	}
 	code := m.Run()
-	if left := attachedImages(); left != "" {
-		fmt.Fprintf(os.Stderr, "a test left a disk image attached:\n%s", left)
+	if mine := attachedImages(func(pid int) bool { return pid == os.Getpid() }); parent && mine != "" {
+		fmt.Fprintf(os.Stderr, "a test left a disk image attached:\n%s", mine)
 		code = 1
 	}
 	os.Exit(code)
 }
 
-// attachedImages returns the hdiutil lines naming an image of these tests.
-func attachedImages() string {
-	out, err := exec.Command("hdiutil", "info").CombinedOutput()
+// leftImages returns the attached images whose test process no longer runs.
+func leftImages() string {
+	return attachedImages(func(pid int) bool { return syscall.Kill(pid, 0) == syscall.ESRCH })
+}
+
+// attachedImages returns the hdiutil lines naming an image of these tests whose pid matches.
+func attachedImages(match func(pid int) bool) string {
+	out, err := exec.Command(hdiutil, "info").CombinedOutput()
 	if err != nil {
 		return fmt.Sprintf("hdiutil info: %v\n%s", err, out)
 	}
 	var found strings.Builder
 	for _, line := range strings.Split(string(out), "\n") {
-		if strings.Contains(line, imagePrefix) {
+		_, rest, ok := strings.Cut(line, imagePrefix)
+		if !ok {
+			continue
+		}
+		digits, _, _ := strings.Cut(rest, ".")
+		if pid, err := strconv.Atoi(digits); err != nil || match(pid) {
 			found.WriteString(line + "\n")
 		}
 	}
@@ -47,11 +65,11 @@ func attachedImages() string {
 func smallVolume(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	image := filepath.Join(dir, imagePrefix+"volume.dmg")
+	image := filepath.Join(dir, fmt.Sprintf("%s%d.dmg", imagePrefix, os.Getpid()))
 	mount := filepath.Join(dir, "mount")
 	run := func(args ...string) {
 		t.Helper()
-		if out, err := exec.Command("hdiutil", args...).CombinedOutput(); err != nil {
+		if out, err := exec.Command(hdiutil, args...).CombinedOutput(); err != nil {
 			t.Fatalf("hdiutil %s: %v\n%s", strings.Join(args, " "), err, out)
 		}
 	}
@@ -61,7 +79,7 @@ func smallVolume(t *testing.T) string {
 	}
 	run("attach", "-nobrowse", "-noautoopen", "-mountpoint", mount, image)
 	t.Cleanup(func() {
-		if out, err := exec.Command("hdiutil", "detach", "-force", mount).CombinedOutput(); err != nil {
+		if out, err := exec.Command(hdiutil, "detach", "-force", mount).CombinedOutput(); err != nil {
 			t.Errorf("hdiutil detach: %v\n%s", err, out)
 		}
 	})
@@ -91,7 +109,7 @@ func fill(t *testing.T, dir string) string {
 func TestAFullDiskFailsTheWriteAndKeepsWhatWasCommitted(t *testing.T) {
 	mount := smallVolume(t)
 	path := filepath.Join(mount, "library.sqlite")
-	s := open(t, path)
+	s := openStore(t, path)
 	must(t, s, "CREATE TABLE rows(id INTEGER PRIMARY KEY, n INTEGER, data BLOB)")
 	for i := range 20 {
 		must(t, s, "INSERT INTO rows(n) VALUES (?)", i)
@@ -106,13 +124,15 @@ func TestAFullDiskFailsTheWriteAndKeepsWhatWasCommitted(t *testing.T) {
 		t.Fatalf("Write on a full disk = %v, want ErrFull", err)
 	}
 	t.Logf("Write on a full disk: %v", err)
-	// Close may or may not manage its checkpoint without space; the committed rows are in the WAL
-	// either way, which the reopen proves.
-	t.Logf("Close on a full disk: %v", s.Close())
+	// The closing checkpoint cannot copy the WAL into the database file without space; the committed
+	// rows stay in the WAL, which the reopen proves.
+	if err := s.Close(); !errors.Is(err, ErrFull) {
+		t.Fatalf("Close on a full disk = %v, want ErrFull", err)
+	}
 	if err := os.Remove(filler); err != nil {
 		t.Fatal(err)
 	}
-	again := open(t, path)
+	again := openStore(t, path)
 	if n := count(t, again); n != 20 {
 		t.Fatalf("%d rows after the full disk, want 20", n)
 	}
