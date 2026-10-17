@@ -70,7 +70,7 @@ type TorrentStorage struct {
 	root    string
 	rootID  files.Identity
 	session *Session
-	marks   marksState // nil when the completion does not report its state
+	marks   marksState
 	reads   atomic.Int64
 	lost    atomic.Pointer[error]
 	tr      *tracker
@@ -78,14 +78,14 @@ type TorrentStorage struct {
 	mu       sync.RWMutex // orders flight.Add against Stop; never held while the engine runs
 	stopped  bool
 	flight   sync.WaitGroup
-	idleOnce sync.Once
-	idle     chan struct{}
-	drained  atomic.Bool
+	idleOnce sync.Once     // starts the drain once
+	idle     chan struct{} // closed once Stop has drained every operation
 }
 
 var _ storage.ClientImpl = (*TorrentStorage)(nil)
 
 // newGuard guards inner for the save folder root, which must be an existing, clean, absolute folder.
+// marks must not be nil.
 func newGuard(inner storage.ClientImpl, root string, session *Session, marks marksState) (*TorrentStorage, error) {
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
 		return nil, fmt.Errorf("the save folder %q is not a clean absolute path", root)
@@ -104,7 +104,7 @@ func newGuard(inner storage.ClientImpl, root string, session *Session, marks mar
 	if !id.Dir {
 		return nil, fmt.Errorf("the save folder %q is not a folder", root)
 	}
-	return &TorrentStorage{inner: inner, root: root, rootID: id, session: session, marks: marks, tr: newTracker()}, nil
+	return &TorrentStorage{inner: inner, root: root, rootID: id, session: session, marks: marks, tr: newTracker(), idle: make(chan struct{})}, nil
 }
 
 // enter admits one operation: not after Stop, and only while the save folder is the recorded one.
@@ -172,10 +172,8 @@ func (s *TorrentStorage) Stop(ctx context.Context) error {
 	s.stopped = true
 	s.mu.Unlock()
 	s.idleOnce.Do(func() {
-		s.idle = make(chan struct{})
 		go func() {
 			s.flight.Wait()
-			s.drained.Store(true)
 			close(s.idle)
 		}()
 	})

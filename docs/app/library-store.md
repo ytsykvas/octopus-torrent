@@ -1,6 +1,6 @@
 # Library store: how SQLite is opened, written and read
 
-**Status:** `implemented` (prototype: no schema yet)  
+**Status:** `implemented` (prototype: only the interim marks schema of 009; the library schema comes with 014)  
 **Requirements:** `STACK-04`, `SET-02`, `AI-07`  
 **Related tasks:** [008](../../product/tasks/008-sqlite-driver-durability-spike.md); next [014](../../product/tasks/014-sqlite-schema-migrations.md), [015](../../product/tasks/015-transactional-repositories.md), [016](../../product/tasks/016-migration-backup-corruption-recovery.md), [028](../../product/tasks/028-application-startup-quit.md)  
 **Last verified version:** branch `task/008-sqlite-driver`  

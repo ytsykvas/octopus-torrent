@@ -165,7 +165,7 @@ func TestClassicIOReportsAShortWriteForAPieceThatEndsInsideItsFile(t *testing.T)
 	}
 	info := infoOf(t, mi)
 	var session Session
-	s, err := NewTorrentStorage(dir, storage.NewMapPieceCompletion(), &session, slog.New(slog.DiscardHandler))
+	s, err := NewTorrentStorage(dir, marks(t), &session, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

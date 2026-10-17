@@ -48,8 +48,8 @@ type Store struct {
 	write *sql.DB
 	read  *sql.DB
 
-	closing sync.Once
-	closed  error
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // connector opens connections of the modernc driver with a fixed DSN; unlike sql.Open it cannot fail.
@@ -215,7 +215,7 @@ func run(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(Tx) error
 // with the same outcome. The checkpoint waits at most busyTimeout (5 s) for another process's
 // reader. Close runs once; later calls return its result.
 func (s *Store) Close() error {
-	s.closing.Do(func() {
+	s.closeOnce.Do(func() {
 		errs := []error{s.read.Close()}
 		var busy, logged, done int
 		err := s.write.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&busy, &logged, &done)
@@ -225,7 +225,7 @@ func (s *Store) Close() error {
 		case busy != 0:
 			errs = append(errs, &kindError{ErrBusy, fmt.Errorf("the checkpoint copied %d of %d WAL frames", done, logged)})
 		}
-		s.closed = errors.Join(append(errs, s.write.Close())...)
+		s.closeErr = errors.Join(append(errs, s.write.Close())...)
 	})
-	return s.closed
+	return s.closeErr
 }

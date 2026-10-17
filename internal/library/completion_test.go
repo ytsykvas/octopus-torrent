@@ -101,6 +101,9 @@ func TestACancelledContextIsRefusedByEveryOperation(t *testing.T) {
 	if err := c.SaveMarks(ctx, []Mark{{hashA, 0, true}}); !errors.Is(err, ErrCanceled) {
 		t.Fatalf("SaveMarks = %v, want ErrCanceled", err)
 	}
+	if err := c.SaveMarks(ctx, nil); !errors.Is(err, ErrCanceled) {
+		t.Fatalf("SaveMarks of no marks = %v, want ErrCanceled", err)
+	}
 	if _, err := c.LoadMarks(ctx, hashA); !errors.Is(err, ErrCanceled) {
 		t.Fatalf("LoadMarks = %v, want ErrCanceled", err)
 	}

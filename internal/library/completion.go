@@ -71,7 +71,7 @@ func (c *CompletionStore) SaveMarks(ctx context.Context, marks []Mark) error {
 		}
 	}
 	if len(marks) == 0 {
-		return ctx.Err()
+		return classify(ctx.Err())
 	}
 	return c.store.Write(ctx, func(tx Tx) error {
 		for _, m := range marks {

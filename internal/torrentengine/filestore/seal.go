@@ -22,19 +22,19 @@ func (s *TorrentStorage) Baseline(rec *files.Record, decision files.Decision) {
 // be verified: the stale marks of such pieces must not be trusted at the next start. The record is Clean
 // only if the whole session had no storage problem.
 func (s *TorrentStorage) Seal() (files.Record, error) {
-	if !s.drained.Load() {
+	select {
+	case <-s.idle:
+	default:
 		return files.Record{}, ErrNotStopped
 	}
-	unresolved := map[int]bool{}
-	if s.marks != nil {
-		if !s.marks.Closed() {
-			return files.Record{}, ErrNotClosed
-		}
-		for _, p := range s.marks.Unresolved(s.tr.boundHash()) {
-			unresolved[p] = true
-		}
+	if !s.marks.Closed() {
+		return files.Record{}, ErrNotClosed
 	}
-	return s.tr.seal(s.root, s.session, unresolved, syncFile)
+	unresolved := map[int]bool{}
+	for _, p := range s.marks.Unresolved(s.tr.boundHash()) {
+		unresolved[p] = true
+	}
+	return s.tr.seal(s.root, s.session, unresolved)
 }
 
 // syncFile flushes a regular file to stable storage (F_FULLFSYNC on macOS). It does not block on a

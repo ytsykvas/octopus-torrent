@@ -40,37 +40,37 @@ func specs() []spec {
 			pieceLength: 32 << 10, root: "tree", files: treeFiles, engine: StageAdd},
 		{name: "hybrid-single", purpose: "hybrid single file", set: "single", format: Hybrid, pieceLength: 16 << 10, files: singleFiles, engine: StageAccepted},
 		hybridTree,
-		invalid(v1Single, "invalid-truncated", "v1-single cut in the middle of the info dictionary", StageLoad, nil, 60),
+		truncated(v1Single, "invalid-truncated", "v1-single cut in the middle of the info dictionary", StageLoad, 60),
 		invalid(v1Single, "invalid-info-type", "piece length is a string, not an integer", StageInfo, func(info map[string]any, _ map[string]string) {
 			info["piece length"] = "16384"
-		}, 0),
+		}),
 		invalid(v1Single, "invalid-pieces-length", "pieces is not a multiple of 20 bytes", StageAdd, func(info map[string]any, _ map[string]string) {
 			pieces := info["pieces"].(string)
 			info["pieces"] = pieces[:len(pieces)-1]
-		}, 0),
+		}),
 		invalid(v1Tree, "invalid-negative-length", "a file with length -1", StageAdd, func(info map[string]any, _ map[string]string) {
 			info["files"].([]any)[0].(map[string]any)["length"] = int64(-1)
-		}, 0),
+		}),
 		invalid(v1Tree, "invalid-path-traversal", "a path component \"..\" that leaves the save folder; the engine accepts it", StageAccepted, func(info map[string]any, _ map[string]string) {
 			info["files"].([]any)[0].(map[string]any)["path"] = []any{"..", "escape.bin"}
-		}, 0),
+		}),
 		invalid(v1Tree, "invalid-empty-traversal", "the empty file's path is [\"..\", \"victim.txt\"]: one level above the torrent folder; the engine accepts it and truncates an existing file there on add", StageAccepted, func(info map[string]any, _ map[string]string) {
 			zeroLength(info)["path"] = []any{"..", "victim.txt"}
-		}, 0),
+		}),
 		invalid(v1Tree, "invalid-embedded-separator", "the empty file's path is one component \"a/../../x\", which resolves to the save folder", StageAccepted, func(info map[string]any, _ map[string]string) {
 			zeroLength(info)["path"] = []any{"a/../../x"}
-		}, 0),
+		}),
 		invalid(v1Tree, "invalid-dot-components", "path components \".\" and \"\" in the empty file's path", StageAccepted, func(info map[string]any, _ map[string]string) {
 			zeroLength(info)["path"] = []any{".", "", "dots.dat"}
-		}, 0),
+		}),
 		invalid(hybridTree, "invalid-hybrid-mismatch", "a hybrid whose v1 file list disagrees with its file tree; the engine accepts it", StageAccepted, func(info map[string]any, _ map[string]string) {
 			info["files"].([]any)[0].(map[string]any)["length"] = int64(10001)
-		}, 0),
+		}),
 		invalid(hybridTree, "invalid-piece-layer", "a hybrid whose piece layer does not hash to its pieces root", StagePieceLayers, func(_ map[string]any, layers map[string]string) {
 			for root, layer := range layers {
 				layers[root] = "\xff" + layer[1:]
 			}
-		}, 0),
+		}),
 	}
 }
 
@@ -80,8 +80,14 @@ func zeroLength(info map[string]any) map[string]any {
 	return info["files"].([]any)[1].(map[string]any)
 }
 
-// invalid derives a metainfo-only fixture from base.
-func invalid(base spec, name, purpose string, engine Stage, mutate func(map[string]any, map[string]string), cut int) spec {
-	base.name, base.purpose, base.engine, base.mutate, base.cut = name, purpose, engine, mutate, cut
+// invalid derives a metainfo-only fixture from base by changing its info dictionary or piece layers.
+func invalid(base spec, name, purpose string, engine Stage, mutate func(map[string]any, map[string]string)) spec {
+	base.name, base.purpose, base.engine, base.mutate = name, purpose, engine, mutate
+	return base
+}
+
+// truncated derives a metainfo-only fixture from base whose metainfo file ends after at bytes.
+func truncated(base spec, name, purpose string, engine Stage, at int) spec {
+	base.name, base.purpose, base.engine, base.cut = name, purpose, engine, at
 	return base
 }

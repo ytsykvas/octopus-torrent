@@ -29,7 +29,7 @@ func sealed(t *testing.T) (s *TorrentStorage, pieces [3]storage.PieceImpl, sessi
 	root = t.TempDir()
 	session = &Session{}
 	var err error
-	if s, err = newGuard(f, root, session, nil); err != nil {
+	if s, err = newGuard(f, root, session, noMarks{}); err != nil {
 		t.Fatal(err)
 	}
 	impl, err := s.OpenTorrent(context.Background(), multiInfo, metainfo.Hash{})
@@ -229,7 +229,7 @@ func TestClosingTheMarksStoreWithAnErrorMakesTheSessionUnclean(t *testing.T) {
 
 func TestATorrentWithAPathOutsideTheSaveFolderIsRefusedBeforeTheEngineSeesIt(t *testing.T) {
 	f := newFake()
-	s, err := newGuard(f, t.TempDir(), &Session{}, nil)
+	s, err := newGuard(f, t.TempDir(), &Session{}, noMarks{})
 	if err != nil {
 		t.Fatal(err)
 	}
