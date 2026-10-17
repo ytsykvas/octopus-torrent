@@ -97,6 +97,20 @@ func assertRootLost(t *testing.T, r *run) {
 	}
 }
 
+// noMarks is the marks state of a guard whose tests do not use piece marks: closed, nothing unresolved.
+type noMarks struct{}
+
+func (noMarks) Unresolved([20]byte) []int { return nil }
+func (noMarks) Closed() bool              { return true }
+
+// marks is a Completion over the test double, closed when the test ends, for a storage whose tests do
+// not look at the marks.
+func marks(t *testing.T) *Completion {
+	t.Helper()
+	c, _ := completion(t, newDouble(), slowFlush)
+	return c
+}
+
 // writeFile returns the path of a regular file, for tests that need a path that is not a folder.
 func writeFile(t *testing.T) string {
 	t.Helper()

@@ -61,6 +61,7 @@ func (a *App) GetOperation(operationID string) (contracts.OperationStatus, error
 	if problem != nil {
 		return status, problem
 	}
+	// A nil *AppError converted to error would be a non-nil interface: success returns nil itself.
 	return status, nil
 }
 

@@ -29,9 +29,8 @@ func (c *checker) isolation() stepResult {
 	if err != nil {
 		return fail("go list -deps .: "+err.Error(), out)
 	}
-	gomod, _ := c.sys.ReadFile("go.mod")
 	deps := strings.Fields(out)
-	if found := CheckProductIsolation(GoModulePath(string(gomod)), deps); len(found) > 0 {
+	if found := CheckProductIsolation(c.module(), deps); len(found) > 0 {
 		return fail("the product links packages it must not (the spike, test support, or the engine before 018)", strings.Join(found, "\n"))
 	}
 	return pass("the product links none of the spike, test support or the engine (" + strconv.Itoa(len(deps)) + " packages)")

@@ -294,7 +294,7 @@ func TestAFolderThatCannotBeSearchedMakesTheTorrentUnopenableNotUnchecked(t *tes
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
-	s, err := newGuard(f, root, &Session{}, nil)
+	s, err := newGuard(f, root, &Session{}, noMarks{})
 	if err != nil {
 		t.Fatal(err)
 	}

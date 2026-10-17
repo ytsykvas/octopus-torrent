@@ -1,16 +1,10 @@
-// The only module that calls the generated Wails bindings for runtime info.
-// UI code depends on this own DTO, never on the generated classes.
+// The only module that calls the generated runtime info binding.
 import { GetRuntimeInfo } from '../../wailsjs/go/app/App'
+import { callGo } from './call'
+import type { Result } from './contract/errors'
+import { runtimeInfo, type RuntimeInfo } from './contract/runtimeInfo'
 
-/** Go runtime and SQLite compiled into the running application (Go DTO app.RuntimeInfo). */
-export interface RuntimeInfo {
-  goVersion: string
-  os: string
-  arch: string
-  sqliteVersion: string
-}
-
-export async function getRuntimeInfo(): Promise<RuntimeInfo> {
-  const { goVersion, os, arch, sqliteVersion } = await GetRuntimeInfo()
-  return { goVersion, os, arch, sqliteVersion }
+/** The Go runtime and SQLite compiled into the running application. */
+export function getRuntimeInfo(): Promise<Result<RuntimeInfo>> {
+  return callGo(() => GetRuntimeInfo(), runtimeInfo)
 }

@@ -1,9 +1,10 @@
 package devtool
 
 import (
+	"fmt"
+	"io"
 	"path"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -97,11 +98,42 @@ func slug(heading string) string {
 	return b.String()
 }
 
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
+// checkDocs verifies every relative Markdown link and every .claude/**.md pointer in the agent and
+// runner configuration.
+func checkDocs(stdout io.Writer, sys System) error {
+	summary, dead, err := docsCheck(sys)
+	return printOwn(stdout, summary, dead, err, "dead links or pointers")
+}
+
+// docsCheck returns the dead links and pointers, and the summary printed when there are none.
+func docsCheck(sys System) (string, []string, error) {
+	files, err := repositoryFiles(sys)
+	if err != nil {
+		return "", nil, err
 	}
-	sort.Strings(keys)
-	return keys
+	exists := listedPath(files)
+	docs, sources := map[string]string{}, map[string]string{}
+	for _, f := range files {
+		content, err := sys.ReadFile(f)
+		if err != nil {
+			continue // listed but deleted from the working tree
+		}
+		if strings.HasSuffix(f, ".md") {
+			docs[f] = string(content)
+		}
+		if f == "CLAUDE.md" || f == "AGENTS.md" || hasAnyPrefix(f, ".claude/", ".codex/", ".octopus/", ".conductor/", "docs/") {
+			sources[f] = string(content)
+		}
+	}
+	dead := append(CheckLinks(docs, exists), CheckPointers(sources, exists)...)
+	return fmt.Sprintf("every relative link and .claude pointer resolves (%d Markdown files)", len(docs)), dead, nil
+}
+
+func hasAnyPrefix(s string, prefixes ...string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
 }

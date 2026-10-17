@@ -47,7 +47,8 @@ Anything that needs the real torrent engine uses the [test torrents and the loca
 
 ## TypeScript
 
-- Vitest with jsdom (`src/test/setup.ts` adds jest-dom matchers and cleans up after each test).
+- Vitest with jsdom (`src/test/setup.ts` adds jest-dom matchers and, after each test, cleans up and removes
+  any `window.go` stub; `src/test/goBinding.ts` has `stubGoMethod` for a Go facade method).
 - **Inventory:** every `frontend/src/**/*.ts(x)` except tests, `src/test/` and `.d.ts`. The gate
   derives it from the repository listing, not from `vite.config.ts`, and requires
   covered == total on lines, statements, functions and branches for every file.

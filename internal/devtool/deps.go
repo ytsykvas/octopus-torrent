@@ -60,19 +60,15 @@ func npmLockEntries(lock []byte) ([]npmLockEntry, error) {
 	return entries, nil
 }
 
-// NpmLockPackages returns every installed package version of an npm lockfile as name@version,
+// npmLockPackages returns every installed package version of a parsed npm lockfile as name@version,
 // sorted and unique.
-func NpmLockPackages(lock []byte) ([]string, error) {
-	entries, err := npmLockEntries(lock)
-	if err != nil {
-		return nil, err
-	}
+func npmLockPackages(entries []npmLockEntry) []string {
 	found := make([]string, len(entries))
 	for i, e := range entries {
 		found[i] = e.name + "@" + e.version
 	}
 	slices.Sort(found)
-	return slices.Compact(found), nil
+	return slices.Compact(found)
 }
 
 type goModule struct {
@@ -204,15 +200,15 @@ func (c *checker) network(step func() stepResult) func() stepResult {
 // releaseAges checks that every locked npm package version and every Go module in the build list
 // was published at least minReleaseAgeDays ago, by the registry's publication time.
 func (c *checker) releaseAges() stepResult {
-	lock, err := c.sys.ReadFile("frontend/package-lock.json")
+	lock, err := c.sys.ReadFile(npmLock)
 	if err != nil {
-		return fail("read frontend/package-lock.json: "+err.Error(), "")
+		return fail("read "+npmLock+": "+err.Error(), "")
 	}
 	entries, err := npmLockEntries(lock)
 	if err != nil {
-		return fail("frontend/package-lock.json: "+err.Error(), "")
+		return fail(npmLock+": "+err.Error(), "")
 	}
-	npm, _ := NpmLockPackages(lock)
+	npm := npmLockPackages(entries)
 	list, err := c.sys.Output("go", "list", "-m", "-json", "all")
 	if err != nil {
 		return fail("go list -m -json all: "+err.Error(), list)
@@ -260,19 +256,10 @@ func (c *checker) releaseAges() stepResult {
 	}
 	for _, p := range npm {
 		name, version := splitVersion(p)
-		doc, err := c.parsePackument(name, answers[npmURL(name)])
+		doc, err := c.storePackument(name, answers[npmURL(name)])
 		check(p, doc.Time[version], err)
 	}
-	// The age was checked in the registry, so npm ci must install exactly the registry's artifact.
-	for _, e := range entries {
-		doc := c.npmDocs[e.name]
-		switch want := doc.Versions[e.version].Dist.Integrity; {
-		case !strings.HasPrefix(e.resolved, npmRegistry):
-			problems = append(problems, e.path+": resolved from "+e.resolved+", not from "+npmRegistry)
-		case doc.Versions != nil && e.integrity != want:
-			problems = append(problems, e.path+": integrity "+e.integrity+" differs from the registry's "+want)
-		}
-	}
+	problems = append(problems, npmArtifactProblems(entries, c.npmDocs)...)
 	for _, m := range mods {
 		var info struct{ Time string }
 		a := answers[goInfoURL(splitVersion(m))]
@@ -299,11 +286,34 @@ type npmDocument struct {
 	Versions map[string]struct{ Dist struct{ Integrity string } }
 }
 
-// parsePackument reads an npm registry document and remembers it for the other checks.
-func (c *checker) parsePackument(name string, a fetched) (npmDocument, error) {
+// npmArtifactProblems checks that every locked package comes from the registry with the registry's
+// integrity: the age was checked there, so npm ci must install exactly that artifact. docs are the
+// registry documents already read.
+func npmArtifactProblems(entries []npmLockEntry, docs map[string]npmDocument) []string {
+	var problems []string
+	for _, e := range entries {
+		doc := docs[e.name]
+		switch want := doc.Versions[e.version].Dist.Integrity; {
+		case !strings.HasPrefix(e.resolved, npmRegistry):
+			problems = append(problems, e.path+": resolved from "+e.resolved+", not from "+npmRegistry)
+		case doc.Versions != nil && e.integrity != want:
+			problems = append(problems, e.path+": integrity "+e.integrity+" differs from the registry's "+want)
+		}
+	}
+	return problems
+}
+
+// packument returns the registry document of an npm package, read once.
+func (c *checker) packument(name string) (npmDocument, error) {
 	if doc, ok := c.npmDocs[name]; ok {
 		return doc, nil
 	}
+	body, err := c.sys.Get(npmURL(name))
+	return c.storePackument(name, fetched{body, err})
+}
+
+// storePackument decodes an npm registry answer and remembers it for the other checks.
+func (c *checker) storePackument(name string, a fetched) (npmDocument, error) {
 	if a.err != nil {
 		return npmDocument{}, a.err
 	}
@@ -327,7 +337,8 @@ func (c *checker) updates() stepResult {
 	}
 	// npm outdated exits 1 when something is outdated; its JSON is the answer either way, and an
 	// npm error is a JSON object with an error code.
-	out, _ := c.sys.Output("npm", "--prefix", "frontend", "outdated", "--json")
+	outdatedCmd := npm("outdated", "--json")
+	out, _ := c.sys.Output(outdatedCmd[0], outdatedCmd[1:]...)
 	var outdated map[string]struct{ Current, Latest, Code, Summary string }
 	if err := json.Unmarshal([]byte(out), &outdated); err != nil {
 		return fail("npm outdated --json: "+err.Error(), out)
@@ -341,7 +352,7 @@ func (c *checker) updates() stepResult {
 	var found []string
 	for _, name := range sortedKeys(outdated) {
 		o := outdated[name]
-		doc, err := c.parsePackument(name, c.fetch([]string{npmURL(name)})[npmURL(name)])
+		doc, err := c.packument(name)
 		if err != nil {
 			return notRun("cannot read the publication times of " + name + ": " + err.Error())
 		}
@@ -357,8 +368,7 @@ func (c *checker) updates() stepResult {
 	if err != nil {
 		return fail("go list -m -u -json all: "+err.Error(), list)
 	}
-	gomod, _ := c.sys.ReadFile("go.mod")
-	tools := GoTools(string(gomod))
+	tools := GoTools(c.gomod())
 	isTool := func(module string) bool {
 		return slices.ContainsFunc(tools, func(t string) bool { return t == module || strings.HasPrefix(t, module+"/") })
 	}

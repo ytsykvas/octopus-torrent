@@ -50,11 +50,14 @@ Everything except the two `wailsjs/` directories is gitignored.
 
 | File | Responsibility |
 |---|---|
-| `devtool.go` | `Main` dispatch, workspace, docs and plan commands |
-| `check.go` | gate modes, the step runner, the report, npm cooldown, go env, tool steps |
-| `frontendcov.go`, `gocov.go`, `appcov.go` | coverage inventories, profiles, the escape-hatch scan, the `wailsApps` table and the instrumented run of every app |
+| `devtool.go` | `Main` dispatch, the `System` interface, the repository listing (`repositoryFiles`, `listedPath`), `sortedKeys` |
+| `workspace.go` | the `workspace-setup` and `workspace-run` commands |
+| `check.go` | gate modes, the step runner, the report, tool steps |
+| `toolchain.go` | the npm cooldown and go env checks |
+| `frontendcov.go`, `gocov.go`, `appcov.go` | coverage inventories, profiles, the `wailsApps` table and the instrumented run of every app |
+| `escapehatches.go` | the escape-hatch scan of TS and Go sources and tests |
 | `isolation.go` | the `product isolation` step |
 | `scripts.go` | the `scripts` step: shell scripts only hand over to `devtool` |
 | `deps.go` | lockfile and build list, registry dates and integrity, audits, updates |
-| `docs.go`, `plan.go`, `codexagents.go` | link and pointer checks, the plan check and navigation, Codex mirrors |
+| `docs.go`, `plan.go`, `codexagents.go` | link and pointer checks and the `check-docs` command; the plan check, `check-plan` and `plan-nav`; Codex mirrors and the `codex-agents` command |
 | `system.go` | `OSSystem`: the real file, process and HTTP calls |

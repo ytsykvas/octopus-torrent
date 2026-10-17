@@ -3,6 +3,7 @@ package filestore
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/anacrolix/torrent/metainfo"
@@ -113,22 +114,22 @@ func (t *tracker) baseline(rec *files.Record, decision files.Decision) {
 	if rec == nil {
 		return
 	}
+	kept := map[string]bool{}
+	for _, path := range slices.Concat(decision.Trusted, decision.Missing) {
+		kept[path] = true
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for _, f := range rec.Files {
-		for _, kept := range [][]string{decision.Trusted, decision.Missing} {
-			for _, path := range kept {
-				if path == f.Path {
-					t.base[f.Path] = f
-				}
-			}
+		if kept[f.Path] {
+			t.base[f.Path] = f
 		}
 	}
 }
 
 // seal builds the record. A file is recorded as present only if the run left it (and synced it), it was
 // not changed by someone else, and none of its pieces is still waiting to be verified.
-func (t *tracker) seal(root string, session *Session, unresolved map[int]bool, sync func(string) error) (files.Record, error) {
+func (t *tracker) seal(root string, session *Session, unresolved map[int]bool) (files.Record, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	var errs []error
@@ -154,7 +155,7 @@ func (t *tracker) seal(root string, session *Session, unresolved map[int]bool, s
 		}
 		if !t.tainted[i] && !waiting {
 			if left, ok := t.left[i]; ok {
-				if err := sync(r.Path); err != nil {
+				if err := syncFile(r.Path); err != nil {
 					fail(err)
 				} else {
 					state = left

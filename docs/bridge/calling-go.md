@@ -1,11 +1,10 @@
 # Calling Go from React
 
-> Last updated: 2026-10-15
+> Last updated: 2026-10-18
 
 React reaches Go only through `frontend/src/bridge`. A wrapper there calls the generated binding,
 treats the answer as untrusted `unknown`, decodes it against the [contract](contract.md), and
-returns a `Result<T>`. A wrapper never rejects (except the 003 prototype `getRuntimeInfo`), so
-components handle one shape for every outcome.
+returns a `Result<T>`. A wrapper never rejects, so components handle one shape for every outcome.
 
 ## Flow
 
@@ -34,7 +33,7 @@ result.value.revision // bigint
 
 | Function | Go method | Value |
 |---|---|---|
-| `getRuntimeInfo()` (`bridge/runtimeInfo.ts`) | `GetRuntimeInfo` | `RuntimeInfo`. This is the 003 prototype: it rejects instead of returning a `Result` |
+| `getRuntimeInfo()` (`bridge/runtimeInfo.ts`) | `GetRuntimeInfo` | `Result<RuntimeInfo>` |
 | `getLibrarySnapshot()` (`bridge/library.ts`) | `GetLibrarySnapshot` | `Result<LibrarySnapshot>` |
 | `getOperation(id)` (`bridge/operations.ts`) | `GetOperation` | `Result<OperationStatus>` |
 
@@ -84,10 +83,11 @@ context.
 
 ## Testing a wrapper
 
-Stub the global the generated binding calls, and assert the `Result`:
+Stub the global the generated binding calls with `stubGoMethod` (`src/test/goBinding.ts`; `setup.ts`
+removes the stub after each test), and assert the `Result`:
 
 ```ts
-Object.assign(window, { go: { app: { App: { GetOperation: vi.fn(() => Promise.resolve(example('operation-succeeded.json'))) } } } })
+stubGoMethod('GetOperation', () => Promise.resolve(example('operation-succeeded.json')))
 await expect(getOperation(id)).resolves.toMatchObject({ ok: true, value: { state: 'succeeded' } })
 ```
 

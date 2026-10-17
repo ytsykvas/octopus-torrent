@@ -20,9 +20,9 @@ var ErrNoSaveFolder = errors.New("the torrent has no save folder: it needs stora
 
 // NewTorrentStorage is the storage for one torrent: the engine's file storage with the payload under
 // saveRoot, part files off, and the given completion, inside a guard. The engine's file storage logs
-// absolute paths; a nil logger discards them. If the completion reports its state (*Completion does),
-// Seal also requires it to be closed and keeps files with unresolved pieces out of the record.
-func NewTorrentStorage(saveRoot string, completion storage.PieceCompletion, session *Session, logger *slog.Logger) (*TorrentStorage, error) {
+// absolute paths; a nil logger discards them. Seal requires the completion to be closed and keeps
+// files with unresolved pieces out of the record. completion must not be nil.
+func NewTorrentStorage(saveRoot string, completion *Completion, session *Session, logger *slog.Logger) (*TorrentStorage, error) {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
@@ -33,8 +33,7 @@ func NewTorrentStorage(saveRoot string, completion storage.PieceCompletion, sess
 		Logger:          logger,
 	}
 	opts.UsePartFiles.Set(false)
-	state, _ := completion.(marksState)
-	return newGuard(storage.NewFileOpts(opts), saveRoot, session, state)
+	return newGuard(storage.NewFileOpts(opts), saveRoot, session, completion)
 }
 
 // filePath is the engine's own default rule for the path of a file below the save folder: the
@@ -49,11 +48,11 @@ func filePath(opts storage.FilePathMakerOpts) string {
 }
 
 // Layout is where the engine puts the torrent below saveRoot: contentRoot is the file of a
-// single-file v1 torrent and the folder of any other, and files lists the path of every file. A
+// single-file v1 torrent and the folder of any other, and paths lists the path of every file. A
 // path that would leave saveRoot is an error, as it is for the engine, and so is a torrent whose name
 // makes its folder the save folder itself ("", "." or "a/.."): a later deletion of "the torrent's
 // folder" would remove the user's whole folder.
-func Layout(saveRoot string, info *metainfo.Info) (contentRoot string, files []string, err error) {
+func Layout(saveRoot string, info *metainfo.Info) (contentRoot string, paths []string, err error) {
 	contentRoot = filepath.Join(saveRoot, info.BestName())
 	if info.BestName() == metainfo.NoName {
 		contentRoot = saveRoot
@@ -65,9 +64,9 @@ func Layout(saveRoot string, info *metainfo.Info) (contentRoot string, files []s
 		if rel, relErr := filepath.Rel(saveRoot, path); relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return "", nil, fmt.Errorf("the file %q would be written outside the save folder %q", path, saveRoot)
 		}
-		files = append(files, path)
+		paths = append(paths, path)
 	}
-	return contentRoot, files, nil
+	return contentRoot, paths, nil
 }
 
 // Ranges is Layout with the pieces every file covers: what files.Decide needs as the torrent's own

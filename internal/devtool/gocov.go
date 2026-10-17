@@ -106,7 +106,8 @@ func goInventory(sources map[string]string) (measured map[string]bool, mainLines
 // own non-test file with a function must be in the profile and no block may have a zero count.
 // Without the .app run, zero blocks inside func main of package main are returned as deferred
 // instead: only the real application executes them.
-// appMains names the file with func main of every Wails app; the .app profile must contain each.
+//
+// appMains: the file with func main of every Wails app; the .app profile must contain each.
 func CheckGoCoverage(module string, sources map[string]string, unitText, appText string, withApp bool, appMains []string) (problems, deferred []string) {
 	measured, mainLines, problems := goInventory(sources)
 	unit, bad := parseGoProfile(module, unitText)

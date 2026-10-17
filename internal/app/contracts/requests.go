@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"unicode"
 )
@@ -18,8 +17,8 @@ import (
 type Request interface {
 	// Validate returns request.invalid naming the first bad field, or nil.
 	Validate() *AppError
-	// normalized returns a copy for comparison: no operation ID, no shape, ID sets sorted and
-	// without repeats.
+	// normalized returns a copy for comparison: no operation ID, ID sets sorted and without repeats.
+	// It copies the whole request first, so a field added later is part of the fingerprint.
 	normalized() Request
 }
 
@@ -185,31 +184,38 @@ func (r *UpdateSettingsRequest) Validate() *AppError {
 }
 
 func (r *TorrentSelectionRequest) normalized() Request {
-	return &TorrentSelectionRequest{TorrentIDs: sortedUnique(r.TorrentIDs)}
+	n := *r
+	n.OperationID, n.TorrentIDs = "", sortedUnique(r.TorrentIDs)
+	return &n
 }
 
 func (r *SetFilesWantedRequest) normalized() Request {
-	return &SetFilesWantedRequest{TorrentID: r.TorrentID, FileIndexes: sortedUnique(r.FileIndexes), Wanted: r.Wanted}
+	n := *r
+	n.OperationID, n.FileIndexes = "", sortedUnique(r.FileIndexes)
+	return &n
 }
 
 func (r *ConfirmImportRequest) normalized() Request {
 	n := *r
-	n.OperationID, n.shape, n.SelectedFileIndexes = "", nil, sortedUnique(r.SelectedFileIndexes)
+	n.OperationID, n.SelectedFileIndexes = "", sortedUnique(r.SelectedFileIndexes)
 	return &n
 }
 
 func (r *CancelImportRequest) normalized() Request {
-	return &CancelImportRequest{PendingImportID: r.PendingImportID}
+	n := *r
+	return &n
 }
 
 func (r *RemoveTorrentsRequest) normalized() Request {
 	n := *r
-	n.OperationID, n.shape, n.TorrentIDs = "", nil, sortedUnique(r.TorrentIDs)
+	n.OperationID, n.TorrentIDs = "", sortedUnique(r.TorrentIDs)
 	return &n
 }
 
 func (r *UpdateSettingsRequest) normalized() Request {
-	return &UpdateSettingsRequest{Settings: r.Settings}
+	n := *r
+	n.OperationID = ""
+	return &n
 }
 
 // firstProblem returns the first non-nil problem: the order of the checks is the order of fields.
@@ -285,13 +291,4 @@ func sortedUnique[T cmp.Ordered](values []T) []T {
 	sorted := slices.Clone(values)
 	slices.Sort(sorted)
 	return slices.Compact(sorted)
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

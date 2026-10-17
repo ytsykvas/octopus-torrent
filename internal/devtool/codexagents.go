@@ -58,3 +58,29 @@ func CodexAgentTOML(markdown string) (string, error) {
 	return fmt.Sprintf("name = %q\ndescription = '''%s'''\nmodel_reasoning_effort = %q\ndeveloper_instructions = '''\n%s'''\n",
 		name[1], desc, reasoning, body), nil
 }
+
+// codexAgents regenerates .codex/agents/*.toml from .claude/agents/*.md.
+func codexAgents(sys System) error {
+	files, err := repositoryFiles(sys)
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		if !strings.HasPrefix(f, ".claude/agents/") || !strings.HasSuffix(f, ".md") {
+			continue
+		}
+		content, err := sys.ReadFile(f)
+		if err != nil {
+			return fmt.Errorf("%s: %w", f, err)
+		}
+		toml, err := CodexAgentTOML(string(content))
+		if err != nil {
+			return fmt.Errorf("%s: %w", f, err)
+		}
+		name := strings.TrimSuffix(strings.TrimPrefix(f, ".claude/agents/"), ".md")
+		if err := sys.WriteFile(".codex/agents/"+name+".toml", []byte(toml)); err != nil {
+			return fmt.Errorf("%s: %w", f, err)
+		}
+	}
+	return nil
+}

@@ -3,12 +3,12 @@
 **Status:** `implemented` (prototype from task 003; the product UI will replace it in 034/035/040)  
 **Requirements:** REL-01, REL-02, STACK-05, UI-04 (partially), AI-07, QA-01, QA-02, QA-05 (partially)  
 **Related tasks:** [003](../../product/tasks/003-wails-macos-build-spike.md); next — [004](../../product/tasks/004-reproducible-check-commands.md) (single check command), [034](../../product/tasks/034-wails-facade-real-bindings.md) (real facade), [035](../../product/tasks/035-react-bridge-state-resync.md) (bridge and state)  
-**Last verified version:** task 005 (startup and quit wiring); task 003 (window and check UI)  
-**Last updated:** 2026-10-15
+**Last verified version:** refactor after 009 (runtime info as a `Result`); task 005 (startup and quit wiring); task 003 (window and check UI)  
+**Last updated:** 2026-10-18
 
 ## Goal and behavior
 
-The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window (system WebView) shows a local React UI with a **Check Go connection** button. Clicking it calls a Go method through the generated bindings and shows the response `Go go1.27.2 · darwin/arm64 · SQLite 3.53.4`; the SQLite part, added by [008](../../product/tasks/008-sqlite-driver-durability-spike.md), is the version compiled into the binary. A call error is shown as `role="alert"` with the reason text. The UI is embedded in the binary and works without internet; the finished package does not need Go, Node.js or the Wails CLI.
+The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window (system WebView) shows a local React UI with a **Check Go connection** button. Clicking it calls a Go method through the generated bindings and shows the response `Go go1.27.2 · darwin/arm64 · SQLite 3.53.4`; the SQLite part, added by [008](../../product/tasks/008-sqlite-driver-durability-spike.md), is the version compiled into the binary. A failed or malformed answer is shown as `role="alert"` with the bridge's English fallback for its error code (for example `The application did not answer.`); diagnostic text is never shown. The UI is embedded in the binary and works without internet; the finished package does not need Go, Node.js or the Wails CLI.
 
 Only this proof of the path is implemented. The torrent list, themes, i18n and the rest are in later tasks (prototype texts are in English; localization is added by 041).
 
@@ -44,10 +44,10 @@ Finder / `open` → OctopusTorrent.app/Contents/MacOS/OctopusTorrent
 
 | Go (`internal/app`) | JSON / TS (`frontend/src/bridge/runtimeInfo.ts`) |
 |---|---|
-| `func (*App) GetRuntimeInfo() RuntimeInfo` | `getRuntimeInfo(): Promise<RuntimeInfo>` |
+| `func (*App) GetRuntimeInfo() RuntimeInfo` | `getRuntimeInfo(): Promise<Result<RuntimeInfo>>` |
 | `RuntimeInfo{GoVersion, OS, Arch, SQLiteVersion string}` | `{ goVersion: string; os: string; arch: string; sqliteVersion: string }` |
 
-The bridge returns its own plain object, not the generated `app.RuntimeInfo` class. A rejected promise is passed on unchanged; the component turns an `Error` into its `message`, any other value into `String(value)`.
+The wrapper follows the bridge template ([calling Go](../bridge/calling-go.md)): `callGo` decodes the answer with the `runtimeInfo` decoder (`bridge/contract/runtimeInfo.ts`) into a plain object, never the generated `app.RuntimeInfo` class, and returns a `Result`. It never rejects: a rejection becomes an `AppError`, a missing or extra field `contract.invalidDto`. The component shows `describeError(error).fallback`.
 
 ## Scenarios and TDD
 
@@ -56,8 +56,8 @@ The bridge returns its own plain object, not the generated `app.RuntimeInfo` cla
 | Facade returns embedded runtime values; contract JSON keys | `internal/app/app_test.go` | `undefined: New`, `undefined: RuntimeInfo` |
 | `run` passes `wails.Run` the name, the embedded `frontend/dist/index.html`, exactly one bind `*app.App`; startup error → stderr and code 1 | `main_test.go` | `undefined: run` |
 | `OnShutdown` stops the ledger; a mutation that ignores cancellation is reported on stderr (task 005) | `main_test.go`: `TestRunStopsOperationsOnShutdown`, `TestStopOperationsReportsMutationsThatDidNotStop` | `run` signature |
-| Bridge: success → plain DTO; error → reject | `src/bridge/runtimeInfo.test.ts` | `Failed to resolve import "./runtimeInfo"` |
-| UI: initial state, "Checking…", success, `Error`/non-`Error` errors, keyboard (Tab + Enter) and focus | `src/features/runtime-check/RuntimeCheck.test.tsx` | `Failed to resolve import "./RuntimeCheck"` |
+| Bridge: success → decoded DTO; a malformed answer → `contract.invalidDto`; a rejection → `bridge.callFailed` (same values as the Go JSON pin) | `src/bridge/runtimeInfo.test.ts` | `Failed to resolve import "./runtimeInfo"`; the `Result` form (refactor after 009): three failures, the wrapper still rejected and passed a malformed answer through |
+| UI: initial state, "Checking…", success, an error `Result` shown by its fallback without diagnostic text, keyboard (Tab + Enter) and focus | `src/features/runtime-check/RuntimeCheck.test.tsx` | `Failed to resolve import "./RuntimeCheck"` |
 | `App` wires up the bridge; heading | `src/App.test.tsx` | `Failed to resolve import "./App"` |
 | `main.tsx` mounts the app into `#root`; without `#root` — a clear error | `src/main.test.tsx` | `Failed to resolve import "./main"` |
 | Real `.app`: click → Go response; launch from Finder; repeated launch; offline | manual + System Events | see [report 003](../verification/003-wails-macos-build-spike.md) |
@@ -69,7 +69,7 @@ main.go                         embed frontend/dist; run(start, stderr, ledger);
 internal/app/app.go             App facade (see facade.md), RuntimeInfo DTO, ErrorFormatter
 frontend/src/main.tsx           mounting into #root
 frontend/src/App.tsx            composition: RuntimeCheck + real bridge
-frontend/src/bridge/runtimeInfo.ts       the single call of the generated GetRuntimeInfo
+frontend/src/bridge/runtimeInfo.ts       the single call of the generated GetRuntimeInfo (callGo + runtimeInfo decoder)
 frontend/src/features/runtime-check/     connection check UI
 frontend/wailsjs/               generated by `go tool wails generate module` — do not edit
 build/darwin/Info*.plist        bundle ID, minimum macOS (ADR macos-target)

@@ -4,7 +4,7 @@
 **Requirements:** `AI-05`, `AI-02`, `STACK-01`, `STACK-02`, `STACK-03`  
 **Related tasks:** [005](../../product/tasks/005-domain-dto-and-bridge-contract.md); users: 013, 024, 025, 027, 031, 034, 035, 050  
 **Last verified version:** task 005 commits `44877f2`…stage E commit, full gate in the [report](../verification/005-domain-dto-and-bridge-contract.md)  
-**Last updated:** 2026-10-15 (moved from `docs/features/bridge-contract.md`)  
+**Last updated:** 2026-10-18 (moved from `docs/features/bridge-contract.md` on 2026-10-15)  
 **Guides:** [calling Go](calling-go.md), [ordering](ordering.md), [adding a command](adding-a-command.md), [facade](../app/facade.md), [operation ledger](../app/operations.md)
 
 ## Goal and behavior
@@ -66,7 +66,7 @@ internal/app/operations/       Ledger: Start, Get, Cancel, Shutdown
 internal/app/app.go            GetLibrarySnapshot, GetOperation, ErrorFormatter
 main.go                        ErrorFormatter(stderr), OnShutdown → stopOperations
 frontend/src/bridge/contract/  decode, numbers, ids, enums, errors, errorMessages, library,
-                               importPreview, settings, operations, commands, ordering
+                               importPreview, settings, operations, commands, ordering, runtimeInfo
 frontend/src/bridge/call.ts    callGo: binding call → Result<T>
 frontend/src/bridge/library.ts, operations.ts   the only callers of the new bindings
 ```

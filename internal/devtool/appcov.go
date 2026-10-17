@@ -11,9 +11,10 @@ import (
 
 const (
 	appPoll = 250 * time.Millisecond
-	// appPolls bounds every wait for an .app (start, quit) to 20 s; a quit request is repeated
+	// appPolls bounds every wait for an .app (start, quit) to appWait; a quit request is repeated
 	// every appQuitEvery polls in case the first one arrived before the window was ready.
 	appPolls     = 80
+	appWait      = appPolls * appPoll
 	appQuitEvery = 8
 )
 
@@ -92,16 +93,9 @@ func (a wailsApp) coverageRun(sys System, root, dir, module string) stepResult {
 	if out, err := sys.Capture("open", "-n", "--env", "GOCOVERDIR="+dir, app); err != nil {
 		return fail(a.Name+": cannot open "+app+": "+err.Error(), out)
 	}
-	pid := ""
-	for i := 0; i < appPolls && pid == ""; i++ {
-		// Anchored: only a process whose command line starts with this bundle's executable.
-		out, _ := sys.Output("pgrep", "-f", "^"+regexp.QuoteMeta(app+"/Contents/MacOS/"))
-		if pid, _, _ = strings.Cut(strings.TrimSpace(out), "\n"); pid == "" {
-			sys.Sleep(appPoll)
-		}
-	}
+	pid := a.waitForPid(sys, app)
 	if pid == "" {
-		return fail(a.Name+": the .app did not start within 20 s", "")
+		return fail(fmt.Sprintf("%s: the .app did not start within %d s", a.Name, int(appWait.Seconds())), "")
 	}
 	for i := 0; i < appPolls; i++ {
 		if i%appQuitEvery == 0 {
@@ -120,7 +114,20 @@ func (a wailsApp) coverageRun(sys System, root, dir, module string) stepResult {
 		}
 		sys.Sleep(appPoll)
 	}
-	return fail(a.Name+": the .app did not quit within 20 s; "+kill(sys, pid), "")
+	return fail(fmt.Sprintf("%s: the .app did not quit within %d s; %s", a.Name, int(appWait.Seconds()), kill(sys, pid)), "")
+}
+
+// waitForPid waits up to appWait for the process of the opened bundle and returns its pid, or "".
+func (a wailsApp) waitForPid(sys System, app string) string {
+	for range appPolls {
+		// Anchored: only a process whose command line starts with this bundle's executable.
+		out, _ := sys.Output("pgrep", "-f", "^"+regexp.QuoteMeta(app+"/Contents/MacOS/"))
+		if pid, _, _ := strings.Cut(strings.TrimSpace(out), "\n"); pid != "" {
+			return pid
+		}
+		sys.Sleep(appPoll)
+	}
+	return ""
 }
 
 // kill ends the .app that could not be quit and says whether it is gone.

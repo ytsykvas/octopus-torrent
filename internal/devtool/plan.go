@@ -2,6 +2,7 @@ package devtool
 
 import (
 	"fmt"
+	"io"
 	"path"
 	"regexp"
 	"slices"
@@ -170,8 +171,8 @@ func RenderNavigation(files map[string]string) (string, []string) {
 }
 
 // PlanSummary counts what the plan contains, for the success line.
-func PlanSummary(files map[string]string) (string, []string) {
-	tasks, problems := parseTasks(files)
+func PlanSummary(files map[string]string) string {
+	tasks, _ := parseTasks(files)
 	deps := 0
 	for _, t := range tasks {
 		deps += len(t.deps)
@@ -181,7 +182,7 @@ func PlanSummary(files map[string]string) (string, []string) {
 	if s, ok := section(files[requirementsFile], reqScenarioHeader); ok {
 		scenarios = len(scenarioItem.FindAllString(s, -1))
 	}
-	return fmt.Sprintf("%d tasks, %d dependencies, %d requirements, %d scenarios", len(tasks), deps, reqs, scenarios), problems
+	return fmt.Sprintf("%d tasks, %d dependencies, %d requirements, %d scenarios", len(tasks), deps, reqs, scenarios)
 }
 
 // CheckPlan verifies the plan: readable task files with unique IDs, existing dependencies and links,
@@ -330,5 +331,69 @@ func checkScenarios(files map[string]string) []string {
 			return []string{fmt.Sprintf("%s: scenario table row %d is %s, want AS-%02d", tasksReadme, i+1, r[1], i+1)}
 		}
 	}
+	return nil
+}
+
+// planFiles reads the task files, the plan README and the requirements.
+func planFiles(sys System) (map[string]string, func(string) bool, error) {
+	files, err := repositoryFiles(sys)
+	if err != nil {
+		return nil, nil, err
+	}
+	plan := map[string]string{}
+	for _, f := range files {
+		if strings.HasPrefix(f, tasksDir) || f == requirementsFile {
+			if content, err := sys.ReadFile(f); err == nil {
+				plan[f] = string(content)
+			}
+		}
+	}
+	return plan, listedPath(files), nil
+}
+
+func planProblems(problems []string) []string {
+	out := make([]string, len(problems))
+	for i, p := range problems {
+		out[i] = "PLAN " + p
+	}
+	return out
+}
+
+// checkPlan verifies the task plan and that its navigation table matches the task files.
+func checkPlan(stdout io.Writer, sys System) error {
+	summary, problems, err := planCheck(sys)
+	return printOwn(stdout, summary, problems, err, "plan problems")
+}
+
+// planCheck returns the plan problems, and the summary printed when there are none.
+func planCheck(sys System) (string, []string, error) {
+	files, exists, err := planFiles(sys)
+	if err != nil {
+		return "", nil, err
+	}
+	if problems := CheckPlan(files, exists); len(problems) > 0 {
+		return "", planProblems(problems), nil
+	}
+	return "plan: " + PlanSummary(files) + "; navigation up to date", nil, nil
+}
+
+// planNav regenerates the navigation block of the plan README from the task files.
+func planNav(stdout io.Writer, sys System) error {
+	files, _, err := planFiles(sys)
+	if err != nil {
+		return err
+	}
+	readme, problems := RenderNavigation(files)
+	if len(problems) > 0 {
+		return printOwn(stdout, "", planProblems(problems), nil, "plan problems")
+	}
+	if readme == files[tasksReadme] {
+		fmt.Fprintln(stdout, "plan-nav: navigation already up to date")
+		return nil
+	}
+	if err := sys.WriteFile(tasksReadme, []byte(readme)); err != nil {
+		return err
+	}
+	fmt.Fprintln(stdout, "plan-nav: navigation regenerated")
 	return nil
 }

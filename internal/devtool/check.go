@@ -3,12 +3,11 @@ package devtool
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
-	"strconv"
+	"slices"
 	"strings"
 )
 
@@ -37,25 +36,34 @@ func notBuiltYet(detail string) stepResult {
 
 // checkMode selects the steps: the full gate runs everything; offline skips the network steps and
 // fast also skips the .app run. Skipped steps are reported as not_run, so only the full gate passes.
-// deps runs the network steps alone. In a full mode a mandatory step that did not run fails.
+// deps runs the network steps alone. A mode with network steps is a full mode: a mandatory step that
+// did not run fails it.
 type checkMode struct {
-	app, network, depsOnly, full bool
-	label                        string
+	app, network, depsOnly bool
+	label                  string
 }
 
 var checkModes = map[string]checkMode{
-	"check":         {app: true, network: true, full: true, label: "GATE"},
+	"check":         {app: true, network: true, label: "GATE"},
 	"check offline": {app: true, label: "GATE"},
 	"check fast":    {label: "GATE"},
-	"check deps":    {network: true, depsOnly: true, full: true, label: "DEPENDENCIES"},
+	"check deps":    {network: true, depsOnly: true, label: "DEPENDENCIES"},
 }
 
 const (
-	unitCoverDir   = "build/coverage/go-unit"
-	appCoverDir    = "build/coverage/go-app"
-	frontendReport = "frontend/coverage/coverage-summary.json"
-	reportTail     = 30
+	coverRoot        = "build/coverage"
+	unitCoverDir     = coverRoot + "/go-unit"
+	appCoverDir      = coverRoot + "/go-app"
+	frontendCoverDir = "frontend/coverage"
+	frontendReport   = frontendCoverDir + "/coverage-summary.json"
+	npmLock          = "frontend/package-lock.json"
+	reportTail       = 30
 )
+
+// npm is an npm command run in the frontend folder.
+func npm(args ...string) []string {
+	return append([]string{"npm", "--prefix", "frontend"}, args...)
+}
 
 type checkStep struct {
 	name string
@@ -102,7 +110,7 @@ func runCheck(mode checkMode, stdout io.Writer, sys System) int {
 	case len(failed) > 0:
 		fmt.Fprintln(stdout, mode.label+" FAILED")
 		return 1
-	case len(missing) > 0 && mode.full:
+	case len(missing) > 0 && mode.network:
 		fmt.Fprintln(stdout, mode.label+" FAILED: not run: "+strings.Join(missing, ", "))
 		return 1
 	case len(missing) > 0:
@@ -149,27 +157,27 @@ func (c *checker) start() (map[string]string, error) {
 }
 
 func (c *checker) steps() []checkStep {
-	npmCI := []string{"npm", "--prefix", "frontend", "ci"}
+	npmCI := npm("ci")
 	if !c.mode.network {
 		npmCI = append(npmCI, "--offline")
 	}
 	network := []checkStep{
 		{"release age", c.network(c.releaseAges)},
-		{"npm audit", c.network(c.audit("npm", "--prefix", "frontend", "audit"))},
+		{"npm audit", c.network(c.audit(npm("audit")...))},
 		{"govulncheck", c.network(c.audit("go", "tool", "govulncheck", "./..."))},
 		{"updates", c.network(c.updates)},
 	}
 	if c.mode.depsOnly {
 		return network
 	}
-	return append([]checkStep{
+	local := []checkStep{
 		{"npm ci", c.tool(npmCI...)},
 		{"npm cooldown", c.npmCooldown},
 		{"go env", c.goEnv},
-		{"typecheck", c.tool("npm", "--prefix", "frontend", "run", "typecheck")},
-		{"lint", c.tool("npm", "--prefix", "frontend", "run", "lint")},
+		{"typecheck", c.tool(npm("run", "typecheck")...)},
+		{"lint", c.tool(npm("run", "lint")...)},
 		{"frontend tests", c.frontendTests},
-		{"frontend build", c.tool("npm", "--prefix", "frontend", "run", "build")},
+		{"frontend build", c.tool(npm("run", "build")...)},
 		{"gofmt", c.gofmt},
 		{"go vet", c.tool("go", "vet", "./...")},
 		{"bindings", c.bindings},
@@ -182,10 +190,28 @@ func (c *checker) steps() []checkStep {
 		{"release build", c.tool("go", "tool", "wails", "build", "-clean", "-trimpath")},
 		{"docs", c.own(docsCheck)},
 		{"plan", c.own(planCheck)},
-	}, append(network,
-		checkStep{"engine integration", func() stepResult { return notBuiltYet("not implemented yet: task 018") }},
-		checkStep{"test-bridge UI tests", func() stepResult { return notBuiltYet("not implemented yet: task 035") }},
-	)...)
+	}
+	pending := []checkStep{
+		{"engine integration", notBuiltYetStep("task 018")},
+		{"test-bridge UI tests", notBuiltYetStep("task 035")},
+	}
+	return slices.Concat(local, network, pending)
+}
+
+// notBuiltYetStep is a tier of the gate that a numbered task has yet to build.
+func notBuiltYetStep(task string) func() stepResult {
+	return func() stepResult { return notBuiltYet("not implemented yet: " + task) }
+}
+
+// gomod is the text of go.mod.
+func (c *checker) gomod() string {
+	b, _ := c.sys.ReadFile("go.mod")
+	return string(b)
+}
+
+// module is the module path of go.mod.
+func (c *checker) module() string {
+	return GoModulePath(c.gomod())
 }
 
 // tool runs a command; a non-zero exit fails the step with the command's output.
@@ -212,84 +238,12 @@ func (c *checker) own(check func(System) (string, []string, error)) func() stepR
 	}
 }
 
-// CheckNpmCooldown verifies npm's effective configuration as printed by `npm config get
-// min-release-age before min-release-age-exclude`: the cooldown is at least minReleaseAgeDays and
-// nothing overrides it.
-func CheckNpmCooldown(config string) []string {
-	values := map[string]string{}
-	for _, l := range strings.Split(config, "\n") {
-		if key, value, ok := strings.Cut(strings.TrimSpace(l), "="); ok {
-			values[key] = value
-		}
-	}
-	var problems []string
-	age, set := values["min-release-age"]
-	if days, err := strconv.Atoi(age); !set {
-		problems = append(problems, "min-release-age is not set")
-	} else if err != nil || days < minReleaseAgeDays {
-		problems = append(problems, fmt.Sprintf("min-release-age is %s, want at least %d", age, minReleaseAgeDays))
-	}
-	for _, key := range []string{"before", "min-release-age-exclude"} {
-		if v := values[key]; v != "" && v != "null" {
-			problems = append(problems, key+" is "+v+", want it unset")
-		}
-	}
-	return problems
-}
-
-func (c *checker) npmCooldown() stepResult {
-	out, err := c.sys.Capture("npm", "--prefix", "frontend", "config", "get", "min-release-age", "before", "min-release-age-exclude")
-	if err != nil {
-		return fail("npm config get: "+err.Error(), out)
-	}
-	if problems := CheckNpmCooldown(out); len(problems) > 0 {
-		return fail(strings.Join(problems, "; "), "")
-	}
-	return pass(fmt.Sprintf("min-release-age ≥ %d days, no override", minReleaseAgeDays))
-}
-
-// goEnvDefaults are the Go settings the dependency checks rely on: modules come from the proxy whose
-// dates the gate checks, every checksum is verified against the checksum database, and nothing is
-// fetched insecurely or exempted. Every other setting named here must be unset.
-var goEnvDefaults = map[string]string{"GOPROXY": "https://proxy.golang.org,direct", "GOSUMDB": "sum.golang.org"}
-
-var goEnvNames = []string{"GOFLAGS", "GOINSECURE", "GONOPROXY", "GONOSUMDB", "GOPRIVATE", "GOPROXY", "GOSUMDB"}
-
-// CheckGoEnv verifies Go's effective configuration as printed by `go env -json` for goEnvNames.
-func CheckGoEnv(env map[string]string) []string {
-	var problems []string
-	for _, name := range goEnvNames {
-		switch want, value := goEnvDefaults[name], env[name]; {
-		case value == want:
-		case want == "":
-			problems = append(problems, name+" is "+value+", want it unset")
-		default:
-			problems = append(problems, name+" is "+value+", want "+want)
-		}
-	}
-	return problems
-}
-
-func (c *checker) goEnv() stepResult {
-	out, err := c.sys.Capture("go", append([]string{"env", "-json"}, goEnvNames...)...)
-	if err != nil {
-		return fail("go env: "+err.Error(), out)
-	}
-	var env map[string]string
-	if err := json.Unmarshal([]byte(out), &env); err != nil {
-		return fail("go env: "+err.Error(), out)
-	}
-	if problems := CheckGoEnv(env); len(problems) > 0 {
-		return fail(strings.Join(problems, "; "), "")
-	}
-	return pass("default module proxy and checksum database, no exemptions")
-}
-
 func (c *checker) frontendTests() stepResult {
-	if err := c.sys.RemoveAll("frontend/coverage"); err != nil {
+	if err := c.sys.RemoveAll(frontendCoverDir); err != nil {
 		return fail("remove the previous coverage report: "+err.Error(), "")
 	}
-	if out, err := c.sys.Capture("npm", "--prefix", "frontend", "run", "test:coverage"); err != nil {
+	tests := npm("run", "test:coverage")
+	if out, err := c.sys.Capture(tests[0], tests[1:]...); err != nil {
 		return fail("tests or coverage thresholds failed: "+err.Error(), out)
 	}
 	report, _ := c.sys.ReadFile(frontendReport)
@@ -341,7 +295,7 @@ func (c *checker) bindings() stepResult {
 }
 
 func (c *checker) goTests() stepResult {
-	if err := c.sys.RemoveAll("build/coverage"); err != nil {
+	if err := c.sys.RemoveAll(coverRoot); err != nil {
 		return fail("remove the previous coverage profiles: "+err.Error(), "")
 	}
 	dir := filepath.Join(c.root, unitCoverDir)
@@ -355,8 +309,7 @@ func (c *checker) appRun() stepResult {
 	if !c.mode.app {
 		return notRun("skipped by check fast")
 	}
-	gomod, _ := c.sys.ReadFile("go.mod")
-	r := appCoverageRun(c.sys, c.root, filepath.Join(c.root, appCoverDir), GoModulePath(string(gomod)))
+	r := appCoverageRun(c.sys, c.root, filepath.Join(c.root, appCoverDir), c.module())
 	c.appRan = r.status == statusPass
 	return r
 }
@@ -376,9 +329,8 @@ func (c *checker) goCoverage() stepResult {
 	if c.appRan {
 		app = c.profile(appCoverDir)
 	}
-	gomod, _ := c.sys.ReadFile("go.mod")
 	sources := c.contents(c.files, "")
-	problems, deferred := CheckGoCoverage(GoModulePath(string(gomod)), sources, unit, app, c.appRan, appMains())
+	problems, deferred := CheckGoCoverage(c.module(), sources, unit, app, c.appRan, appMains())
 	switch {
 	case len(problems) > 0:
 		return fail(fmt.Sprintf("%d coverage problems", len(problems)), strings.Join(problems, "\n"))

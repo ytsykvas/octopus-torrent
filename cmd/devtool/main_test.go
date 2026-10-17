@@ -140,7 +140,9 @@ func TestCodexAgentMirrorsAreUpToDate(t *testing.T) {
 	}
 }
 
-// The real plan must stay consistent: the binary checks the repository it is built from.
+// The real plan must stay consistent: the binary checks the repository it is built from. This is also
+// the only run whose binary exits normally and so writes the counters of main(): the workspace-run
+// binary is replaced by exec and writes none. Do not remove it as a duplicate of the gate's plan step.
 func TestThePlanOfThisRepositoryIsConsistent(t *testing.T) {
 	binary, env := buildDevtool(t)
 	cmd := exec.Command(binary, "check-plan")

@@ -116,7 +116,7 @@ func guarded(t *testing.T, f *fakeInner) (*TorrentStorage, storage.PieceImpl, *S
 	t.Helper()
 	root := t.TempDir()
 	var session Session
-	s, err := newGuard(f, root, &session, nil)
+	s, err := newGuard(f, root, &session, noMarks{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestASaveFolderThatIsNotAnExistingCleanAbsoluteFolderIsRefused(t *testing.T
 		"empty":       "",
 		"a trailing/": t.TempDir() + "/",
 	} {
-		if _, err := newGuard(newFake(), root, &Session{}, nil); err == nil {
+		if _, err := newGuard(newFake(), root, &Session{}, noMarks{}); err == nil {
 			t.Errorf("%s: %q was accepted", name, root)
 		}
 	}
@@ -203,7 +203,7 @@ func TestAnOpenFailureOfTheEngineStorageIsReturnedAndRecorded(t *testing.T) {
 	f.openErr = errors.New("cannot open")
 	root := t.TempDir()
 	var session Session
-	s, err := newGuard(f, root, &session, nil)
+	s, err := newGuard(f, root, &session, noMarks{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestAnEngineStorageWithMoreThanPieceAndCloseIsRefusedBecauseTheGuardCouldNo
 		f.impl = impl
 		closed := false
 		f.closeFunc = func() error { closed = true; return nil }
-		s, err := newGuard(f, t.TempDir(), &Session{}, nil)
+		s, err := newGuard(f, t.TempDir(), &Session{}, noMarks{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -242,7 +242,7 @@ func TestAnEngineStorageWithMoreThanPieceAndCloseIsRefusedBecauseTheGuardCouldNo
 func TestACloseOfTheEngineTorrentStorageIsForwardedAndAMissingOneIsHarmless(t *testing.T) {
 	f := newFake()
 	root := t.TempDir()
-	s, _ := newGuard(f, root, &Session{}, nil)
+	s, _ := newGuard(f, root, &Session{}, noMarks{})
 	impl, err := s.OpenTorrent(context.Background(), testInfo, metainfo.Hash{})
 	if err != nil || impl.Close == nil {
 		t.Fatalf("OpenTorrent = %v, Close missing: %v", err, impl.Close == nil)
@@ -387,14 +387,14 @@ func TestLayoutIsTheEnginesPathRuleAndRefusesPathsOutsideTheSaveFolder(t *testin
 
 func TestNewTorrentStorageBuildsOnTheEnginesFileStorage(t *testing.T) {
 	root := t.TempDir()
-	s, err := NewTorrentStorage(root, storage.NewMapPieceCompletion(), &Session{}, slog.New(slog.DiscardHandler))
+	s, err := NewTorrentStorage(root, marks(t), &Session{}, slog.New(slog.DiscardHandler))
 	if err != nil || s == nil {
 		t.Fatalf("NewTorrentStorage = %v, %v", s, err)
 	}
-	if _, err := NewTorrentStorage("relative", storage.NewMapPieceCompletion(), &Session{}, nil); err == nil {
+	if _, err := NewTorrentStorage("relative", marks(t), &Session{}, nil); err == nil {
 		t.Fatal("a relative save folder was accepted")
 	}
-	if _, err := NewTorrentStorage(root, storage.NewMapPieceCompletion(), &Session{}, nil); err != nil {
+	if _, err := NewTorrentStorage(root, marks(t), &Session{}, nil); err != nil {
 		t.Fatalf("a nil logger = %v", err)
 	}
 }
@@ -426,7 +426,7 @@ func TestTheEnginesShortWriteSignalOfAPieceInsideAFileIsNotAStorageProblem(t *te
 
 func TestASaveFolderOnAFileSystemTheEngineCannotHashOnIsRefusedBeforeAnyWrite(t *testing.T) {
 	vol := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctoHFS"})
-	_, err := NewTorrentStorage(vol.Mount, storage.NewMapPieceCompletion(), &Session{}, nil)
+	_, err := NewTorrentStorage(vol.Mount, marks(t), &Session{}, nil)
 	if !errors.Is(err, ErrFileSystem) {
 		t.Fatalf("NewTorrentStorage on HFS+ = %v, want ErrFileSystem", err)
 	}

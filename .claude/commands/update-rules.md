@@ -19,7 +19,7 @@ If none of these changed, stop: no action needed.
 | Base branch, PR or commit conventions | `pull-request.md`, `commit-message.md`, `.octopus/project.json` |
 | A review agent added, removed or re-scoped | the lens table in `.claude/docs/actions/README.md`, `.claude/agents/*`; then regenerate the Codex mirrors with `go tool devtool codex-agents` (`go test` fails while they are stale) |
 | An action file added or renamed | `.claude/docs/actions/README.md`, `.conductor/settings.toml` `[prompts]`, `.octopus/instructions/*` |
-| Workspace setup/run needs (new dependency manager, ports) | `internal/devtool/devtool.go` (test-first), `.octopus/scripts/*`, `.conductor/settings.toml`, `.conductor/README.md` |
+| Workspace setup/run needs (new dependency manager, ports) | `internal/devtool/workspace.go` (test-first), `.octopus/scripts/*`, `.conductor/settings.toml`, `.conductor/README.md` |
 | A `.claude/docs/*` file added or removed | `.claude/docs/README.md` |
 
 Runner configs (`.conductor/settings.toml`, `.octopus/instructions/*`) hold only invariants and a plain

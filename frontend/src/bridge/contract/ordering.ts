@@ -60,7 +60,7 @@ export function receiveSnapshot(
   }
   if (state.retired.includes(snapshot.runtimeID)) {
     // The awaited answer came from a runtime retired meanwhile: nothing is applied, so fetch again.
-    return state.current === null && !state.fetchInFlight ? { action: 'fetch', ...startFetch(state) } : { action: 'discard', state }
+    return needsFetch(state) ? { action: 'fetch', ...startFetch(state) } : { action: 'discard', state }
   }
   const { current } = state
   if (current !== null && current.runtimeID === snapshot.runtimeID && snapshot.revision < current.revision) {
@@ -84,8 +84,7 @@ export function receiveDelta(
     state = { ...retire(state, delta.runtimeID), current: null }
   }
   if (state.fetchInFlight) return { action: 'discard', state }
-  const fetch = startFetch(state)
-  return { action: 'fetch', ...fetch }
+  return { action: 'fetch', ...startFetch(state) }
 }
 
 // Retires the current runtime when runtimeID is a different one.
