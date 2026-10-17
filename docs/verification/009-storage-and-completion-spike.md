@@ -170,8 +170,8 @@ Linking the engine into the product and the Wails build tags (018); persisting t
 | Stage | Commit | Result |
 |---|---|---|
 | A — measurements | `e7ca03e` | `pass` |
-| B — library marks, volume package | stage B commit | `pass` |
-| C1 — placement and the guard | — | `not_run` |
+| B — library marks, volume package | `5631f10` | `pass` |
+| C1 — placement and the guard | stage C1 commit | `pass` |
 | C2 — restart, crash, mismatches | — | `not_run` |
 | C3 — volumes | — | `not_run` |
 | D — documents, review, `done` | — | `not_run` |
@@ -246,3 +246,68 @@ of `internal/library/disk_test.go` moved to the new package `internal/testutil/v
 - A store left open on a volume that is then force-detached makes the next test, on a new volume
   with the same device and inode numbers, fail with `database is locked`: SQLite keeps its lock
   table by (device, inode) per process. Tests must close stores before a volume goes away.
+
+## Stage C1 — placement and the guard
+
+**RED** (each command from the repository root, before the code existed):
+
+| Command | Result |
+|---|---|
+| `go vet ./internal/torrentengine/classicio` | `fail` as expected: `undefined: Process` |
+| `go vet ./internal/torrentengine/testutil/swarm` (tests of `MainClassicIO`, `Options.DefaultStorage`/`DataDir`) | `fail` as expected: `undefined: storage`, then `undefined: mainClassicIO` |
+| `go vet ./internal/torrentengine/filestore` (session, completion tests) | `fail` as expected: `undefined: Options` |
+| `go vet ./internal/torrentengine/filestore` (guard, `Layout`, `Refusing` tests) | `fail` as expected: `undefined: TorrentStorage` |
+
+**GREEN:**
+
+| Command | Result |
+|---|---|
+| `go test -race -count=1 -cover ./internal/torrentengine/classicio` | `pass`, 100.0% |
+| `go test -race -count=1 -cover ./internal/torrentengine/testutil/swarm` | `pass`; the only uncovered block is `MainClassicIO`, which the `filestore` `TestMain` runs (the gate merges profiles with `-coverpkg=./...`) |
+| `go test -race -count=3 -covermode=atomic ./internal/torrentengine/filestore` (units) | `pass`, 100.0% of statements |
+| `go test -race -count=2 ./internal/torrentengine/... ./internal/library ./internal/testutil/...` | `pass` both times |
+
+The re-exec of `MainClassicIO` works under `-race` and `-coverprofile`: the new process keeps the test
+flags, and the profile it writes covers `filestore`.
+
+**What was built.**
+- `classicio.Require(Process)`: the process restarts itself with `TORRENT_STORAGE_DEFAULT_FILE_IO=classic`
+  when it is not set, and refuses any other value. `swarm.MainClassicIO` uses it. `swarm.Options` has
+  `DefaultStorage` and `DataDir`.
+- `filestore.Completion` (the marks as `storage.PieceCompletion`): marks read once per torrent, answered
+  from memory, written in batches of at most 256 rows every 250 ms from one goroutine, a failed write
+  sticky, `Persistent()` false, `Distrust` for the rehash rule, `Close` that flushes and may be repeated.
+- `filestore.TorrentStorage` (the guard): the engine's file storage with part files off, inside a guard that
+  checks the save folder's device and inode before every operation, counts piece reads, records every
+  failure in the `Session`, refuses new operations after `Stop` and waits for those in flight.
+  `Refusing()` is the client's default storage. `Layout` is the engine's path rule, shared with the storage.
+
+**Scenarios on the real engine** (classic IO, closed loopback swarm, `-race`):
+
+| Scenario | Result |
+|---|---|
+| Placement for `v1-single`, `v1-tree` (with its empty file), `hybrid-single`, `hybrid-tree` | `pass`: the files below the save folder are exactly `Layout`'s list, with the fixture's bytes; no `.pad`, no `.part`, no database there; the data folder holds only the marks database; the peer's own folder and the working directory stay empty |
+| A torrent added without storage of its own | `pass`: refused with `ErrNoSaveFolder`, nothing written |
+| The save folder deleted, or replaced, mid-transfer | `pass`: no byte and no folder appears at the old path, the transfer stops, every mark survives in memory and in the store, the session's first problem is `ErrRootChanged` |
+| The run closed mid-transfer, three times | `pass`: every piece marked complete in the store has its bytes on disk (re-hashed against the torrent); the only problems are `ErrStopped`/`ErrClosed` |
+| The same deletion with the engine's own storage (contrast) | `pass`, i.e. the engine **does** recreate the folder and goes on writing (finding 18) |
+
+**Engine findings (numbered after 14).**
+
+15. **`AddTorrentOpt` drops the storage error of the info it is given; `SetInfoBytes` returns it.**
+    `TestTheEngineReportsAStorageErrorOnlyThroughSetInfoBytes`. The adapter adds with
+    `AddTorrentOpts{InfoHash, Storage}` and `SetInfoBytes`. The engine also opens a torrent's storage
+    more than once per add.
+16. **The engine follows a symlink at `<save folder>/<name>`.** The payload is written to the link's target
+    (`TestAnEngineWritesThroughASymlinkAtTheTorrentPath`). 020/023 must refuse such a path before the add.
+17. **With classic file IO, `WriteTo` of a piece that ends inside its file returns `io.ErrShortWrite`.**
+    The engine's limit writer reports the end of the range that way; `finishHash` only logs it and the hash
+    is right. The guard passes it through and does not count it as a storage problem
+    (`TestClassicIOReportsAShortWriteForAPieceThatEndsInsideItsFile`).
+18. **Classic file IO recreates a deleted save folder** and writes on
+    (`TestWithoutTheGuardTheEngineRecreatesADeletedSaveFolder`). For a detached volume that folder is the
+    mount point, on the application's own disk. The guard prevents it.
+19. **The engine's own constructors forget every piece when their database cannot be opened.**
+    `storage.NewFile`, `NewMMap` and `NewFileOpts` (part files off, no completion) log a line and use
+    an in-memory completion; when the database does open, it is `.torrent.db` **in the user's folder**
+    (`internal/torrentengine/storage_test.go`).
