@@ -67,14 +67,18 @@ for each are listed in [report 004](../verification/004-reproducible-check-comma
 
 | File | Responsibility |
 |---|---|
-| `internal/devtool/check.go` | modes, the step runner, the report, npm cooldown, go env, the steps that wrap tools |
-| `internal/devtool/frontendcov.go` | TS inventory, raw-count check of the Vitest summary, escape hatches |
+| `internal/devtool/check.go` | modes, the step runner, the report, the steps that wrap tools |
+| `internal/devtool/toolchain.go` | the npm cooldown and go env steps |
+| `internal/devtool/frontendcov.go` | TS inventory, raw-count check of the Vitest summary |
+| `internal/devtool/escapehatches.go` | the escape-hatch scan of TS and Go sources and tests |
 | `internal/devtool/gocov.go` | Go inventory (`go/parser`; Go under `testdata/` is a problem), profile parsing, compatibility, merge, `go.mod` module and tools |
 | `internal/devtool/scripts.go` | the `scripts` step: a `*.sh` file may only build `devtool` and `exec` it |
 | `internal/devtool/appcov.go` | the `wailsApps` table; instrumented build, launch, Apple Event quit and counters of every app |
 | `internal/devtool/isolation.go` | the `product isolation` step: what the product binary must not link |
 | `internal/devtool/deps.go` | lockfile and build-list parsing, registry dates and integrity, audits, the updates report |
-| `internal/devtool/plan.go` | the task plan check used by the `plan` step |
+| `internal/devtool/plan.go` | the task plan check used by the `plan` step, and the `check-plan` and `plan-nav` commands |
+| `internal/devtool/docs.go` | the link and pointer checks used by the `docs` step, and the `check-docs` command |
+| `internal/devtool/workspace.go`, `codexagents.go` | the workspace setup and run commands; the Codex agent mirrors |
 
 ## Checks and 100% coverage
 

@@ -46,8 +46,8 @@ replace the process).
 
 ## Implementation and reuse
 
-`devtool.go` (`Main`, workspace, doc and plan commands), `docs.go` (links, pointers),
-`codexagents.go` (Codex rendering), `system.go` (`OSSystem`), `cmd/devtool/main.go` (composition
+`devtool.go` (`Main`), `workspace.go` (workspace setup and run), `docs.go` (links, pointers, `check-docs`),
+`plan.go` (`check-plan`, `plan-nav`), `codexagents.go` (Codex rendering, `codex-agents`), `system.go` (`OSSystem`), `cmd/devtool/main.go` (composition
 root). Configs: `.claude/settings.json` (permissions), `.octopus/scripts/{setup,run}.sh`,
 `.conductor/settings.toml`.
 

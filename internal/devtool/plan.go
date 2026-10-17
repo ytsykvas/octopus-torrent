@@ -2,6 +2,7 @@ package devtool
 
 import (
 	"fmt"
+	"io"
 	"path"
 	"regexp"
 	"slices"
@@ -330,5 +331,76 @@ func checkScenarios(files map[string]string) []string {
 			return []string{fmt.Sprintf("%s: scenario table row %d is %s, want AS-%02d", tasksReadme, i+1, r[1], i+1)}
 		}
 	}
+	return nil
+}
+
+// planFiles reads the task files, the plan README and the requirements.
+func planFiles(sys System) (map[string]string, func(string) bool, error) {
+	files, err := repositoryFiles(sys)
+	if err != nil {
+		return nil, nil, err
+	}
+	plan := map[string]string{}
+	for _, f := range files {
+		if strings.HasPrefix(f, tasksDir) || f == requirementsFile {
+			if content, err := sys.ReadFile(f); err == nil {
+				plan[f] = string(content)
+			}
+		}
+	}
+	return plan, listedPath(files), nil
+}
+
+func reportPlanProblems(stdout io.Writer, problems []string) error {
+	for _, p := range problems {
+		fmt.Fprintln(stdout, "PLAN "+p)
+	}
+	return fmt.Errorf("%d plan problems", len(problems))
+}
+
+// checkPlan verifies the task plan and that its navigation table matches the task files.
+func checkPlan(stdout io.Writer, sys System) error {
+	summary, problems, err := planCheck(sys)
+	switch {
+	case err != nil:
+		return err
+	case len(problems) > 0:
+		return reportPlanProblems(stdout, problems)
+	}
+	fmt.Fprintln(stdout, "pass   "+summary)
+	return nil
+}
+
+// planCheck returns the plan problems, and the summary printed when there are none.
+func planCheck(sys System) (string, []string, error) {
+	files, exists, err := planFiles(sys)
+	if err != nil {
+		return "", nil, err
+	}
+	if problems := CheckPlan(files, exists); len(problems) > 0 {
+		return "", problems, nil
+	}
+	summary, _ := PlanSummary(files)
+	return "plan: " + summary + "; navigation up to date", nil, nil
+}
+
+// planNav regenerates the navigation block of the plan README from the task files.
+func planNav(stdout io.Writer, sys System) error {
+	files, _, err := planFiles(sys)
+	if err != nil {
+		return err
+	}
+	readme, problems := RenderNavigation(files)
+	if len(problems) > 0 {
+		return reportPlanProblems(stdout, problems)
+	}
+	if readme == files[tasksReadme] {
+		fmt.Fprintln(stdout, "plan-nav: navigation already up to date")
+		return nil
+	}
+	if err := sys.WriteFile(tasksReadme, []byte(readme)); err != nil {
+		return err
+	}
+	fmt.Fprintln(stdout, "plan-nav: navigation regenerated")
 	return nil
 }
