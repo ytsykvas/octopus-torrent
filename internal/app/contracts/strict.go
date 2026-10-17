@@ -3,7 +3,9 @@ package contracts
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -71,7 +73,7 @@ func decodeFields(data []byte, target any) (shape, error) {
 			}
 		}
 	}
-	for _, name := range sortedKeys(raw) {
+	for _, name := range slices.Sorted(maps.Keys(raw)) {
 		if !known[name] {
 			problems = append(problems, fieldProblem{shortened(name), ReasonUnknown})
 		}

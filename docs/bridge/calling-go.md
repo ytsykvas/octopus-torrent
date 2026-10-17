@@ -84,10 +84,11 @@ context.
 
 ## Testing a wrapper
 
-Stub the global the generated binding calls, and assert the `Result`:
+Stub the global the generated binding calls with `stubGoMethod` (`src/test/goBinding.ts`; `setup.ts`
+removes the stub after each test), and assert the `Result`:
 
 ```ts
-Object.assign(window, { go: { app: { App: { GetOperation: vi.fn(() => Promise.resolve(example('operation-succeeded.json'))) } } } })
+stubGoMethod('GetOperation', () => Promise.resolve(example('operation-succeeded.json')))
 await expect(getOperation(id)).resolves.toMatchObject({ ok: true, value: { state: 'succeeded' } })
 ```
 

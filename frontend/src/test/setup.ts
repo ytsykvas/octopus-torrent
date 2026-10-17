@@ -4,4 +4,5 @@ import { afterEach } from 'vitest'
 
 afterEach(() => {
   cleanup()
+  Reflect.deleteProperty(window, 'go')
 })

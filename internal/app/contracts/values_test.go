@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -38,12 +37,6 @@ func TestIdentifierFormats(t *testing.T) {
 		if got := IsUUID(value); got != want {
 			t.Errorf("IsUUID(%q) = %v", value, got)
 		}
-	}
-	if !IsInfohashV1(strings.Repeat("a1", 20)) || IsInfohashV1(strings.Repeat("A1", 20)) || IsInfohashV1(strings.Repeat("a", 64)) {
-		t.Error("IsInfohashV1 must accept exactly 40 lower-case hex digits")
-	}
-	if !IsInfohashV2(strings.Repeat("0f", 32)) || IsInfohashV2(strings.Repeat("0f", 20)) {
-		t.Error("IsInfohashV2 must accept exactly 64 lower-case hex digits")
 	}
 }
 
@@ -135,6 +128,27 @@ func TestFingerprintNormalizesTheRequest(t *testing.T) {
 	}
 	if !reflect.DeepEqual(same[0].(*SetFilesWantedRequest).FileIndexes, []int{1, 0, 1}) {
 		t.Error("Fingerprint changed the request it was given")
+	}
+	// every field that changes the mutation changes the fingerprint
+	plan := "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+	for name, pair := range map[string][2]Request{
+		"TorrentSelection.TorrentIDs":       {&TorrentSelectionRequest{TorrentIDs: []TorrentID{a}}, &TorrentSelectionRequest{TorrentIDs: []TorrentID{a, b}}},
+		"SetFilesWanted.TorrentID":          {&SetFilesWantedRequest{TorrentID: a, FileIndexes: []int{0}}, &SetFilesWantedRequest{TorrentID: b, FileIndexes: []int{0}}},
+		"SetFilesWanted.FileIndexes":        {&SetFilesWantedRequest{TorrentID: a, FileIndexes: []int{0}}, &SetFilesWantedRequest{TorrentID: a, FileIndexes: []int{0, 1}}},
+		"RemoveTorrents.TorrentIDs":         {&RemoveTorrentsRequest{TorrentIDs: []TorrentID{a}, Mode: RemoveRecordOnly}, &RemoveTorrentsRequest{TorrentIDs: []TorrentID{b}, Mode: RemoveRecordOnly}},
+		"RemoveTorrents.Mode":               {&RemoveTorrentsRequest{TorrentIDs: []TorrentID{a}, Mode: RemoveRecordOnly}, &RemoveTorrentsRequest{TorrentIDs: []TorrentID{a}, Mode: RemoveWithFiles}},
+		"RemoveTorrents.DeletionPlanID":     {&RemoveTorrentsRequest{TorrentIDs: []TorrentID{a}, Mode: RemoveWithFiles}, &RemoveTorrentsRequest{TorrentIDs: []TorrentID{a}, Mode: RemoveWithFiles, DeletionPlanID: &plan}},
+		"ConfirmImport.PendingImportID":     {&ConfirmImportRequest{PendingImportID: a}, &ConfirmImportRequest{PendingImportID: b}},
+		"ConfirmImport.PreviewVersion":      {&ConfirmImportRequest{PreviewVersion: 1}, &ConfirmImportRequest{PreviewVersion: 2}},
+		"ConfirmImport.SelectedFileIndexes": {&ConfirmImportRequest{SelectedFileIndexes: []int{0}}, &ConfirmImportRequest{SelectedFileIndexes: []int{1}}},
+		"ConfirmImport.Destination":         {&ConfirmImportRequest{Destination: "/a"}, &ConfirmImportRequest{Destination: "/b"}},
+		"ConfirmImport.StartAfterAdding":    {&ConfirmImportRequest{}, &ConfirmImportRequest{StartAfterAdding: true}},
+		"CancelImport.PendingImportID":      {&CancelImportRequest{PendingImportID: a}, &CancelImportRequest{PendingImportID: b}},
+		"UpdateSettings.Settings":           {&UpdateSettingsRequest{}, &UpdateSettingsRequest{Settings: Settings{Language: "uk"}}},
+	} {
+		if Fingerprint(pair[0]) == Fingerprint(pair[1]) {
+			t.Errorf("%s: a different value has the same fingerprint", name)
+		}
 	}
 }
 

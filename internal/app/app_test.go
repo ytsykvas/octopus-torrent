@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"octopustorrent/internal/app/contracts"
 	"octopustorrent/internal/app/operations"
@@ -68,15 +67,12 @@ func TestGetOperationReturnsTheLedgersStatus(t *testing.T) {
 		return nil
 	})
 	<-ran
-	for {
-		status, err := a.GetOperation(opID)
-		if err != nil || status.OperationID != opID {
-			t.Fatalf("GetOperation = %+v, %v", status, err)
-		}
-		if status.State == contracts.OperationSucceeded {
-			return
-		}
-		time.Sleep(time.Millisecond)
+	// Shutdown waits for the mutation, which reaches succeeded before its goroutine ends.
+	if err := ledger.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := a.GetOperation(opID); err != nil || status.OperationID != opID || status.State != contracts.OperationSucceeded {
+		t.Fatalf("GetOperation = %+v, %v; want the succeeded operation", status, err)
 	}
 }
 

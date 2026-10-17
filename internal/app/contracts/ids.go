@@ -24,20 +24,10 @@ type (
 
 var (
 	uuidV4 = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	// A v1 infohash is the SHA-1 of the info dictionary, a v2 infohash the full SHA-256; both are
-	// lower-case hex on the wire.
-	infohashV1 = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	infohashV2 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
 // IsUUID reports whether s is a version 4 UUID in canonical lower-case text.
 func IsUUID(s string) bool { return uuidV4.MatchString(s) }
-
-// IsInfohashV1 reports whether s is a full v1 (SHA-1) infohash in lower-case hex.
-func IsInfohashV1(s string) bool { return infohashV1.MatchString(s) }
-
-// IsInfohashV2 reports whether s is a full v2 (SHA-256) infohash in lower-case hex.
-func IsInfohashV2(s string) bool { return infohashV2.MatchString(s) }
 
 // NewUUID reads 16 bytes from random and formats them as a version 4 UUID (RFC 9562).
 func NewUUID(random io.Reader) (string, error) {
