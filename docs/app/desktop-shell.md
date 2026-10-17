@@ -3,7 +3,7 @@
 **Status:** `implemented` (prototype from task 003; the product UI will replace it in 034/035/040)  
 **Requirements:** REL-01, REL-02, STACK-05, UI-04 (partially), AI-07, QA-01, QA-02, QA-05 (partially)  
 **Related tasks:** [003](../../product/tasks/003-wails-macos-build-spike.md); next — [004](../../product/tasks/004-reproducible-check-commands.md) (single check command), [034](../../product/tasks/034-wails-facade-real-bindings.md) (real facade), [035](../../product/tasks/035-react-bridge-state-resync.md) (bridge and state)  
-**Last verified version:** task 005 (startup and quit wiring); task 003 (window and check UI)  
+**Last verified version:** refactor after 009 (runtime info as a `Result`); task 005 (startup and quit wiring); task 003 (window and check UI)  
 **Last updated:** 2026-10-18
 
 ## Goal and behavior

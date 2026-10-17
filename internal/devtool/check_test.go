@@ -215,7 +215,7 @@ func TestCheckStepsReportTheirOwnFailures(t *testing.T) {
 		"dead link": {func(s *fakeSystem) { s.files["README.md"] = "[x](gone.md)\n" }, "docs", "DEAD README.md: gone.md"},
 		"stale plan": {func(s *fakeSystem) {
 			s.files["product/tasks/003-check.md"] = strings.Replace(s.files["product/tasks/003-check.md"], "`planned`", "`blocked`", 1)
-		}, "plan", "navigation table is out of date"},
+		}, "plan", "PLAN product/tasks/README.md: navigation table is out of date"},
 		"file added": {func(s *fakeSystem) {
 			s.results[listFiles] = []fakeResult{{out: s.output}, {out: s.output + "notes.txt\x00"}}
 			s.files["notes.txt"] = "written during the check\n"

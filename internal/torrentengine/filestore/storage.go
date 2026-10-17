@@ -21,7 +21,7 @@ var ErrNoSaveFolder = errors.New("the torrent has no save folder: it needs stora
 // NewTorrentStorage is the storage for one torrent: the engine's file storage with the payload under
 // saveRoot, part files off, and the given completion, inside a guard. The engine's file storage logs
 // absolute paths; a nil logger discards them. Seal requires the completion to be closed and keeps
-// files with unresolved pieces out of the record.
+// files with unresolved pieces out of the record. completion must not be nil.
 func NewTorrentStorage(saveRoot string, completion *Completion, session *Session, logger *slog.Logger) (*TorrentStorage, error) {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)

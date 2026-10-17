@@ -106,7 +106,7 @@ test was run with
 | `e43f327` | D1–D3, D5–D11 | One packument cache with one store path, the lockfile parsed once, `printOwn` for the docs and plan output, `c.gomod()`/`c.module()`, named cover and lockfile paths, `npm(args...)`, the step lists joined with `slices.Concat`, `waitForPid` and `appWait`, `PlanSummary` returns only the summary |
 | `75f9cc5` | A8, A9, A10(b), A11, B1, B3, B4, E9 | `NewTorrentStorage` takes a `*Completion`; `tracker.seal` calls `syncFile` itself; the guard makes its idle channel up front and Seal reads it; `Layout` returns `paths`; `SaveMarks` with a cancelled context returns `ErrCanceled`; `closeOnce`/`closeErr`; `library/doc.go` rewritten; the fixture's `truncated()` and bencode lists and maps |
 | `46fadf7` | C1, C3–C8 | Every `normalized()` copies, then blanks, and a table proves every request field changes the fingerprint; `IsInfohashV1`/`V2` deleted; `ordering.ts` uses `needsFetch`; one typed `stubGoMethod` for the bridge tests; the operation test waits for `ledger.Shutdown` instead of polling; `slices.Sorted(maps.Keys(…))` |
-| (this commit) | C2 | `getRuntimeInfo` follows the bridge template: `callGo` with a `runtimeInfo` decoder, returning `Result<RuntimeInfo>`. `RuntimeCheck` shows the error's fallback text. The TS test uses the Go JSON pin's values, and each test names the other |
+| `9f7aa0a` | C2 | `getRuntimeInfo` follows the bridge template: `callGo` with a `runtimeInfo` decoder, returning `Result<RuntimeInfo>`. `RuntimeCheck` shows the error's fallback text. The TS test uses the Go JSON pin's values, and each test names the other |
 
 ### RED / GREEN
 
@@ -132,8 +132,23 @@ test was run with
   - shows the bridge's English fallback (`The application did not answer.` or `The application sent data
     this window cannot read.`) instead of `Go call failed: <reason>`;
   - never shows the diagnostic text (C2).
-- `check-plan` problem lines from `plan-nav` carry the `PLAN ` prefix (D5). Every text asserted before is
-  unchanged.
+- The gate's `plan` step shows its problem lines with the `PLAN ` prefix, as `check-plan` and `plan-nav`
+  always did; before, the step showed them bare (D5). `check_test.go` now pins the prefix. The output
+  of the two commands is unchanged.
+
+**Weakened or dropped on purpose (PR 2):**
+- **`deps_test.go`: the "lockfile packages accepted invalid JSON" assertion is gone.** The `bad lockfile`
+  case of the deps step still covers it.
+- **`TestGetOperationReturnsTheLedgersStatus` checks only the final status.** It used to poll and check
+  every intermediate status. It now waits for `ledger.Shutdown` and asserts once, so the test is
+  deterministic (C6).
+- **`plan_test.go` no longer asserts empty problems from `PlanSummary`.** The function no longer returns
+  problems (D11).
+- **`RuntimeCheck.test.tsx`: the `Error` and non-`Error` rejection tests became one error-`Result` test.**
+  The component no longer sees rejections. `fromRejection` keeps its own tests in `errors.test.ts`, and
+  `runtimeInfo.test.ts` checks that a rejection becomes `bridge.callFailed`.
+- **`values_test.go`: the Go `IsInfohash…` checks went with the functions (C3).** The TS `ids.ts`
+  decoders keep their own tests.
 
 **Dropped after measurement:**
 - **E10, the growing stack buffer in `engineStacks`.**
@@ -149,16 +164,38 @@ test was run with
   plus the `.app` run), TS 100% on all four metrics per file.
 - `go test -race -count=20 -run 'Stop|Seal' ./internal/torrentengine/filestore` passes after A10(b).
 - E9: `TestCatalogMatchesTheCommittedTestdata` passes, so the committed fixture bytes are unchanged.
-- **Flakes seen, none caused by this pass:**
-  - The first gate of `e43f327` failed in `internal/enginespike`
-    `TestAStalledTransferIsWokenAndCounted`: 2 recoveries where 1 was expected, an extra natural stall
-    (finding 22). The test passed `-count=5` alone, and the gate rerun passed. The spike has been
+- **Flakes seen, none in a package the failing commit changed:**
+  - **`e43f327`, first gate:** failed in `internal/torrentengine`, where an engine test's connection stood
+    still for 20 s. The gate's 30-line tail of DEBUG logs hid the test's name.
+  - **`e43f327`, the separate `go test -race ./...` run after it:** failed in `internal/enginespike`
+    `TestAStalledTransferIsWokenAndCounted`, with 2 recoveries where 1 was expected (an extra natural
+    stall, finding 22). The test passed `-count=5` alone, and the gate rerun passed. The spike has been
     unchanged since 007 and is deleted by 034.
+  - **`75f9cc5`, first gate (E10 still in):** failed in `internal/torrentengine`. This led to the E10
+    measurement above.
+  - **`9f7aa0a`, first gate:** failed in `swarm` `TestACorruptedPieceReceivedOverTheWireIsNeverAccepted`:
+    `WaitComplete = 0 of 75000 bytes complete, missing pieces [0 1 2]`. Nothing moved, the finding-22
+    stall. The test passed `-count=5` alone, and `swarm` is unchanged against `main`. The same run also
+    failed `single code version`, because the report was edited during the gate. The rerun, with no
+    edits, passed.
   - `TestPinnedEngineAcceptsInfoBytes…/from a peer's metadata` fails about 1 in 10 on `main` too.
+  - The gate's `go tests` step should show the `--- FAIL` lines instead of the log tail. That belongs
+    to its own change, not to this pass.
 - `not_run`, as before:
   - engine integration (018);
   - test-bridge UI tests (035);
   - `.app` QA of the new runtime-check error text. The gate still launches the `.app` for coverage.
+- **Tech-lead readiness review:**
+  - Verdict: ready after fixes. All the fixes were in this report: the D5 wording, the flake attribution,
+    and the list of weakened or dropped tests.
+  - It found no behavior change beyond the deliberate ones.
+  - A10(b) is race-free: `idle` is never reassigned and is closed only after `flight.Wait()`.
+    `-race -count=10` of the Stop and Seal tests passed again.
+  - C1 keeps the JSON byte-identical, because the only extra copied field is unexported.
+  - Its optional suggestions were taken: the gate test pins the `PLAN ` prefix, `NewTorrentStorage` states
+    that the completion must not be nil, and the desktop shell names its last verified version.
+  - Left for the owner: the `updates` step lists `github.com/anacrolix/chansync` v0.7.0 → v0.8.0 as out of
+    quarantine. This pass changes no `go.mod`.
 
 **Debt after PR 2:** none in the code this pass touched. The deferred items keep the owners listed in
 the plan above.
