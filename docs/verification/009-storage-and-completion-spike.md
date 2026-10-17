@@ -169,8 +169,8 @@ Linking the engine into the product and the Wails build tags (018); persisting t
 
 | Stage | Commit | Result |
 |---|---|---|
-| A — measurements | stage A commit | `pass` |
-| B — library marks, volume package | — | `not_run` |
+| A — measurements | `e7ca03e` | `pass` |
+| B — library marks, volume package | stage B commit | `pass` |
 | C1 — placement and the guard | — | `not_run` |
 | C2 — restart, crash, mismatches | — | `not_run` |
 | C3 — volumes | — | `not_run` |
@@ -200,3 +200,49 @@ are the evidence. Every command ran from the repository root.
   from one goroutine; a `Get` is answered from memory.
 - The guard may `stat` the save folder before every operation: 1 µs.
 - Product tags: `nosqlite,noboltdb` always; `disable_libutp` is 018/026's transport decision.
+
+## Stage B — library marks and the volume package
+
+**REFACTOR first.** `go test -race -count=1 ./internal/library` was green (100%). The `hdiutil` helpers
+of `internal/library/disk_test.go` moved to the new package `internal/testutil/volume`
+(`New`, `Attach`, `Detach`, `Fill`, `Main`), which `disk_test.go` now uses.
+
+**RED:**
+
+| Command | Result |
+|---|---|
+| `go test -count=1 ./internal/testutil/volume` | `fail` as expected: `undefined: run`, `undefined: Main`, `undefined: New`, `undefined: Options`, `undefined: Fill` |
+| `go vet ./internal/library` (with `completion_test.go`) | `fail` as expected: `undefined: CompletionStore` |
+
+**GREEN:**
+
+| Command | Result |
+|---|---|
+| `go test -race -count=1 -cover ./internal/testutil/volume` | `pass`, 100.0% of statements |
+| `go test -race -count=1 -covermode=atomic -coverprofile=… ./internal/library`, no block with count 0 | `pass`, 100.0% of statements |
+| `go test -race -count=2 ./internal/library ./internal/testutil/...` | `pass` both times |
+
+**What was built.**
+- `library.OpenCompletion(ctx, path)` opens the marks store with `library.Open`, so it has the 008 settings.
+  `SaveMarks` writes a batch in one transaction; `LoadMarks` returns one torrent's marks;
+  a piece with no mark is absent from the map. The table is
+  `piece_completion(infohash, piece, complete)` `WITHOUT ROWID`, `user_version` 1.
+- A database of a newer version, or with other tables, is `ErrUnsupportedVersion` and is never
+  `ErrCorrupt`, so a rebuild of a damaged store cannot destroy a newer library. Tested, and the file
+  is unchanged.
+- The tests with real causes: a missing and a read-only folder (`ErrCannotOpen`), a garbage file
+  (`ErrCorrupt`, kept), a full HFS+ volume (`ErrFull`, the failed batch of 20000 rows leaves none of its
+  rows and earlier marks stay), a cancelled context, a table dropped and replaced by a second store
+  on the same file (errors are reported, not hidden), and a schema setup on an ended transaction.
+
+**Findings of the stage (not engine findings).**
+- `Open` parses the schema, so a damaged schema page fails `Open` itself and the schema query of
+  `OpenCompletion` cannot fail by corruption; its error branch is covered by a transaction that has
+  ended (`sql.ErrTxDone`).
+- On a volume filled to the last block, `Open` fails with `ErrCannotOpen` (no room for the WAL
+  file); with 40 KiB free, `Open` works and the commit of the first schema fails with `ErrFull`.
+  `volume.Fill` now fills in shrinking chunks down to one byte, so a test sets the free space
+  explicitly.
+- A store left open on a volume that is then force-detached makes the next test, on a new volume
+  with the same device and inode numbers, fail with `database is locked`: SQLite keeps its lock
+  table by (device, inode) per process. Tests must close stores before a volume goes away.
