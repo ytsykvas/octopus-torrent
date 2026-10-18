@@ -16,7 +16,6 @@ function transfer(overrides: Partial<Transfer> = {}): Transfer {
     payloadWritten: 0n,
     peers: 0,
     clientsStarted: 0,
-    recoveries: 0,
     error: '',
     ...overrides,
   }
@@ -88,10 +87,10 @@ describe('SpikeApp', () => {
     emit(transfer({ revision: 7n, state: 'running', bytesCompleted: 1n, length: 1048576n }))
 
     expect(screen.getByText('524288 / 1048576 bytes (50%)')).toBeInTheDocument()
-    expect(screen.getByText('1 peer, 2 engine clients started, 0 stalls woken')).toBeInTheDocument()
+    expect(screen.getByText('1 peer, 2 engine clients started')).toBeInTheDocument()
 
-    emit(transfer({ revision: 9n, state: 'running', bytesCompleted: 524288n, length: 1048576n, peers: 2, clientsStarted: 2, recoveries: 1 }))
-    expect(screen.getByText('2 peers, 2 engine clients started, 1 stall woken')).toBeInTheDocument()
+    emit(transfer({ revision: 9n, state: 'running', bytesCompleted: 524288n, length: 1048576n, peers: 2, clientsStarted: 2 }))
+    expect(screen.getByText('2 peers, 2 engine clients started')).toBeInTheDocument()
   })
 
   it('starts, pauses and resumes through the bridge; a reply older than the screen is ignored', async () => {

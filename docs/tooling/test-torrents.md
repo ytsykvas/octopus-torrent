@@ -46,6 +46,7 @@ The catalog is in `internal/torrentengine/testutil/fixture/testdata/fixtures.jso
 | `v1-tree` | v1 | 3 × 32 KiB | nested folders, repeated names (`docs/readme.txt`, `media/readme.txt`), `empty.dat`, `Ünïcode/файл.bin`, pieces across files. **Does not transfer on the pinned engine** (empty-file chunk defect) |
 | `v1-tree-no-empty` | v1 | 3 × 32 KiB | the same tree without the empty file: the control for that defect |
 | `v1-large` | v1 | 64 × 16 KiB | 1 MiB for rate-limited transfers, measurement, cancellation |
+| `v1-long` | v1 | 256 × 64 KiB | 16 MiB for stop measurements: larger than a loopback connection holds in flight (010) |
 | `v2-single`, `v2-tree` | v2 | — | parse-only. **Adding them panics on the pinned engine** |
 | `hybrid-single`, `hybrid-tree` | hybrid | 4 × 16 KiB, 5 × 32 KiB | BEP 47 pad files, an empty file, a piece layer |
 
@@ -87,7 +88,7 @@ bytes in every format.
 | `WaitInfo`, `WaitComplete` | Bounded by `ctx`. On expiry: `"no metainfo: …"`, or an `*IncompleteError` wrapping `ctx.Err()`. |
 | `Settle(ctx, t)` | Waits until no piece is queued, hashing or storing its verdict; bounded by `ctx`. Read piece state only after it: `VerifyDataContext` returns before the verdict is stored. `Peer.Seed` uses it, and so do the 009 storage tests. |
 | `Count(t)` | `PayloadRead`, `PayloadWritten`, `Read`, `Written`. Payload is piece data; the other two include protocol messages. |
-| `Record(interval, torrents)`, `Mark`, `Stop` | Sample counters. `Log.FirstPayload`, `LastPayload`, `MarkAt` and `PayloadAfter(mark, name)` give the start, the stop and the residual traffic. |
+| `Record(interval, torrents)`, `Mark`, `Stop` | Sample counters. `Log.First(name, field)`, `Last(name, field)`, `MarkAt` and `Delta(mark, name)` give the start, the stop and the residual traffic; `field` is `Payload`, `PayloadRead` or `PayloadWritten`, so one direction of a peer that downloads and uploads can be followed. |
 | `Peer.Settings`, `ListenAddrs`, `SeenAddrs`, `Logs` | What the configuration allows, where the peer listens, the address of every peer it saw, and its engine log. |
 | `Peer.Client()` | The raw engine client, for tests of the engine's own API (007). The peer still owns it: close it only through `Peer.Close`. |
 | `Main(m)` | The `TestMain` body of every package that starts engine clients (see below). |

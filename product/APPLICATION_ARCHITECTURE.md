@@ -60,6 +60,7 @@ internal/app/operations/        idempotent operation ledger (exists, 005)
 internal/torrentengine/         interface and anacrolix adapter
 internal/torrentengine/testutil/ fixture (own v1/v2/hybrid test torrents), swarm (closed loopback swarm) (exists, 006)
 internal/torrentengine/          engine contract tests on the pinned version (exist, 007); the adapter comes in 018
+internal/torrentengine/transferswitch/  confirmed upload stop, resume without a stall, the writer wake bound (prototype from 010; 018 moves it into the adapter)
 cmd/engine-spike/, internal/enginespike/, frontend/src/spike/   temporary EngineSpike.app (exists, 007; deleted by 034)
 internal/library/               SQLite: Open/Write/Read and error kinds (008), the piece-completion marks (009); repositories and migrations
 internal/torrentengine/filestore/   the engine storage: guard, marks completion, session record (prototype from 009; 018 builds on it)
@@ -116,6 +117,8 @@ Stored policy is separate from actual state:
 - an access or deletion error has its own state and does not silently change the manual pause.
 
 Effective upload permission is computed from all these conditions. Turning off globalUploadDisabled does not start a manualPaused torrent. Saving the desired state in SQLite and applying it to the engine have a visible result: if the engine or the DB write failed, the UI shows incompleteness/an error. On restart the policy is applied before payload is permitted.
+
+Applying the upload policy to the engine is confirmed, not assumed: a stop counts as applied when the torrent's own sent-payload counter stays unchanged for a quiet window after `DisallowDataUpload` returns; bytes already sent may still arrive at the peer. New and restored torrents receive the switch before their metadata is attached, and download is resumed with a nudge that ends the engine's stall after a pause ([global-upload-stop](../docs/decisions/global-upload-stop.md)).
 
 For a completed torrent, the text "Completed" and "Seeding" depends on readiness of the selected data and on policy; `Seeding()` is not used as the sole source of status. Checking, metadata waiting, filesystem error and manual pause have priority display rules.
 

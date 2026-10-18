@@ -158,7 +158,6 @@ func TestAVolumePulledWhileSeedingIsNotRecreatedAndTheMarksSurvive(t *testing.T)
 		t.Fatal(err)
 	}
 	swarm.Connect(lt, second.peer)
-	keepMoving(t, second.peer, mi.HashInfoBytes())
 	eventually(t, transferLimit, "nothing was uploaded from the volume", func() bool { return swarm.Count(lt).PayloadRead > 0 })
 
 	vol.Detach()

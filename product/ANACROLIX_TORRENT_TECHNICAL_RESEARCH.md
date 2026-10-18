@@ -24,7 +24,7 @@ The product needs its own adapter that translates our UUIDs and commands into li
 | Verification | `VerifyDataContext` |
 | Removal from client | `Drop`, `Closed` |
 
-A new TorrentSpec can set an initial download/upload prohibition. Before metadata is received, `Info` may be nil; that is not a ready file list. `MergeSpec` is not a way to replace storage. [API documentation](https://pkg.go.dev/github.com/anacrolix/torrent).
+The `DisallowDataUpload`/`DisallowDataDownload` fields of `AddTorrentOpts` (and so of a `TorrentSpec`) are never read on the pinned v1.61.0 ([engine-lifecycle](../docs/decisions/engine-lifecycle.md), finding 10): a new or restored record gets its prohibition from the `Torrent` method after the add and before `SetInfoBytes` ([global-upload-stop](../docs/decisions/global-upload-stop.md)). Before metadata is received, `Info` may be nil; that is not a ready file list. `MergeSpec` is not a way to replace storage. [API documentation](https://pkg.go.dev/github.com/anacrolix/torrent).
 
 This is an integration map, not a promise that a single call implements the whole product scenario. The adapter controls ordering, the local record, cancellation, errors and the result.
 
@@ -32,9 +32,9 @@ This is an integration map, not a promise that a single call implements the whol
 
 We store `manualPaused`, `globalUploadDisabled`, file wanted and the actual error separately. The policy recomputes permissions after every command; pressing play does not restore upload if it is globally disabled.
 
-In the current engine code, download and upload have separate flags; a download prohibition cancels requests. The upload implementation contains a TODO about updating active peer connections, so the mere existence of the method does not prove an immediate stop of all buffered payload. A controlled test must determine the confirmation boundary and measure the residual traffic. [torrent.go implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go).
+In the current engine code, download and upload have separate flags; a download prohibition cancels requests. The upload implementation contains a TODO about updating active peer connections, so the mere existence of the method does not prove an immediate stop of all buffered payload. A controlled test must determine the confirmation boundary and measure the residual traffic. [torrent.go implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go). Task 010 measured it: see [global-upload-stop](../docs/decisions/global-upload-stop.md) for the confirmed stop, the residual, and the two engine defects (a lost writer wake-up; no request after the last cancel is rejected) with their remedies.
 
-Design decision: use per-torrent permissions for the runtime switch; new records are added with the corresponding initial prohibitions. Do not mutate the client configuration without a verified thread-safety contract. A separate `NoUpload` is a configuration-level disabling of sending chunks. `Seed` controls readiness to seed without reciprocity, and the upload limiter applies to chunks. [Client config](https://raw.githubusercontent.com/anacrolix/torrent/master/config.go).
+Design decision: use per-torrent permissions for the runtime switch; new records get the corresponding prohibitions before their info is set (the initial spec flags are dead, see §2). Do not mutate the client configuration without a verified thread-safety contract. A separate `NoUpload` is a configuration-level disabling of sending chunks. `Seed` controls readiness to seed without reciprocity, and the upload limiter applies to chunks. [Client config](https://raw.githubusercontent.com/anacrolix/torrent/master/config.go).
 
 Ordinary seeding after completion requires an explicitly chosen client seed policy and per-torrent permissions. A stopped record is not closed merely for the sake of a pause. Protocol messages, tracker/DHT or disk verification must not be presented as payload downloading.
 

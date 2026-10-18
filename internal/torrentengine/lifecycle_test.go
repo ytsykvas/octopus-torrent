@@ -56,8 +56,8 @@ var (
 func TestATorrentLivesFromAddToDropAndTheClientFromNewToClose(t *testing.T) {
 	fx := named(t, "v1-single")
 	mi := metaInfo(t, fx)
-	seeder := seed(t, fx, swarm.Options{})
-	leecher := peer(t, swarm.Options{})
+	seeder := seed(t, fx, woken(0))
+	leecher := peer(t, woken(0))
 	client := leecher.Client()
 
 	spec, err := torrent.TorrentSpecFromMetaInfoErr(mi)
@@ -114,8 +114,8 @@ func TestATorrentLivesFromAddToDropAndTheClientFromNewToClose(t *testing.T) {
 func TestAddingAKnownTorrentReturnsTheSameTorrentWithNewFalse(t *testing.T) {
 	fx := named(t, "v1-single")
 	mi := metaInfo(t, fx)
-	seeder := seed(t, fx, swarm.Options{})
-	leecher := peer(t, swarm.Options{})
+	seeder := seed(t, fx, woken(0))
+	leecher := peer(t, woken(0))
 	lt, err := leecher.Leech(mi)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +159,7 @@ func TestAddingAKnownTorrentReturnsTheSameTorrentWithNewFalse(t *testing.T) {
 
 func TestAFailedAddIsAnErrorAndLeavesAnExistingTorrentWorking(t *testing.T) {
 	t.Run("an info dictionary the engine cannot read", func(t *testing.T) {
-		client := peer(t, swarm.Options{}).Client()
+		client := peer(t, woken(0)).Client()
 		for _, fx := range fixture.All() {
 			if fx.Engine != fixture.StageInfo {
 				continue
@@ -188,7 +188,7 @@ func TestAFailedAddIsAnErrorAndLeavesAnExistingTorrentWorking(t *testing.T) {
 	}
 
 	t.Run("info bytes that are not bencode, as a new torrent", func(t *testing.T) {
-		client := peer(t, swarm.Options{}).Client()
+		client := peer(t, woken(0)).Client()
 		lt, isNew, err := client.AddTorrentSpec(broken(t))
 		if err == nil || !isNew {
 			t.Fatalf("AddTorrentSpec = new %v, %v; want an error for a new torrent", isNew, err)
@@ -199,8 +199,8 @@ func TestAFailedAddIsAnErrorAndLeavesAnExistingTorrentWorking(t *testing.T) {
 	})
 
 	t.Run("info bytes that are not bencode, for an existing torrent", func(t *testing.T) {
-		seeder := seed(t, fx, swarm.Options{})
-		leecher := peer(t, swarm.Options{})
+		seeder := seed(t, fx, woken(0))
+		leecher := peer(t, woken(0))
 		lt, err := leecher.Leech(mi)
 		if err != nil {
 			t.Fatal(err)
@@ -238,7 +238,7 @@ func TestPinnedEngineAcceptsInfoBytesThatDoNotMatchTheInfohash(t *testing.T) {
 	}
 
 	t.Run("from a spec", func(t *testing.T) {
-		client := peer(t, swarm.Options{}).Client()
+		client := peer(t, woken(0)).Client()
 		lt, isNew, err := client.AddTorrentSpec(spec)
 		if err != nil || !isNew || lt.Info().Name != otherInfo.Name {
 			t.Fatalf("AddTorrentSpec = new %v, %v, name %q; the engine now rejects info bytes of another torrent: re-check 011, 019 and 022's notes", isNew, err, lt.Info().Name)
@@ -246,13 +246,13 @@ func TestPinnedEngineAcceptsInfoBytesThatDoNotMatchTheInfohash(t *testing.T) {
 	})
 
 	t.Run("from a peer's metadata", func(t *testing.T) {
-		liar := peer(t, swarm.Options{})
+		liar := peer(t, woken(0))
 		lie, _, err := liar.Client().AddTorrentSpec(spec)
 		if err != nil {
 			t.Fatal(err)
 		}
 		lie.DownloadAll() // a torrent that wants nothing accepts no connection
-		leecher := peer(t, swarm.Options{})
+		leecher := peer(t, woken(0))
 		lt := leecher.AddInfohash(want.HashInfoBytes())
 		swarm.Connect(lt, liar)
 		if err := swarm.WaitInfo(deadline(t, transferLimit), lt); err != nil {
@@ -277,7 +277,7 @@ func TestATorrentWaitingForMetadataIsDroppedAndClosedPromptly(t *testing.T) {
 	hash := metaInfo(t, named(t, "v1-single")).HashInfoBytes()
 
 	t.Run("Drop", func(t *testing.T) {
-		leecher := peer(t, swarm.Options{})
+		leecher := peer(t, woken(0))
 		lt := leecher.AddInfohash(hash)
 		if waitClosed(lt.GotInfo(), 500*time.Millisecond) {
 			t.Fatal("GotInfo closed with no peer to send the metainfo")
@@ -293,7 +293,7 @@ func TestATorrentWaitingForMetadataIsDroppedAndClosedPromptly(t *testing.T) {
 	})
 
 	t.Run("Client.Close", func(t *testing.T) {
-		leecher := peer(t, swarm.Options{})
+		leecher := peer(t, woken(0))
 		lt := leecher.AddInfohash(hash)
 		closed := make(chan []error, 1)
 		go func() { closed <- leecher.Client().Close() }()
@@ -317,7 +317,7 @@ func TestClosingTheClientRepeatedlyDuringTransfersLeavesNothingRunning(t *testin
 	mi := metaInfo(t, fx)
 	waiting := metaInfo(t, named(t, "v1-single")).HashInfoBytes()
 	for cycle := range 3 {
-		opts := swarm.Options{RateLimit: 64 << 10}
+		opts := woken(64 << 10)
 		seeder := seed(t, fx, opts)
 		leecher := peer(t, opts)
 		lt, err := leecher.Leech(mi)
@@ -350,7 +350,7 @@ func TestClosingTheClientRepeatedlyDuringTransfersLeavesNothingRunning(t *testin
 func TestPinnedEngineIgnoresTheUploadSwitchOfTheAddOptions(t *testing.T) {
 	fx := named(t, "v1-single")
 	mi := metaInfo(t, fx)
-	seeder := peer(t, swarm.Options{})
+	seeder := peer(t, woken(0))
 	if err := fx.WritePayload(seeder.Dir); err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestPinnedEngineIgnoresTheUploadSwitchOfTheAddOptions(t *testing.T) {
 		t.Fatal("the seeder never marked its data complete")
 	}
 
-	leecher := peer(t, swarm.Options{})
+	leecher := peer(t, woken(0))
 	lt, err := leecher.Leech(mi)
 	if err != nil {
 		t.Fatal(err)
@@ -385,8 +385,10 @@ func TestPinnedEngineIgnoresTheUploadSwitchOfTheAddOptions(t *testing.T) {
 
 // Allowing download right after disallowing it, while the cancelled requests are still on the wire,
 // leaves the pinned engine with no request for good: the transfer never moves again (20 of 20 runs
-// while 007 was written; with 5 ms between the two calls, 0 of 20). The cause inside the engine is
-// not established; 010 owns the product's remedy, and our code must not resume right after a pause.
+// while 007 was written; with 5 ms between the two calls, 0 of 20). Cause (010): the last Reject of
+// a cancelled request triggers a request update that adds nothing, and nothing asks again; see
+// TestPinnedEngineRequestsNothingAfterTheLastCancelIsRejected. The product resumes download with
+// transferswitch.ResumeDownload.
 func TestPinnedEngineStallsWhenDownloadIsAllowedRightAfterDisallowing(t *testing.T) {
 	fx := named(t, "v1-large")
 	opts := swarm.Options{RateLimit: 256 << 10}
@@ -421,8 +423,8 @@ func TestPinnedEngineOverwritesAUsersFileAtATorrentPathWhenItDownloads(t *testin
 	// v1-single: v1-tree has a zero-length file, which the default IO cannot download across (006
 	// limitation 2).
 	fx := named(t, "v1-single")
-	seeder := seed(t, fx, swarm.Options{})
-	leecher := peer(t, swarm.Options{})
+	seeder := seed(t, fx, woken(0))
+	leecher := peer(t, woken(0))
 	file := fx.Files[0]
 	path := fx.FilePath(leecher.Dir, file)
 	users := []byte("the user's own file, which the torrent never named")

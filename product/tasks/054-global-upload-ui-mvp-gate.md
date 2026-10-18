@@ -54,6 +54,8 @@ Respect the boundaries of own DTOs, the repository and the engine adapter. An er
 
 **Basis for technical decisions:** [Upload implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go). Check signatures and constraints against the pinned version; reading the API is not a passed integration check.
 
+**From 010** ([global-upload-stop](../../docs/decisions/global-upload-stop.md)): the confirmation takes one quiet window (250 ms) after the switch; explain in the warning that data already sent to a peer may still arrive for a few seconds, and that the stop covers piece data only (peers still exchange protocol messages such as haves and keep-alives). The real-network residual and the product `.app` scenario were `not_run` in 010 and are yours (AS-18).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

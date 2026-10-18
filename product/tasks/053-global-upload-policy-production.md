@@ -54,6 +54,8 @@ If 010 is blocked, this task is also blocked. A full pause of all torrents is no
 
 **Basis for technical decisions:** [Upload implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go). Reconcile signatures and constraints with the pinned version; reading the API is not a passed integration check.
 
+**From 010** ([global-upload-stop](../../docs/decisions/global-upload-stop.md), [feature](../../docs/app/transfer-switches.md), [report](../../docs/verification/010-upload-stop-and-pause-spike.md)): the proven strategy is `transferswitch.StopUpload` per torrent (confirmed when the sent-payload counter stays unchanged for 250 ms, `ErrNotConfirmed` after 2 s) and `AllowDataUpload` only for torrents that are not manually paused. The proven bound is "no new payload after the switch returns"; bytes already written still reach the peer (on loopback up to about 1 MiB per connection, delivered at the receiver's pace) and the UI must not promise otherwise. New and restored torrents get the switch before `SetInfoBytes`. "Payload" is piece data only; metadata, haves and keep-alives still flow. `StopUpload` polls `Stats()` (the client lock) every 25 ms per torrent: stagger or batch it when stopping many torrents. A `ResumeDownload` in progress runs its nudge under the same per-torrent lock as the stop. The "policy saved" timing was `not_run` in 010 (no store): measure it here.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

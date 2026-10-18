@@ -115,7 +115,6 @@ No stub is left in the code: the prototype is the base of 018. What is open is o
 | Persisting the record and the "not clean" marker; `DeleteMarks` for a removed torrent | 014, 029, 031 |
 | The user messages for `ErrFileSystem`, `ErrUnsafePath`, `Missing` | 020, 030 |
 | The `.app` restart, crash and quit; the re-exec in the bundle; shutdown with discovery on | 018, 029, 052 |
-| The remedy for the transfer that sometimes stands still (finding 22) | 010 |
 | Quit time for a torrent with many files (one fsync per written file) | 028 |
 
 Limits of the design (the ADR lists them in full): the window between the guard's check and the engine's open;
@@ -126,7 +125,8 @@ an outside edit that is absorbed while writes to one file overlap; bit rot on a 
 For tests: `swarm.MainClassicIO` in `TestMain`; the run harness in
 `internal/torrentengine/filestore/run_test.go` shows a whole run (`start`, `download`, `end`). The tripwires
 for the pinned engine (findings 15–18, 20, 21, 23 and 24) are together in `enginefacts_test.go`; finding 19
-is in `internal/torrentengine/storage_test.go`, and finding 22 has no tripwire (`keepMoving` works around it).
+is in `internal/torrentengine/storage_test.go`, and finding 22 has no tripwire: its cause is a race, bounded in every harness peer by the 1 s keep-alive of
+[task 010](transfer-switches.md).
 Recovery: an unclean record or an unreadable marks store means "verify everything"; the marks of a torrent
 are advisory and can always be rebuilt by hashing.
 

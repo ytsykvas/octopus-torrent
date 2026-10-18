@@ -206,6 +206,19 @@ func TestTreesHoldTheCasesTheyAreFor(t *testing.T) {
 	}
 }
 
+// v1-long must be larger than what the kernel can hold in flight on one loopback connection (send
+// buffers grow to 4 MiB here), so a residual after a stop is never mistaken for completion (010).
+func TestTheLongFixtureLeavesRoomForAResidual(t *testing.T) {
+	fx := named(t, "v1-long")
+	info, err := load(t, fx).UnmarshalInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fx.Files) != 1 || fx.Files[0].Length != 16<<20 || info.PieceLength != 64<<10 || info.NumPieces() != 256 {
+		t.Fatalf("v1-long: files %v, piece length %d, %d pieces; want one 16 MiB file in 256 pieces of 64 KiB", fx.Files, info.PieceLength, info.NumPieces())
+	}
+}
+
 func TestNoFixtureNamesATrackerOrAWebSeed(t *testing.T) {
 	for _, fx := range valid(t) {
 		mi := load(t, fx)
@@ -339,8 +352,8 @@ func valid(t *testing.T) (fixtures []Fixture) {
 			fixtures = append(fixtures, fx)
 		}
 	}
-	if len(fixtures) != 8 {
-		t.Fatalf("%d fixtures with payload, want 8", len(fixtures))
+	if len(fixtures) != 9 {
+		t.Fatalf("%d fixtures with payload, want 9", len(fixtures))
 	}
 	return fixtures
 }

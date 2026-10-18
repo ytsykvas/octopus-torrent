@@ -8,8 +8,6 @@ import (
 	"log/slog"
 	"path/filepath"
 	"slices"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +17,7 @@ import (
 	"octopustorrent/internal/files"
 	"octopustorrent/internal/torrentengine/testutil/fixture"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
+	"octopustorrent/internal/torrentengine/transferswitch"
 )
 
 const (
@@ -69,7 +68,6 @@ type run struct {
 	storage    *TorrentStorage
 	torrent    *torrent.Torrent
 	addErr     error
-	stopMoving func()         // ends the wake-ups of connect
 	decision   files.Decision // what the rehash rule decided at the start
 	record     files.Record   // what the run left at its quit
 }
@@ -114,7 +112,7 @@ func start(t *testing.T, mi *metainfo.MetaInfo, saveRoot, dataDir string, o runO
 		r.completion.Distrust(mi.HashInfoBytes(), r.decision.Distrusted(pieces))
 		r.storage.Baseline(o.prev, r.decision)
 	}
-	if r.peer, err = swarm.NewPeer(t.TempDir(), swarm.Options{RateLimit: o.rateLimit, DefaultStorage: Refusing(), DataDir: dataDir}); err != nil {
+	if r.peer, err = swarm.NewPeer(t.TempDir(), swarm.Options{RateLimit: o.rateLimit, DefaultStorage: Refusing(), DataDir: dataDir, KeepAliveTimeout: transferswitch.WakeInterval}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -135,72 +133,10 @@ const drainWait = 300 * time.Millisecond
 // idleWindow is how long a connected run must stay without traffic to show that it asks for nothing.
 const idleWindow = 300 * time.Millisecond
 
-// stallWindow is how long a seeder may upload nothing before keepMoving wakes the transfer.
-const stallWindow = 1500 * time.Millisecond
-
-// keepMoving wakes a transfer that stands still. The pinned engine stalls now and then (finding 22):
-// one request sits unserved in the seeder's queue, and both sides wait for ever. It was seen only when
-// the process runs slowly (-race: 4% of fresh transfers with classic file IO, 2% with mmap; none
-// without it), and a second upload switch off and on, 50 ms apart, serves the request (finding 14).
-// When the seeder has uploaded nothing for stallWindow, the helper does that and counts it; the count
-// is logged at the end of the test. It stops with the test.
-func keepMoving(t *testing.T, seeder *swarm.Peer, infoHash metainfo.Hash) (stopMoving func()) {
-	t.Helper()
-	st, ok := seeder.Client().Torrent(infoHash)
-	if !ok {
-		t.Fatal("the seeder does not hold the torrent")
-	}
-	var wakes atomic.Int64
-	var once sync.Once
-	stop, done := make(chan struct{}), make(chan struct{})
-	go func() {
-		defer close(done)
-		tick := time.NewTicker(100 * time.Millisecond)
-		defer tick.Stop()
-		last, since := swarm.Count(st).PayloadWritten, time.Now()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-tick.C:
-			}
-			if now := swarm.Count(st).PayloadWritten; now != last {
-				last, since = now, time.Now()
-			} else if time.Since(since) >= stallWindow {
-				st.DisallowDataUpload()
-				time.Sleep(50 * time.Millisecond)
-				st.AllowDataUpload()
-				wakes.Add(1)
-				since = time.Now()
-			}
-		}
-	}()
-	stopMoving = func() {
-		once.Do(func() {
-			close(stop)
-			<-done
-			if n := wakes.Load(); n > 0 {
-				t.Logf("the stalled transfer was woken %d time(s) (engine finding 22)", n)
-			}
-		})
-	}
-	t.Cleanup(stopMoving)
-	return stopMoving
-}
-
-// connect gives the torrent the seeder as its only peer, and keeps the transfer moving until the run
-// ends.
+// connect gives the torrent the seeder as its only peer.
 func (r *run) connect(seeder *swarm.Peer) {
 	r.t.Helper()
 	swarm.Connect(r.torrent, seeder)
-	r.stopMoving = keepMoving(r.t, seeder, r.torrent.InfoHash())
-}
-
-// connectPlain is connect for a torrent that is not part of a run.
-func connectPlain(t *testing.T, tor *torrent.Torrent, seeder *swarm.Peer) {
-	t.Helper()
-	swarm.Connect(tor, seeder)
-	keepMoving(t, seeder, tor.InfoHash())
 }
 
 // download connects the seeder and waits until the torrent is complete. A transfer that stands still
@@ -221,9 +157,6 @@ func (r *run) download(seeder *swarm.Peer) {
 // session and the errors of closing the marks and of Seal.
 func (r *run) end() (problems []error, err error) {
 	r.t.Helper()
-	if r.stopMoving != nil {
-		r.stopMoving()
-	}
 	ctx := deadline(r.t, closeLimit)
 	if err := r.peer.Close(ctx); err != nil {
 		r.t.Error(err)

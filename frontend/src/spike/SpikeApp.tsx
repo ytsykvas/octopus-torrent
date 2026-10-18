@@ -70,8 +70,7 @@ export function SpikeApp({ bridge }: SpikeAppProps) {
             {`${current.bytesCompleted} / ${current.length} bytes (${percent(current)}%)`}
           </p>
           <p>
-            {`${current.peers} peer${current.peers === 1 ? '' : 's'}, ${current.clientsStarted} engine clients started, ` +
-              `${current.recoveries} stall${current.recoveries === 1 ? '' : 's'} woken`}
+            {`${current.peers} peer${current.peers === 1 ? '' : 's'}, ${current.clientsStarted} engine clients started`}
           </p>
         </>
       )}

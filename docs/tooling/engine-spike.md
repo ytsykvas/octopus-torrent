@@ -30,10 +30,10 @@ Its states are `idle`, `running`, `paused`, `complete` and `failed`:
 - **Pause** stops the seeder's upload, and **Resume** lets it upload again. This is not the product's
   pause policy (010, 013, 025). The leecher's download switch is avoided because of engine
   finding 12.
-- **A stall is woken and counted.** When a running transfer stands still for 2 s (8 ticks), the
-  ticker switches the seeder's upload off, and on again at the next tick, and adds one to
-  `recoveries`. The page shows the count. The pinned engine can leave the transfer standing still
-  after the upload is allowed again (engine finding 14), rarely and under CPU load.
+- **No stall needs waking.** Both clients use the product's keep-alive interval
+  (`transferswitch.WakeInterval`, 1 s), which bounds the lost writer wake-up behind engine finding 14
+  (task 010, [ADR](../decisions/global-upload-stop.md)). Until 010 the ticker woke such stalls itself and
+  counted them in `recoveries`; both are gone.
 - **Reload UI** reloads the page through `WindowReloadApp`. A reload creates no client:
   `clientsStarted` stays at 2.
 - **Quitting** ends the service's lifetime first, so a Start still in progress gives up instead of
@@ -75,7 +75,6 @@ list with it:
 | `payloadRead`, `payloadWritten` | decimal string | Piece data the leecher received and sent. |
 | `peers` | integer | Active peers of the leecher's torrent. |
 | `clientsStarted` | integer | Engine clients this service created. |
-| `recoveries` | integer | Stalls the ticker woke (engine finding 14). |
 | `error` | string | Why the last Start failed; otherwise empty. |
 
 - **Errors.** A refused command comes back as an `Error` that `callGo` maps to
@@ -95,7 +94,8 @@ The RED and GREEN record is in the [report](../verification/007-engine-api-lifec
   - Start twice keeps one run;
   - Pause holds the bytes, and Resume completes the transfer;
   - a repeated Pause;
-  - a stall (a dropped "allow") is woken once, counted, and the transfer completes;
+  - both clients start with the product keep-alive, and five pauses and resumes in one transfer
+    still complete it;
   - Shutdown during a Start ends the Start promptly;
   - nothing beside the spike's folder is removed, after a run or a failed Start, and a folder with
     foreign content is kept;
@@ -166,3 +166,5 @@ The spike is temporary by design, with an owner and a deadline: 034 deletes it. 
 
 - 2026-10-17, task 007: the spike app, its gate rows and the engine findings 9–14
   ([report](../verification/007-engine-api-lifecycle-spike.md), [ADR](../decisions/engine-lifecycle.md)).
+- 2026-10-18, task 010: the wake-up and `recoveries` replaced by the keep-alive interval
+  ([report](../verification/010-upload-stop-and-pause-spike.md)).

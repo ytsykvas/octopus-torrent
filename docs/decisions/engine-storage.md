@@ -237,8 +237,7 @@ anacrolix/torrent v1.61.0, classic IO, closed loopback swarm, `-race`.
   save folder; 19 the engine's constructors forget every piece silently, put a database in the user's folder
   and place files differently; 20 a mark is believed over a same-size rewrite; 21 HFS+ cannot be hashed on; 22
   a fresh transfer sometimes stands still (measured with temporary scratch tests that were deleted: 4.3%
-  with classic IO and 1.7% with mmap under `-race`, none without; the helper's wake-ups are logged by every
-  scenario); 23 an unreadable completion disallows download; 24 with part files off the engine still warns
+  with classic IO and 1.7% with mmap under `-race`, none without; cause and remedy in 010: a lost writer wake-up, bounded by a 1 s keep-alive); 23 an unreadable completion disallows download; 24 with part files off the engine still warns
   about a missing `.part` file, naming the local path.
 - **Source only, not executed:** bbolt `NoSync`; crawshaw opening in WAL; `Client.Close` not waiting for
   storage calls; `Set(true)` running before the payload flush.
@@ -259,7 +258,9 @@ anacrolix/torrent v1.61.0, classic IO, closed loopback swarm, `-race`.
   error whose rebuild is a separate action.
 - **030** receives `Missing`. **031/032** include `.part` names in deletion lists (finding 13), and the marks of
   a removed torrent are removed with its record (`DeleteMarks` is not built in 009).
-- **010** owns the product remedy for finding 22; the test helper `keepMoving` is not product code.
+- **010** found the cause of finding 22 (a lost writer wake-up) and its remedy: every client sets
+  `KeepAliveTimeout = transferswitch.WakeInterval` (1 s); the helper `keepMoving` is gone and the harness peers
+  use the interval ([global-upload-stop](global-upload-stop.md)).
 - **014** inherits `piece_completion` (`user_version` 1) as a schema that precedes its migration policy.
 - An engine update re-runs `internal/torrentengine/...`; every finding test that turns red is decided again,
   and this ADR is updated.
