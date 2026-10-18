@@ -405,7 +405,7 @@ child tests (findings 9 and 33).
 | Magnet trackers and DHT; a dialog left open for minutes on a real network | the loopback swarm only, every discovery path off | 022, 026 |
 | The engine's close racing a confirm with the real engine | reproduced at unit level only (`TestAnAttachInProgressBlocksNeitherCloseNorAnotherAttach`) | 018 |
 
-### Known residual
+### Known residual (closed by the follow-up below)
 
 Finding 33: the pinned engine applies a peer's metadata before `Fetch` can verify it. v2-only info
 under a v1 infohash panics an engine goroutine and ends the application; a 16 MiB info of tiny
@@ -423,6 +423,222 @@ release), as their notes say.
   link them, which the isolation step proves.
 - No `TODO`, skipped test, ignore directive or lowered threshold was added (gate: `escape hatches`
   pass).
-- Open for later tasks, not debt: finding 33 (018/022), the coordinator, its expiry and peer retry
+- Open for later tasks, not debt: finding 33 (018/022; closed since by the follow-up below, together with 34–39), the coordinator, its expiry and peer retry
   (022), the durable record (023), the folder dialog's collision report (020), info limits (019),
   trackers and DHT (022/026).
+
+## Follow-up: hostile metadata (findings 33 to 43)
+
+**Date:** 2026-10-18, branch `fix/finding-33-hostile-metadata`, after the merge of 011 (PR #14). The
+owner asked to close finding 33 now instead of in 018/022. anacrolix/torrent v1.61.0 is still the
+latest release on the module proxy, so the fix is ours.
+
+### Session plan (approved)
+
+- **The hook.** `setInfo` opens the torrent's storage with the parsed info before it sets the info,
+  builds the pieces or runs `onSetInfo` (`torrent.go:553-575`); a failed open makes
+  `maybeCompleteMetadata` discard the metadata (`torrent.go:1855-1868`). Every panic measured below
+  happens after the open, so `filestore.Deferred` refuses unsafe info there.
+- **`internal/torrentengine/infocheck`** (pure): `Check(info, Limits)`: `meta version` 0–2; a complete
+  v1 part with exactly the pieces its total needs; with `meta version 2`, a file tree identical to
+  the v1 files without pad files (order, path, length, offset) and the same piece count; at most
+  `Limits.Files` files and `Limits.Pieces` pieces. Errors `ErrV2Only`, `ErrInconsistentInfo`,
+  `ErrInfoTooLarge`, `ErrInvalidLimits`.
+- **`filestore.NewDeferred(admit)`**: the rule runs in `OpenTorrent`; a refused info is not recorded;
+  the first refusal is kept (`Refusal`) and closes `Refused`.
+- **`pendingmagnet`**: `Request.Limits`; `Fetch` selects on `Refused` and classifies a refusal after
+  a closed torrent and before the limit; `verify` drops its `HasV1` check (`ErrV2Only` moved to
+  `infocheck`).
+- **Test support:** `fixture.HostileInfos` (the measured shapes, built through `spec.dicts`) and
+  `swarm.MetadataPeer` (handshake, BEP 10, BEP 9 only), because an engine peer cannot serve info that
+  panics its own client.
+- Self-assessment 8/10; risks: an unmeasured shape could reach another engine bug; the engine's own
+  parse still runs before the hook; a hybrid whose v1 files differ in order or padding from its file
+  tree is refused (BEP 52 requires them to match).
+
+### Measurements (scratch, not committed)
+
+Each shape in a fresh child process: `SetInfoBytes` on a torrent added by the bytes' own SHA-1 with a
+`Deferred` storage, as the engine does when a peer's metadata is complete.
+
+| Shape | Pinned engine |
+|---|---|
+| `v2-single`, `v2-tree` info (v2-only) | panic `piece request order has {} and pending pieces has {0,1}` / `{1,2}` (finding 33) |
+| `meta version 2` with a v1 `length` and no `pieces`; with `length` 1 and one piece; with one piece only; `hybrid-tree` one piece short, with half its piece length, with its v1 part a 1-byte single file; `v1-tree` with `v2-tree`'s file tree | panic `slice bounds out of range` in `makePieces` (`torrent.go:450`, called from `setInfo` `:575`), every time (finding 34) |
+| `hybrid-tree` with a v1 file dropped, extra v1 pieces, another file tree; `v2-single` with too many v1 pieces; `meta version 2` without a file tree | applied without a panic in the short run; the two views disagree |
+| a consistent single-file hybrid built from `v2-single`; `v2-single` with `meta version 1`; honest `v1-*`, `hybrid-*` | applied |
+| `hybrid-tree` with a 5-byte pieces root; `hybrid-tree` whose root folder has a length of one piece, plus a trailing pad and one more v1 piece (found by the design review, committed as `HostileInfos` shapes) | panic in `FileTree.PiecesRootAsByteArray`; panic in `Piece.mustGetOnlyFile` (`5 != 1`) from `onSetInfo`; every time (finding 35) |
+
+Memory for a 17 MiB info of 600 000 one-byte files (in-process, `runtime.MemStats`):
+
+| Mode | Time in `SetInfoBytes` | Allocated | In use | In use after GC, torrent still added |
+|---|---|---|---|---|
+| accepted | 0.55–1.28 s | 2235 MiB | 573–611 MiB | 303 MiB |
+| refused in `OpenTorrent` | 0.37–0.90 s | 1072 MiB | 293 MiB | 128 MiB (the scratch storage kept the offered info; freed after `Drop`) |
+
+The first scratch version re-encoded file trees through `metainfo.Info` (which writes them wrongly)
+and called `DownloadAll` on a torrent without info; both produced false panics and were fixed before
+the table above was taken.
+
+### RED → GREEN
+
+| Step | Command | Result |
+|---|---|---|
+| `infocheck` | `go vet ./internal/torrentengine/infocheck` with `check_test.go` only | `fail` as expected: `undefined: Limits` |
+| | `go test ./internal/torrentengine/infocheck -coverprofile=…` | first `fail`: the limits test assumed 4 pieces for `v1-tree` (it has 3); then two branches uncovered (a file tree with a file more; a trailing pad piece), shapes added; `pass`, 100% |
+| `Deferred` admission | `go vet ./internal/torrentengine/filestore` | `fail` as expected: `too many arguments in call to NewDeferred` |
+| | `go test -race ./internal/torrentengine/filestore -run 'Deferred\|Attach\|Refused'` | `pass`; `deferred.go` 100% |
+| `fixture.HostileInfos` | `go vet ./internal/torrentengine/testutil/fixture` without `hostile.go` | `fail` as expected: `undefined: HostileInfos` |
+| | `go test ./internal/torrentengine/testutil/fixture -coverprofile=…` | `pass`, 100%; `TestCatalogMatchesTheCommittedTestdata` still passes after `spec.dicts` was split out of `build` |
+| `MetadataPeer` | `go vet ./internal/torrentengine/testutil/swarm` | `fail` as expected: `undefined: MetadataPeer` |
+| | `go test -race ./internal/torrentengine/testutil/swarm -run MetadataPeer -coverprofile=…` | `pass`; the decoder pool was uncovered until the raw test sent a piece message; then `metadatapeer.go` 100% |
+| Pinned 33–35 and the in-process rule | `go test ./internal/torrentengine -run 'PanicsOnHostileInfo\|TheAdmissionRule' -v` | `pass`: every shape panics a child; with the rule none panics and `Info()` stays nil |
+| Over the wire | `TestFetchRefusesHostileMetadataBeforeTheEngineAppliesIt` with the admission rule replaced by one that admits everything | `fail` as expected: the test binary died with `panic: piece request order has {} and pending pieces has {0,1}` |
+| | with `infocheck.Check` | `pass`: each shape ends with its refusal, the client is empty, no file, no payload; `pendingmagnet` 100% |
+| Finding 35 | `go test ./internal/torrentengine -run PanicsOnHostileInfo` with the two new `HostileInfos` shapes | `pass`: both panic a child on the pin |
+| | `go test ./internal/torrentengine/infocheck` with the first rule (engine accessors on the file tree) | `fail` as expected: `Check` itself panicked in `PiecesRootAsByteArray` |
+| | with the own walk (`walkTree`) | `pass`, 100%: every node shape, an offset overflow, a tree with more or fewer files |
+| Fuzz | `go test ./internal/torrentengine/infocheck -run Fuzz` (the seeds: the catalog and `HostileInfos`) | `pass`; the seeds run in every gate |
+
+### Revision 2: the engine applies only metadata we have vetted
+
+The security review of revision 1 reproduced four more ways for a peer to end or freeze the
+application over the wire (`swarm.MetadataPeer`, the btih the SHA-1 of its bytes); three run before
+`OpenTorrent`, so revision 1's hook could not reach them. Each was confirmed in the v1.61.0 source
+and is now pinned:
+
+| Finding | Shape | Where | Effect |
+|---|---|---|---|
+| 36 | `meta version 2` without a piece length | `validateInfo` (`misc.go:90`) divides by it, before `OpenTorrent` | `integer divide by zero` |
+| 37 | an unknown key nested 4M levels (8 MB) | the recursive decoder in `setInfoBytesLocked`, before anything else | `fatal error: stack overflow` (a child used 1.1 GB) |
+| 38 | a file tree nested 20 000 levels (100 KB) | `FileTree.UnmarshalBencode` parses every folder again per level, under the client lock | 18–30 s, 17 GiB allocated, every torrent frozen (review's measurement) |
+| 39 | piece length ≥ 2^32 | passes revision 1's `Check`; the request planner's uint32 index | `integer divide by zero` once a peer has every piece, after Confirm and on restart |
+
+**Session plan (approved, revision 3 after the owner asked for less complexity):**
+- `pendingmagnet.Gate`: `NewGate(cfg)` installs a `PeerConnReadExtensionMessage` callback (a thin
+  adapter over `onMessage`) that copies each `ut_metadata` data piece into the fetched torrent's
+  assembly and rewrites the message into `d8:msg_typei2ee` plus its old bytes, which the engine
+  reads as a reject and ignores. `gate.Fetch` replaces `Fetch`.
+- `infocheck.CheckBytes`: size (`Limits.MetadataBytes`), one iterative scan (syntax, depth ≤ 64,
+  file-tree decode work ≤ 16× its length), `Unmarshal`, `Check`. `Check` gains a piece length ≤ 2^30,
+  the chunk index bound, and no file tree outside `meta version 2`.
+- `Fetch`: assembly → SHA-1 → `CheckBytes` → `SetInfoBytes` → the applied info. `Deferred` keeps its
+  admission as the second guard; `Refused`/`Refusal` and the extra `select` case are gone (the
+  refusal is `SetInfoBytes`'s error). `pendingmagnet.ErrBadInfo` became `infocheck.ErrMalformed`.
+- Dropped as extra complexity, with reasons in the ADR: a depth scan of every extended message, a
+  reply hook in `MetadataPeer`, a "not installed" error, a `recover` around the admission.
+- Self-assessment 8/10; risks: the rewrite relies on engine internals (pinned by the wire test); the
+  first copy of a piece wins; the bounds may refuse a legitimate, very deep torrent.
+
+**Measured cost at the bounds** (M4, in-process, `runtime.MemStats`, scratch, not committed). The
+engine never parses a hostile info; `CheckBytes` does, outside the client lock:
+
+| Shape (16 MiB unless noted) | `CheckBytes` | Allocated | In use |
+|---|---|---|---|
+| chain of 8 folders over one 16 MiB string (work ~10×) | 36 ms | 560 MiB | — |
+| chain of 15 or 16 folders over one string (work 17×, 18×) | refused by the scan in < 10 µs | 0 | — |
+| 16 MiB of lists nested 62 deep | 315 ms | 328 MiB | — |
+| wide tree of tiny folders 8 deep (work 4.8×) | 2.5 s | 5.1 GiB | 1.8 GiB |
+| wide tree of tiny folders 29 deep (work 15.2×) | 4.4–4.5 s | 8.3 GiB | 2.2–2.4 GiB |
+| the same at 4 MiB | 1.1 s | 2.1 GiB | 0.5 GiB |
+| wide tree 31 deep (work 16.2×) | refused by the scan in 20 ms | 0 | — |
+
+The plan said to lower the bounds if the worst case cost more than the flat 550k-file v1 info
+(3 GiB, 1.2 s). It does, but lowering them does not help: the number of tree nodes drives the cost
+(work 4.8× still costs 5.1 GiB), and the cost is linear in the size. The knob is
+`Limits.MetadataBytes`, which 022 sets; the ADR records the numbers.
+
+### RED → GREEN (revision 2)
+
+| Step | Command | Result |
+|---|---|---|
+| `Check` index and tree rules | `go test ./internal/torrentengine/infocheck -run 'EnginesIndex\|OutsideMetaVersion2'` | `fail` as expected: piece lengths 2^30+1 and 2^32, one chunk past the index and a v1 file tree admitted; then `pass` |
+| `CheckBytes` | `go vet ./internal/torrentengine/infocheck` | `fail` as expected: `undefined: CheckBytes`; then `pass`, 100% (two scanner branches needed sharper test bytes) |
+| Findings 36, 37 in `HostileInfos` | `go test ./internal/torrentengine/testutil/fixture` | `pass`, 100%; the finding-37 shape is checked from its bytes (decoding it would overflow the test's stack) |
+| Gate | `go vet ./internal/torrentengine/pendingmagnet` | `fail` as expected: `undefined: Gate`; then the unit tests `pass` |
+| Over the wire | the hostile test with the rewrite disabled | `fail` as expected: `panic: runtime error: integer divide by zero` in `runHandshookConn` (finding 36) killed the test binary |
+| | with the gate | `pass` for every shape (33–39, the size limits); `pendingmagnet` 100% after an untestable error refinement was dropped |
+| Pins 36–39 | `go test ./internal/torrentengine -run 'PanicsOnHostileInfo\|QuadraticWork\|PastItsRequestIndex'` | 39 first `fail`ed: the child wanted no piece, so nothing was planned; with `DownloadAll` it panics; then `pass` |
+| Fuzz, revision 1 | `go test ./internal/torrentengine/infocheck -run '^$' -fuzz '^FuzzCheck$' -fuzztime=10m -parallel 8` | `pass`: 9 595 861 runs, 152 interesting inputs, no failure; 28 of the 134 cached interesting inputs passed `Check` and were applied by the engine (2 with `meta version 2`) |
+| Fuzz, revision 2 | `go test ./internal/torrentengine/infocheck -run '^$' -fuzz '^FuzzCheckBytes$' -fuzztime=10m -parallel 8` | `pass`: 16 889 309 runs, 94 interesting inputs, no failure; 22 of the 71 cached interesting inputs passed `CheckBytes` and were applied by the engine (3 with `meta version 2`) |
+| Fuzz, revision 3 | the same, after the scan and `Check` grew their bounds | `pass`: 21 176 438 runs, 130 interesting inputs, no failure |
+| Full suites | `go test -race -count=1 -covermode=atomic ./internal/torrentengine/...`, again with `-race`, once without | `pass` all three (internal/torrentengine 94–101 s, filestore 42–47 s, pendingmagnet 16.6–18.5 s); every package 100% but `swarm`'s `MainClassicIO`, which other packages' runs cover |
+| Repeats | the pins 20× with `-race`; the hostile, liar and gate tests 10× with `-race` | `pass` |
+
+### Revision 3: the whole peer-message surface
+
+A second security review of revision 2 reproduced four more one-message kills or freezes over the
+wire, three outside the diff, all at the same "the engine handles a peer's message" boundary:
+
+| Finding | Shape | Effect |
+|---|---|---|
+| 40 | a hybrid with many small files | the engine walks the whole file tree per piece per peer on `onSetInfo`; 50 000 files froze it 43 s |
+| 41 | a `ut_metadata` request for a negative piece, after a size is set | `index out of range` / `slice bounds out of range` |
+| 42 | the extended handshake's `metadata_size` (64-bit, 32-bit check) | allocation of up to the value: 4.9 GiB at 2^32, OOM at 2^47, `makeslice` panic at 2^62 |
+| 43 | a v2 `Hashes`/`HashRequest` message | `nil pointer dereference` from any peer |
+
+The owner chose to close the whole surface in this branch. The gate grew from one callback to three:
+- `PeerConnReadExtensionMessage`: every extended message is screened with `infocheck.CheckMessage`
+  (the info scan: depth, a 19-digit integer cap for N2, and the tree-is-a-dict rule for M2); a
+  `ut_metadata` request for an impossible piece becomes a reject (41);
+- `ReadExtendedHandshake`: a `metadata_size` over 16 MiB is cleared (42);
+- `ReadMessage`: `Hashes`/`HashRequest`/`HashReject` become keep-alives (43).
+
+`infocheck.Check` gained a pieces × tree-nodes bound for `meta version 2` (40) and the limits clamp
+to 16 MiB. The assembly now names the peers that sent each piece, so a refusal is a `PeerError` the
+coordinator can act on (M3). Pins: `TestPinnedEnginePanicsOnAPeersMessage` (a child per 41–43);
+`TestFetchSurvivesAPeersCrashingMessages` and `TestFetchNamesThePeersThatSentRefusedMetadata` over
+the wire. The second review's M2 (list-wrapping bypass), N2 (big-integer decode), L5 (stale doc) and
+the cost-model errors are fixed; its "confirmed safe" set (the rewrite is byte-safe, no parser
+differential, no lock inversion, traversal refused at Confirm) still holds.
+
+A third review of this revision confirmed 40–43 and all earlier findings closed over the wire, and
+found that revision 2's "scan every extended message" broke `ut_holepunch` (binary, not bencode) and
+that the engine keeps unbounded per-name (handshake extensions) and per-length (requests) counters a
+peer can grow, plus the per-peer multiplier on finding 40 (a sybil swarm freezing the client ~40 s).
+The gate now skips the scan for `ut_holepunch` and clears it (the engine refuses it and drops the
+peer, which also closes the pre-existing panic answering one from a non-advertising peer), prunes a
+handshake to ut_metadata and ut_pex, caps request lengths, and the finding-40 bound was lowered to
+`1<<20` to allow for the engine's full peer set — the owner chose this hard bound now over deferring
+the sybil multiplier to 022, which refuses a hybrid of more than about a thousand files. A refusal
+of assembled metadata is a `PeerError` naming the peers' IPs. The review's remaining notes (the
+attribution blames every contributor, not only the liar; doc wording) are recorded for 022; its
+"confirmed safe" set (a 399-variant message sweep in three states, seeding, the rewrite and
+`CheckMessage`-vs-engine fuzz, no lock inversion) holds for this revision.
+
+### Review
+
+`/branch-review` (code-reviewer, tech-lead, security-reviewer) before the commit:
+
+| Finding | Fix |
+|---|---|
+| tech-lead: `Check` called `Info.UpvertedFilesIter` and `Info.NumPieces`, which trust the file tree: a short pieces root panics inside `Check`, and a folder with a length makes the engine's counts agree while a piece lies in no file (finding 35) | `walkTree`: an own walk in the engine's order that checks each node first and calls no engine method on the tree; both shapes in `HostileInfos`, pinned |
+| tech-lead: collecting the v2 files had no bound | the walk compares each file with the v1 file of the same index and stops at the first that differs; a path is a chain to its parent, so a deep tree costs one link per node |
+| tech-lead: only measured shapes are proven | `FuzzCheck` (the engine applies every admitted input through a `Deferred`); the ADR claims the measured shapes plus the fuzz budget, not more |
+| tech-lead: "discarded" overstated what the engine keeps | the ADR names what the engine has kept before the open and why a refusal must stay terminal |
+| tech-lead: a refusal may come from a liar on a legitimate magnet | ADR, feature doc and 022 say so: retry without the peer, never "unsupported torrent" |
+| code-reviewer: long lines, a name, the sum overflow untested, peer paths in error text, the 022 note | wrapped and renamed; `TestATotalThatOverflowsIsRefusedWhereItOverflows`; errors carry indices and lengths only; 022 note added |
+| security-reviewer C1–C3: three crash or freeze routes before `OpenTorrent` (findings 36–38) | revision 2: the gate, `CheckBytes` |
+| security-reviewer C4: no upper bound on the piece length (finding 39) | `Check`: piece length ≤ 2^30 and the chunk index bound |
+| security-reviewer M1: the documents said "closed" | rewritten around the gate, with the measured remaining cost and what is not covered |
+| security-reviewer L1: a file tree on a v1 info is admitted and kept | refused |
+| security-reviewer L2: a `recover` around the admission | not done: `CheckBytes` runs first, outside the lock, where a recover would not help; fuzzing is the defence |
+| security-reviewer L3: the total size is unbounded | the chunk index bound caps it (64 TiB at most) |
+| security-reviewer L4: the memory figures said 17 MiB | the 16 MiB cap and ~550k files; the revision-2 table |
+
+### Refactoring and debt (follow-up)
+
+- One entry point for both ways in: `infocheck.CheckBytes` serves magnets now and `.torrent` files
+  from 019. The gate is the only new engine seam, a callback the engine offers for this purpose; its
+  logic (`onMessage`, `assembly`) is tested without the engine.
+- `Fetch` became a `Gate` method and lost a `select` case and the `Deferred` refusal API; `verify`
+  split into `vet` (before the engine) and `sameInfo` (after).
+- The in-process admission test was removed: its claim moved to the `CheckBytes` and wire tests, and
+  its `SetInfoBytes` would now crash on findings 36 and 37.
+- `spec.dicts` split out of `spec.build`, so hostile shapes reuse the catalog's specs; the catalog
+  testdata is unchanged (`TestCatalogMatchesTheCommittedTestdata`).
+- `childDir` now serves findings 9 and 33–35; `swarm.MetadataPeer` is test support only and stays out
+  of the product binary (`product isolation`).
+- No `TODO`, skipped test, ignore directive or lowered threshold. Open for later tasks, not debt: the
+  product limits (019/022), the retry without a lying peer (022), and the engine's own parse before
+  the hook (documented cost; removing it needs our own BEP 9 handling).

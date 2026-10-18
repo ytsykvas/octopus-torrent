@@ -90,6 +90,8 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 
 **Checks:** `go test -race -count=1 ./internal/torrentengine/...` `pass` twice, without `-race` `pass` once; `go tool devtool check` `GATE PASSED`. Not run: the `.app` scenario (owner decision, 022), library records (023), trackers and DHT on a real network (022/026). Evidence: [report 011](../../docs/verification/011-magnet-metadata-storage-spike.md).
 
-**Limitations:** finding 33 is a known residual. The pinned engine applies a peer's metadata before it can be verified; v2-only info under a v1 infohash panics the engine and ends the application, and a 16 MiB info costs about 600 MiB. The product links none of this code; 018/022 must close it before magnets ship.
+**Follow-up (2026-10-18):** findings 33–43 are closed: the engine never assembles a peer's metadata (`pendingmagnet.Gate`), and it parses only bytes `infocheck.CheckBytes` admitted; see the report's follow-up section.
+
+**Limitations (as of the handoff, closed by the follow-up):** finding 33 was a known residual. The pinned engine applies a peer's metadata before it can be verified; v2-only info under a v1 infohash panics the engine and ends the application, and a 16 MiB info costs about 600 MiB. The product links none of this code; 018/022 must close it before magnets ship.
 
 **Next task:** the README's next tasks: [012](012-macos-trash-and-path-spike.md), [013](013-transfer-policy-state-machine.md), [014](014-sqlite-schema-migrations.md), [017](017-local-diagnostics-privacy.md), [035](035-react-bridge-state-resync.md).

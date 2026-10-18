@@ -675,6 +675,18 @@ func TestAPeerTakesItsKeepAliveTimeoutFromTheCaller(t *testing.T) {
 	}
 }
 
+// Configure runs last, so it sees, and may change, the configuration the peer built.
+func TestAPeerLetsTheCallerConfigureTheEngineLast(t *testing.T) {
+	var seen *torrent.ClientConfig
+	p := peer(t, Options{KeepAliveTimeout: 3 * time.Second, Configure: func(cfg *torrent.ClientConfig) {
+		seen = cfg
+		cfg.Callbacks.PeerConnReadExtensionMessage = append(cfg.Callbacks.PeerConnReadExtensionMessage, func(torrent.PeerConnReadExtensionMessageEvent) {})
+	}})
+	if seen != p.config || seen.KeepAliveTimeout != 3*time.Second || len(p.config.Callbacks.PeerConnReadExtensionMessage) != 1 {
+		t.Errorf("Configure saw %p (the peer's is %p) with keep-alive %v", seen, p.config, seen.KeepAliveTimeout)
+	}
+}
+
 func TestPeerInfosTrustEveryListenAddressOfEveryPeer(t *testing.T) {
 	a, b := peer(t, Options{}), peer(t, Options{})
 	got := PeerInfos(a, b)

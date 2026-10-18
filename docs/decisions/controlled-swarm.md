@@ -64,6 +64,10 @@ anacrolix/torrent. The open questions were:
   product's keep-alive interval ([global-upload-stop](global-upload-stop.md)). `PeerInfos` returns
   the trusted entries `Connect` gives, for code that takes peers as a list, and `Peer.Lie` serves
   another torrent's info under an infohash, as a lying peer does (finding 11; task 011).
+  `MetadataPeer` speaks only the handshake, BEP 10 and BEP 9 and serves fixed info bytes, for info
+  that an engine peer cannot serve because applying it panics the engine (findings 33–43;
+  `fixture.HostileInfos`); with `HaveAll` it also claims every piece. `Options.Configure` lets a
+  test install what the product installs in the engine configuration.
 - **Formats.** Transfers are verified for v1 and hybrid. v2-only torrents are parse-only on the pin:
   adding one panics.
 - **Engine limitations.** Limitations 1–4, 7 and 8 below are asserted by tests, so a version that fixes

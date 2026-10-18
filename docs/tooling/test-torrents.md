@@ -76,15 +76,24 @@ bytes in every format.
 - a BEP 52 single file sits at `<dir>/<name>/<name>`;
 - a tree sits under `<dir>/<root>/`.
 
+`fixture.HostileInfos()` returns info dictionaries that panic the pinned engine when applied
+(findings 33–37: v2-only info under a v1 infohash; a `meta version 2` info whose file tree needs
+more pieces than `pieces` holds; a file tree node the engine reads unchecked: a short pieces root,
+a folder with a length), seven shapes, each with its finding and a part of the panic message. They are
+built from the catalog's specs (`spec.dicts`) and are never `.torrent` fixtures, because adding one
+panics the test's own client. Tests serve them through `swarm.MetadataPeer` to prove they are
+refused before the engine applies them.
+
 ### Swarm API
 
 | Function | Behavior |
 |---|---|
-| `NewPeer(dir, Options{RateLimit})` | A client on `127.0.0.1:0`. It uses TCP only, has every discovery path off, keeps its storage in `dir` with in-memory piece completion, captures its log and records every peer address. Tripwires back the switches: only loopback addresses pass the IP block list, and HTTP, tracker and DNS paths are refused and recorded in `Tripped()`. |
+| `NewPeer(dir, Options{RateLimit})` | A client on `127.0.0.1:0`. It uses TCP only, has every discovery path off, keeps its storage in `dir` with in-memory piece completion, captures its log and records every peer address. Tripwires back the switches: only loopback addresses pass the IP block list, and HTTP, tracker and DNS paths are refused and recorded in `Tripped()`. `Options.Configure` changes the engine configuration last, the way a test installs what the product installs (pendingmagnet's gate). |
 | `Peer.Seed(ctx, mi)` | Adds the torrent, verifies the data and waits until no piece is still being checked. Missing pieces come back as `*IncompleteError` together with the torrent. |
 | `Peer.Leech(mi)`, `Peer.AddInfohash(h)` | Adds the torrent and downloads all of it; the infohash form waits for metainfo, as a magnet does. |
 | `Peer.Add(mi)` | Adds the torrent; an engine panic is returned as an error. A metainfo that names a tracker, web seed or DHT node is refused. |
 | `PeerInfos(peers...)` | The same trusted entries as a list, for code that takes its peers as an argument (011). |
+| `ServeMetadata(h, infoBytes, MetadataOptions{HaveAll})` → `*MetadataPeer` | A loopback peer that speaks only the handshake, BEP 10 and BEP 9 and serves fixed info bytes for `h`: what a hostile peer does with info an engine peer cannot serve without panicking. `HaveAll` also sends a full bitfield and an unchoke, so the engine plans requests to it (finding 39). `Addr`, `PeerInfo` (trusted), `Served` (pieces sent), `Close` (idempotent; closes every connection). Plain text only; the engine's dial falls back to it (011, findings 33–43). `MetadataOptions` also lets it lie about the metadata size and send its own messages, for the peer-message findings 41–43. |
 | `Peer.Lie(ctx, h, infoBytes)` | A torrent under infohash `h` with another torrent's info, which the engine serves to a magnet leecher as the metadata of `h` (finding 11). Returns once its pieces are checked: a torrent still checking refuses every connection. |
 | `Connect(t, peers...)` | The only peer source. Peers are trusted: they share 127.0.0.1 and the engine bans by IP, so a peer that sends bad data has its piece re-requested instead of being banned. |
 | `WaitInfo`, `WaitComplete` | Bounded by `ctx`. On expiry: `"no metainfo: …"`, or an `*IncompleteError` wrapping `ctx.Err()`. |
@@ -138,17 +147,19 @@ Each wait has its own limit:
 - `payload.go`: content, `WritePayload`, `CorruptPiece`;
 - `generate.go`: v1, v2 and hybrid;
 - `catalog.go`: `Fixture`, `All`, `Named`, `ParseStage`, `WriteCatalog`;
-- `specs.go`: the catalog.
+- `specs.go`: the catalog;
+- `hostile.go`: `HostileInfos`.
 
 **`swarm`:**
 - `peer.go`;
+- `metadatapeer.go` (`MetadataPeer`);
 - `wait.go`;
 - `counters.go`;
 - `diagnostics.go`;
 - `testmain.go` (`Main`).
 
-The test seams are unexported package variables: `newClient`, `pieceBusy`, and `mainOutput` and
-`mainLimit` for `Main`.
+The test seams are unexported package variables: `newClient`, `listen` (`MetadataPeer`),
+`pieceBusy`, and `mainOutput` and `mainLimit` for `Main`.
 
 ## Checks and 100% coverage
 
@@ -184,6 +195,9 @@ Each engine limitation is a named test, not a skipped one. The tracked items are
   `engine` stages and the tracked limitations, then update `fixture.Engine`.
 
 ## Change history and evidence
+
+- 2026-10-18, findings 33–43: `fixture.HostileInfos`, `swarm.MetadataPeer` (`HaveAll`, `MetadataSize`, `Attack`), `Peer.Lie(ctx, …)`
+  ([report 011](../verification/011-magnet-metadata-storage-spike.md)).
 
 - 2026-10-17, task 009: `swarm.MainClassicIO`, `Options.DefaultStorage` and `DataDir`; the engine's file
   IO is classic in `internal/torrentengine/filestore`. Disk images for volume scenarios are

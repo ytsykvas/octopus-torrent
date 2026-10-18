@@ -37,7 +37,9 @@ type segment struct {
 	length int64
 }
 
-func (s spec) build() Fixture {
+// dicts returns the fixture with its files and the info dictionary and piece layers before they are
+// changed or encoded.
+func (s spec) dicts() (Fixture, map[string]any, map[string]string) {
 	fx := Fixture{Name: s.name, Purpose: s.purpose, Format: s.format, PieceLength: s.pieceLength, Engine: s.engine, set: s.set, root: s.root}
 	for _, e := range s.files {
 		path := strings.Split(e.path, "/")
@@ -64,6 +66,11 @@ func (s spec) build() Fixture {
 	if s.format != V1 {
 		fx.addV2(info, layers)
 	}
+	return fx, info, layers
+}
+
+func (s spec) build() Fixture {
+	fx, info, layers := s.dicts()
 	if s.mutate != nil {
 		s.mutate(info, layers)
 		fx.Files = nil
