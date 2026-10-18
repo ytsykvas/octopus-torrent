@@ -61,6 +61,7 @@ internal/torrentengine/         interface and anacrolix adapter
 internal/torrentengine/testutil/ fixture (own v1/v2/hybrid test torrents), swarm (closed loopback swarm) (exists, 006)
 internal/torrentengine/          engine contract tests on the pinned version (exist, 007); the adapter comes in 018
 internal/torrentengine/transferswitch/  confirmed upload stop, resume without a stall, the writer wake bound (prototype from 010; 018 moves it into the adapter)
+internal/torrentengine/pendingmagnet/   a magnet's metadata without payload, confirmed into the chosen folder in place (prototype from 011; 018/022 build on it)
 cmd/engine-spike/, internal/enginespike/, frontend/src/spike/   temporary EngineSpike.app (exists, 007; deleted by 034)
 internal/library/               SQLite: Open/Write/Read and error kinds (008), the piece-completion marks (009); repositories and migrations
 internal/torrentengine/filestore/   the engine storage: guard, marks completion, session record (prototype from 009; 018 builds on it)
@@ -149,7 +150,7 @@ On startup: open and migrate the DB → load records → check folders → add t
 
 The button, drag-and-drop, Finder, magnet and watch folder all enter through ImportCoordinator. Before a library record is created, count/format, metadata limits, paths, symlinks, collisions and full v1/v2 identities are checked. Import is confirmed transactionally; a repeated source opens the existing record.
 
-A `.torrent` can be parsed before an active engine record exists. A magnet needs a pending metadata-only scenario without payload and without an endless waiting goroutine. The temporary folder belongs to a specific pendingImportID. On confirmation a record is created with the final storage and folder; we do not assume that storage can be changed with an ordinary MergeSpec. Cancellation cleans up only known temporary artifacts and closes the pending engine object. This process is verified before all screens are implemented.
+A `.torrent` can be parsed before an active engine record exists. A magnet needs a pending metadata-only scenario without payload and without an endless waiting goroutine. ~~The temporary folder belongs to a specific pendingImportID.~~ Since 011 there is no temporary folder: the pending torrent's storage creates nothing and refuses every piece operation, the metadata is hashed against the requested infohash, and on confirmation the chosen folder's storage is attached in place, with no Drop and no second add ([magnet-pending-storage](../docs/decisions/magnet-pending-storage.md)); storage is never changed through MergeSpec. Cancellation drops only the pending engine object of that pendingImportID. This process is verified before all screens are implemented.
 
 The UI builds the tree from validated paths. Before adding, files/folders are selected with checkboxes; after adding, play/pause changes wanted. Pausing a folder excludes all descendants, play in a partial state selects everything; collapsing does not change policy. A child row is indented to the right together with its button and progress.
 

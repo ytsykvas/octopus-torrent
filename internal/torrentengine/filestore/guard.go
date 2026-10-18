@@ -33,6 +33,8 @@ var (
 	// ErrUnsafePath is returned for a torrent whose path leads through a symlink, or onto an existing
 	// file that the engine would truncate.
 	ErrUnsafePath = errors.New("a path of the torrent is not safe to write")
+	// ErrPathExists is returned by CheckNew for a save folder that already holds a path of the torrent.
+	ErrPathExists = errors.New("the save folder already holds a path of the torrent")
 )
 
 // unsupportedFileSystems are the file systems on which the engine's classic file IO cannot hash a

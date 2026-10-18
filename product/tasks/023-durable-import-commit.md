@@ -61,6 +61,8 @@ Creating the entry, the storage and the engine object passes through several sep
 
 **From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): in the same transaction that commits the import, store the torrent's record for the rehash rule (initially none, so the first start verifies) and the "not clean" marker. The marks of the new torrent are advisory and live in `piece-completion.sqlite`, not in the library.
 
+**From 011** ([magnet-pending-storage](../../docs/decisions/magnet-pending-storage.md), [feature](../../docs/app/magnet-metadata.md)): persist the record from `Pending.InfoBytes()` before `Confirm` allows download; `Confirm` with `Download=false` keeps the torrent attached but idle until the record is durable. The attach already creates the zero-length files and their folders in the chosen folder: a failed record write must drop the torrent and remove exactly those files (DEL rules: an explicit list). Start the download afterwards through `transferswitch.ResumeDownload`, like every resume (finding 25 cannot apply to a torrent that never requested, but one rule is simpler). Existing library records were `not_run` in 011 (no store): prove here that a cancelled import changes none.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

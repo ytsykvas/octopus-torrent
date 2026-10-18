@@ -417,6 +417,17 @@ func TestErrorsAreReturnedNotHidden(t *testing.T) {
 			t.Errorf("Seed while pieces stay busy = %v", err)
 		}
 	})
+	t.Run("a lie whose pieces stay busy", func(t *testing.T) {
+		p := peer(t, Options{})
+		replace(t, &pieceBusy, func(*torrent.Torrent, int) bool { return true })
+		want, other := metaInfo(t, named(t, "v1-single")), metaInfo(t, named(t, "v1-tree"))
+		if _, err := p.Lie(deadline(t, 200*time.Millisecond), want.HashInfoBytes(), other.InfoBytes); err == nil || !strings.Contains(err.Error(), "still being checked") {
+			t.Errorf("Lie while pieces stay busy = %v", err)
+		}
+		if _, ok := p.Client().Torrent(want.HashInfoBytes()); ok {
+			t.Error("the lie that never settled was left in the client")
+		}
+	})
 	t.Run("the engine refuses or cannot verify", func(t *testing.T) {
 		p := peer(t, Options{RateLimit: rateLimit})
 		if _, err := p.Seed(deadline(t, transferLimit), metaInfo(t, named(t, "v2-single"))); err == nil {
@@ -661,5 +672,54 @@ func TestAPeerTakesItsKeepAliveTimeoutFromTheCaller(t *testing.T) {
 	}
 	if got := peer(t, Options{KeepAliveTimeout: 3 * time.Second}).config.KeepAliveTimeout; got != 3*time.Second {
 		t.Errorf("KeepAliveTimeout = %v, want 3s", got)
+	}
+}
+
+func TestPeerInfosTrustEveryListenAddressOfEveryPeer(t *testing.T) {
+	a, b := peer(t, Options{}), peer(t, Options{})
+	got := PeerInfos(a, b)
+	want := slices.Concat(a.ListenAddrs(), b.ListenAddrs())
+	if len(got) != len(want) || len(got) == 0 {
+		t.Fatalf("PeerInfos gave %d entries, want %d", len(got), len(want))
+	}
+	for i, info := range got {
+		if info.Addr.String() != want[i].String() || !info.Trusted {
+			t.Errorf("entry %d = %+v, want trusted %v", i, info, want[i])
+		}
+	}
+	if PeerInfos() != nil {
+		t.Error("PeerInfos of no peer is not nil")
+	}
+}
+
+func TestALiarServesAnotherTorrentsInfoUnderTheRequestedInfohash(t *testing.T) {
+	want, other := metaInfo(t, named(t, "v1-single")), metaInfo(t, named(t, "v1-tree"))
+	liar := peer(t, Options{})
+	lie, err := liar.Lie(deadline(t, transferLimit), want.HashInfoBytes(), other.InfoBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lie.Info().Name != "tree" {
+		t.Errorf("the lie holds %q, want the other torrent's info", lie.Info().Name)
+	}
+	leecher := peer(t, Options{})
+	lt := leecher.AddInfohash(want.HashInfoBytes())
+	Connect(lt, liar)
+	if err := WaitInfo(deadline(t, transferLimit), lt); err != nil || lt.Info().Name != "tree" {
+		t.Fatalf("a magnet leecher got %v, %v; want the liar's info", lt.Info(), err)
+	}
+	if _, err := liar.Lie(deadline(t, transferLimit), other.HashInfoBytes(), []byte("not bencode")); err == nil {
+		t.Error("a lie that is not an info dictionary was accepted")
+	}
+	if _, ok := liar.Client().Torrent(other.HashInfoBytes()); ok {
+		t.Error("the failed lie was left in the client")
+	}
+	if _, err := liar.Lie(deadline(t, transferLimit), want.HashInfoBytes(), other.InfoBytes); err == nil {
+		t.Error("a second lie under the same infohash was accepted")
+	}
+	select {
+	case <-lie.Closed():
+		t.Error("the refused second lie dropped the first one")
+	default:
 	}
 }

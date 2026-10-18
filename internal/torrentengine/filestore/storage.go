@@ -59,14 +59,27 @@ func Layout(saveRoot string, info *metainfo.Info) (contentRoot string, paths []s
 	} else if contentRoot == saveRoot {
 		return "", nil, fmt.Errorf("the torrent's name %q makes its folder the save folder", info.BestName())
 	}
+	// A folder torrent's files stay strictly inside its own folder: a path that left it would land
+	// beside the user's other files in the save folder, and a file at the folder's own path would
+	// replace it. A single file is the content root itself, inside the save folder.
+	base := saveRoot
+	if info.IsDir() {
+		base = contentRoot
+	}
 	for _, f := range info.UpvertedFiles() {
 		path := filepath.Join(saveRoot, filePath(storage.FilePathMakerOpts{Info: info, File: &f}))
-		if rel, relErr := filepath.Rel(saveRoot, path); relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return "", nil, fmt.Errorf("the file %q would be written outside the save folder %q", path, saveRoot)
+		if !strictlyInside(base, path) {
+			return "", nil, fmt.Errorf("the file %q would be written outside the torrent's folder %q", path, base)
 		}
 		paths = append(paths, path)
 	}
 	return contentRoot, paths, nil
+}
+
+// strictlyInside reports whether the clean path lies below base and is not base itself.
+func strictlyInside(base, path string) bool {
+	rel, err := filepath.Rel(base, path)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // Ranges is Layout with the pieces every file covers: what files.Decide needs as the torrent's own

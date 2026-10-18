@@ -3,8 +3,8 @@
 **Status:** `implemented` (prototype: tests and a test harness; the product does not link it before [018](../../product/tasks/018-torrent-engine-adapter.md))  
 **Requirements:** `SET-02`, `TR-05`, `ADD-04`, `DEL-01`, `AI-05`  
 **Related tasks:** [009](../../product/tasks/009-storage-and-completion-spike.md); next [018](../../product/tasks/018-torrent-engine-adapter.md), [020](../../product/tasks/020-destination-filesystem-service.md), [028](../../product/tasks/028-application-startup-quit.md), [029](../../product/tasks/029-restore-recheck-reconciliation.md), [030](../../product/tasks/030-relink-missing-payload.md)  
-**Last verified version:** branch `task/009-storage-completion`  
-**Last updated:** 2026-10-17
+**Last verified version:** branch `task/011-magnet-metadata`  
+**Last updated:** 2026-10-18
 
 ## Goal and behavior
 
@@ -59,9 +59,11 @@ The decision and the alternatives are in the ADR [engine-storage](../decisions/e
 | `filestore.OpenCompletion`, `NewCompletion` | `storage.PieceCompletion`; reads a torrent once, with no lock held; batches of ≤ 256 rows every 250 ms; sticky `Err`; `Persistent()` false; `Distrust`, `Unresolved`, `Closed`; `Close` flushes. `OpenCompletion` opens `<dataDir>/` + `CompletionFile` (`piece-completion.sqlite`) |
 | `filestore.Session` | The storage problems of one run: `Fail` records one (at most 100 are kept, `Dropped` counts the rest), `Problems` returns a copy, `Clean` is true only with none |
 | `filestore.NewTorrentStorage(saveRoot, *Completion, *Session, logger)` | A guarded engine storage for one torrent, with our marks: `Seal` needs them closed and keeps files with unresolved pieces out of the record. A relative, unclean, missing or non-folder path, and an HFS+ folder, are errors. A nil logger discards the engine's logs |
+| `TorrentStorage.CheckNew(info)` | For a new import: refuses a save folder that already holds a path of the torrent (`ErrPathExists`), because its pieces are cached as not complete and the engine would overwrite the file (011) |
 | `TorrentStorage.Stop`, `Reads`, `Baseline`, `Seal` | Refuse and await operations (a timed-out `Stop` makes the session unclean); count piece reads; keep the files an earlier run left trusted or missing; sync and return the record (after a drained `Stop` and closed marks) |
-| `filestore.Layout`, `Ranges` | The content root and every file path by the engine's rule; with the pieces each file covers |
+| `filestore.Layout`, `Ranges` | The content root and every file path by the engine's rule (a folder torrent's files strictly inside its folder, 011); with the pieces each file covers |
 | `filestore.Refusing()` | The client's default storage |
+| `filestore.NewDeferred()` | The storage of a magnet waiting for confirmation: creates nothing, refuses and counts every piece operation until `Attach(ctx, final)`, which opens the final storage outside its lock (011, [magnet metadata](magnet-metadata.md)) |
 | `files.Record`, `FileState`, `FileRange` | What a run leaves (clean flag, file system, device, one `FileState` per file: present and its fingerprint); a file of the torrent with the pieces it covers, `[First, End)`, always taken from the torrent |
 | `files.Decide`, `files.Decision`, `Distrusted` | The rule, given the torrent's own layout; `VerifyAll`, `VerifyPieces`, `Trusted`, `Missing`; `Distrusted(pieces)` is the list to pass to `Completion.Distrust` |
 | `files.Stat`, `Fingerprint`, `IdentityOf`, `Identity`, `FileSystem`, `Probe`, `System` | Fingerprint of a file (size, mtime, ctime, inode); identity of a folder or volume root (device, inode, creation time); the file system type; the seam and its real implementation |
@@ -86,7 +88,7 @@ The scenarios, all on the real engine in a closed loopback swarm:
 `internal/torrentengine/filestore`: `completion.go` (marks), `guard.go` (`TorrentStorage`, `Stop`, the
 guarded pieces), `track.go` (which files were written, verified or changed from outside), `seal.go`
 (`Baseline`, `Seal`, the payload fsync), `safepath.go` (symlink and truncation refusals), `storage.go`
-(`NewTorrentStorage`, `Layout`, `Ranges`, `Refusing`), `session.go`. `internal/files`: `fingerprint.go`,
+(`NewTorrentStorage`, `Layout`, `Ranges`, `Refusing`), `deferred.go` (`Deferred`, 011), `session.go`. `internal/files`: `fingerprint.go`,
 `trust.go`. `internal/library/completion.go`. Test support: `swarm.MainClassicIO`, `swarm.Options`
 (`DefaultStorage`, `DataDir`), `internal/testutil/volume`.
 
@@ -135,3 +137,4 @@ are advisory and can always be rebuilt by hashing.
 | Date | Change | Evidence |
 |---|---|---|
 | 2026-10-17 | Created by task 009 | [report 009](../verification/009-storage-and-completion-spike.md), [ADR](../decisions/engine-storage.md) |
+| 2026-10-18 | 011: `Deferred`; `CheckNew`; `Layout` keeps a folder torrent's files inside its folder | [report 011](../verification/011-magnet-metadata-storage-spike.md) |

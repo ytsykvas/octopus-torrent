@@ -32,6 +32,10 @@ the ones marked "source" were read and not executed.
   `internal/torrentengine/filestore` is the prototype 018 builds on. A storage serves one torrent.
 - **The engine client's default storage refuses** (`filestore.Refusing`), so a torrent added without a
   chosen folder writes nothing. `DataDir` is always set, to the application's data folder.
+- **A magnet waiting for confirmation has a `filestore.Deferred`** (011,
+  [magnet-pending-storage](magnet-pending-storage.md)): it opens with no file, refuses every piece
+  operation until `Attach` opens the chosen folder's `TorrentStorage` with the same metadata, and is
+  never a `TorrentStorage` of the user's folder before that.
 - **Add with `AddTorrentOpts{InfoHash, Storage}` and then `SetInfoBytes`.** `AddTorrentOpt` drops the
   storage error: with the info in its options it neither sets the info nor reports anything (test,
   finding 15). `SetInfoBytes` returns the error. How often the engine opens a storage is not something to
@@ -39,7 +43,9 @@ the ones marked "source" were read and not executed.
 - **Paths.** One rule, `filestore.Layout`, shared with the storage itself: `<saveRoot>/<name>` for a v1
   single-file torrent; `<saveRoot>/<name>/<path…>` for a v1 multi-file torrent; `<saveRoot>/<name>/<name>`
   for a single-file v2 or hybrid torrent; no pad files. A path that leaves `saveRoot`, and a torrent
-  whose name makes its folder the save folder itself (`""`, `.`, `a/..`), are errors. Tests prove the
+  whose name makes its folder the save folder itself (`""`, `.`, `a/..`), are errors. Since 011 a
+  folder torrent's path must also stay strictly inside `<saveRoot>/<name>` (name `x` with `../f`
+  would write beside the user's files; a path equal to the folder would replace it). Tests prove the
   files on disk equal `Layout` for `v1-single`, `v1-tree`, `hybrid-single` and `hybrid-tree`, with the
   fixture's bytes, and that nothing else is written (no database, no `.part`, no `.pad`). The engine's
   other constructors place files differently (`NewFileByInfoHash` adds an infohash folder, `.part` names

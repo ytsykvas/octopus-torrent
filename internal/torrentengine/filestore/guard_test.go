@@ -379,6 +379,21 @@ func TestLayoutIsTheEnginesPathRuleAndRefusesPathsOutsideTheSaveFolder(t *testin
 	if _, _, err := Layout(root, escape); err == nil {
 		t.Fatal("a path outside the save folder was accepted")
 	}
+	// A path that leaves the torrent's own folder but stays inside the save folder would write beside
+	// the user's other files (a hash-valid magnet can carry it, 011); a file at the folder's own path
+	// would replace the folder.
+	for _, sibling := range []*metainfo.Info{
+		{Name: "x", Files: []metainfo.FileInfo{{Length: 1, Path: []string{"..", "f"}}}},
+		{Name: "a/b", Files: []metainfo.FileInfo{{Length: 1, Path: []string{"..", "..", "f"}}}},
+		{Name: "x", Files: []metainfo.FileInfo{{Length: 1, Path: []string{"."}}}},
+	} {
+		if _, files, err := Layout(root, sibling); err == nil {
+			t.Errorf("name %q, path %q: accepted as %v; want an error", sibling.Name, sibling.Files[0].Path, files)
+		}
+	}
+	if _, files, err := Layout(root, &metainfo.Info{Name: "x", Files: []metainfo.FileInfo{{Length: 1, Path: []string{"y", "..", "z"}}}}); err != nil || files[0] != "/save/x/z" {
+		t.Errorf("a path that stays in the torrent's folder = %v %v", files, err)
+	}
 	noName := &metainfo.Info{Name: metainfo.NoName, Files: []metainfo.FileInfo{{Length: 1, Path: []string{"a"}}}}
 	if _, files, err := Layout(root, noName); err != nil || files[0] != "/save/a" {
 		t.Fatalf("a torrent without a name = %v %v", files, err)

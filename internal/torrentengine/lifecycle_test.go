@@ -18,6 +18,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 
+	"octopustorrent/internal/torrentengine/filestore"
 	"octopustorrent/internal/torrentengine/testutil/fixture"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
 )
@@ -247,11 +248,9 @@ func TestPinnedEngineAcceptsInfoBytesThatDoNotMatchTheInfohash(t *testing.T) {
 
 	t.Run("from a peer's metadata", func(t *testing.T) {
 		liar := peer(t, woken(0))
-		lie, _, err := liar.Client().AddTorrentSpec(spec)
-		if err != nil {
+		if _, err := liar.Lie(deadline(t, transferLimit), want.HashInfoBytes(), spec.InfoBytes); err != nil {
 			t.Fatal(err)
 		}
-		lie.DownloadAll() // a torrent that wants nothing accepts no connection
 		leecher := peer(t, woken(0))
 		lt := leecher.AddInfohash(want.HashInfoBytes())
 		swarm.Connect(lt, liar)
@@ -463,13 +462,20 @@ func TestPinnedEngineOverwritesAUsersFileAtATorrentPathWhenItDownloads(t *testin
 // childDirEnv runs TestPinnedEngineDeadlocksOnVerifyAfterDrop as the child process that deadlocks.
 const childDirEnv = "OCTOPUS_ENGINE_DEADLOCK_CHILD_DIR"
 
+// childDir is the folder this process was given as a child in env, or "" in the parent. A folder
+// outside the temporary folder (a variable left in the developer's shell) is refused before the child
+// writes anything into it.
+func childDir(t *testing.T, env string) string {
+	t.Helper()
+	dir := os.Getenv(env)
+	if dir != "" && !strings.HasPrefix(dir, filepath.Clean(os.TempDir())+string(filepath.Separator)) {
+		t.Fatalf("%s=%q is not under the temporary folder %s", env, dir, os.TempDir())
+	}
+	return dir
+}
+
 func TestPinnedEngineDeadlocksOnVerifyAfterDrop(t *testing.T) {
-	if dir := os.Getenv(childDirEnv); dir != "" {
-		// a folder outside the temporary folder (a variable left in the developer's shell) is refused
-		// before the child writes anything into it
-		if !strings.HasPrefix(dir, filepath.Clean(os.TempDir())+string(filepath.Separator)) {
-			t.Fatalf("%s=%q is not under the temporary folder %s", childDirEnv, dir, os.TempDir())
-		}
+	if dir := childDir(t, childDirEnv); dir != "" {
 		verifyAfterDrop(t, dir)
 		return
 	}
@@ -654,4 +660,69 @@ func (b *lockedBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
+}
+
+// Finding 31: once a peer's metadata set a torrent's info, SetInfoBytes with other bytes returns nil
+// and keeps the peer's info. An add that gives a torrent its peers before its own info can end up on
+// a stranger's file list with no error: 011 never adds a second time, and 019/023 add a .torrent with
+// no peer until its info is set.
+func TestPinnedEngineKeepsThePeersInfoWhenSetInfoBytesComesLate(t *testing.T) {
+	want := metaInfo(t, named(t, "v1-single"))
+	other := metaInfo(t, named(t, "v1-tree"))
+	liar := peer(t, woken(0))
+	if _, err := liar.Lie(deadline(t, transferLimit), want.HashInfoBytes(), other.InfoBytes); err != nil {
+		t.Fatal(err)
+	}
+	leecher := peer(t, woken(0))
+	lt := leecher.AddInfohash(want.HashInfoBytes())
+	lt.DisallowDataDownload()
+	swarm.Connect(lt, liar)
+	if err := swarm.WaitInfo(deadline(t, transferLimit), lt); err != nil {
+		t.Fatal(err)
+	}
+	if err := lt.SetInfoBytes(want.InfoBytes); err != nil || lt.Info().Name != "tree" {
+		t.Fatalf("SetInfoBytes after the peer's metadata = %v, name %q; the engine now replaces or refuses the info: re-check 011, 019 and 023's notes", err, lt.Info().Name)
+	}
+}
+
+// v2OnlyChildDirEnv runs TestPinnedEnginePanicsOnV2OnlyInfoUnderAV1Infohash as the child that panics.
+const v2OnlyChildDirEnv = "OCTOPUS_ENGINE_V2_ONLY_CHILD_DIR"
+
+// Finding 33: v2-only info set on a torrent added by a v1 infohash panics inside the engine
+// ("piece request order has {} and pending pieces has ..."). The check is sampled; the first one in a
+// process runs, so a fresh child panics every time. A peer can send such info for a magnet whose btih
+// is the SHA-1 of its bytes, so the metadata passes every hash check, and the engine panics in a
+// goroutine of its own before Fetch can look at it: the whole application ends. 011 records it as a
+// known residual; 018/022 must close it (own metadata handling, or an engine release that fixes it).
+func TestPinnedEnginePanicsOnV2OnlyInfoUnderAV1Infohash(t *testing.T) {
+	if dir := childDir(t, v2OnlyChildDirEnv); dir != "" {
+		infoBytes := metaInfo(t, named(t, "v2-single")).InfoBytes
+		p, err := swarm.NewPeer(dir, swarm.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		lt, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: metainfo.HashBytes(infoBytes), Storage: filestore.NewDeferred()})
+		err = lt.SetInfoBytes(infoBytes)
+		t.Logf("SetInfoBytes returned %v", err)
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestPinnedEnginePanicsOnV2OnlyInfoUnderAV1Infohash$", "-test.count=1", "-test.v", "-test.timeout=60s")
+	cmd.Env = append(os.Environ(), v2OnlyChildDirEnv+"="+t.TempDir())
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "piece request order has") {
+		t.Fatalf("the child ended with %v and no request-order panic, so finding 33 may be fixed: re-check 011, 018 and 022's notes\n%s", err, out)
+	}
+}
+
+// Finding 32: the engine adds a torrent to a closed client and never closes it. 011's Fetch drops
+// such a torrent itself; 018 checks the client before every add.
+func TestPinnedEngineAddsATorrentToAClosedClient(t *testing.T) {
+	leecher := peer(t, woken(0))
+	client := leecher.Client()
+	client.Close()
+	lt, isNew := client.AddTorrentInfoHash(metaInfo(t, named(t, "v1-single")).HashInfoBytes())
+	if !isNew || waitClosed(lt.Closed(), promptLimit) {
+		t.Fatalf("add to a closed client: new %v, closed %v; the engine now refuses or closes it: re-check 011 and 018's notes", isNew, isClosed(lt.Closed()))
+	}
+	lt.Drop()
 }

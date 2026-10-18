@@ -100,7 +100,7 @@ real SQLite, never a fake:
 
 ```sh
 go test -race ./internal/app/... -run TestName -v
-go test -race -count=1 ./internal/torrentengine/...                 # fixtures, the swarm, engine contract, storage and upload-stop tests, about 90 s
+go test -race -count=1 ./internal/torrentengine/...                 # fixtures, the swarm, engine contract, storage, upload-stop and magnet tests, about 100 s
 go test -race -count=1 ./internal/enginespike ./cmd/engine-spike     # the engine spike app's Go side
 go test -race -count=1 ./internal/library                           # real SQLite: durability, locks, read-only, full disk, about 8 s
 go test ./internal/torrentengine/testutil/fixture -args -update     # rewrite the committed torrents
