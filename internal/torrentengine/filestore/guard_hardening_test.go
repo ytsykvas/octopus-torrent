@@ -305,3 +305,56 @@ func TestAFolderThatCannotBeSearchedMakesTheTorrentUnopenableNotUnchecked(t *tes
 		t.Fatalf("the engine's storage was reached: %v", calls)
 	}
 }
+
+// A new import's pieces are cached as not complete (011), so the engine would overwrite an existing
+// file piece by piece: CheckNew refuses a folder that already holds any of the torrent's paths, or a
+// file where the torrent needs a folder, and accepts a folder that holds only other files.
+func TestCheckNewRefusesAFolderThatAlreadyHoldsAPathOfTheTorrent(t *testing.T) {
+	info := &metainfo.Info{Name: "m", PieceLength: 16, Pieces: make([]byte, 20), Files: []metainfo.FileInfo{{Length: 10, Path: []string{"a"}}, {Length: 6, Path: []string{"d", "b"}}}}
+	open := func(t *testing.T) (*TorrentStorage, string) {
+		t.Helper()
+		root := t.TempDir()
+		s, err := newGuard(newFake(), root, &Session{}, noMarks{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s, root
+	}
+
+	s, root := open(t)
+	if err := s.CheckNew(info); err != nil {
+		t.Fatalf("an empty folder: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "m"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(root, "m", "other"), "the user's")
+	mustWrite(t, filepath.Join(root, "other"), "the user's")
+	if err := s.CheckNew(info); err != nil {
+		t.Fatalf("a folder with only other files: %v", err)
+	}
+	mustWrite(t, filepath.Join(root, "m", "a"), "the user's")
+	if err := s.CheckNew(info); !errors.Is(err, ErrPathExists) {
+		t.Errorf("a user's file at a torrent path: %v, want ErrPathExists", err)
+	}
+
+	s, root = open(t)
+	if err := os.Mkdir(filepath.Join(root, "m"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(root, "m", "d"), "the user's")
+	if err := s.CheckNew(info); !errors.Is(err, syscall.ENOTDIR) {
+		t.Errorf("a user's file where the torrent needs a folder: %v, want ENOTDIR", err)
+	}
+
+	s, _ = open(t)
+	if err := s.CheckNew(&metainfo.Info{Name: "x", Files: []metainfo.FileInfo{{Length: 1, Path: []string{"..", "f"}}}}); err == nil {
+		t.Error("a path outside the torrent's folder was checked as new")
+	}
+	if err := s.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CheckNew(info); !errors.Is(err, ErrStopped) {
+		t.Errorf("after Stop: %v, want ErrStopped", err)
+	}
+}

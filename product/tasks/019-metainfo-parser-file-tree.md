@@ -59,6 +59,8 @@ All names and paths come from untrusted metadata. An interface check does not re
 
 **From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): reject a v2-only metainfo (no v1 infohash) with a clear error before any engine call — the owner's decision of 2026-10-16, while the pinned engine panics on it. A `.torrent` file's infohash is computed from its own info bytes, so finding 11 (mismatching info bytes are accepted) cannot arise here; it matters where a stored infohash meets separately sourced bytes (018, 023, 029).
 
+**From 011** ([magnet-pending-storage](../../docs/decisions/magnet-pending-storage.md), [feature](../../docs/app/magnet-metadata.md)): add a `.torrent` with no peers until `SetInfoBytes` has returned: once a peer's metadata set the info, `SetInfoBytes` returns nil and keeps the peer's info (finding 31). A magnet's verified `metainfo.Info` comes from `Pending.Info()`; apply the same validation limits to it before the confirmation dialog shows it.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.

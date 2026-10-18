@@ -233,18 +233,46 @@ func (p *Peer) AddInfohash(h metainfo.Hash) *torrent.Torrent {
 	return t
 }
 
+// Lie adds a torrent under infohash h with another torrent's info bytes, as a lying peer does: the
+// pinned engine accepts info bytes that do not match a v1 infohash (finding 11) and serves them to a
+// magnet leecher as the metadata of h. The lie wants its pieces, because a torrent that wants
+// nothing accepts no connection, and Lie returns only once the engine has checked them: while a piece
+// is being checked it is not wanted yet, so a connection that came then would be refused.
+func (p *Peer) Lie(ctx context.Context, h metainfo.Hash, infoBytes []byte) (*torrent.Torrent, error) {
+	t, isNew := p.client.AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: h})
+	if !isNew {
+		return nil, fmt.Errorf("the peer already has %s: a lie needs a torrent of its own", h.HexString())
+	}
+	err := t.SetInfoBytes(infoBytes)
+	if err == nil {
+		t.DownloadAll()
+		err = Settle(ctx, t)
+	}
+	if err != nil {
+		t.Drop()
+		return nil, err
+	}
+	return t, nil
+}
+
 // Connect gives the torrent the listen addresses of the peers; no other peer source exists. The peers
 // are trusted: they all share 127.0.0.1 and the engine bans a peer that sent bad data by its IP, so
 // one ban would cut off every local peer. A trusted peer is never banned; its bad piece is requested
 // again (and fails again) until the wait ends.
 func Connect(t *torrent.Torrent, peers ...*Peer) {
+	t.AddPeers(PeerInfos(peers...))
+}
+
+// PeerInfos returns the listen addresses of the peers as trusted peer entries, as Connect gives
+// them; for code that takes its peers as a list.
+func PeerInfos(peers ...*Peer) []torrent.PeerInfo {
 	var infos []torrent.PeerInfo
 	for _, p := range peers {
 		for _, a := range p.ListenAddrs() {
 			infos = append(infos, torrent.PeerInfo{Addr: a, Trusted: true})
 		}
 	}
-	t.AddPeers(infos)
+	return infos
 }
 
 // Close stops the client and its storage, then checks that its listen address refuses connections.

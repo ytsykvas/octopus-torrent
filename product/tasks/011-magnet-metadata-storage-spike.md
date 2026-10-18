@@ -1,6 +1,6 @@
 # 011 — Check magnet metadata retrieval and the final file folder
 
-**Status:** `planned`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** critical path of the main scenario or completion  
 **Size:** Gate/spike with a recorded result  
@@ -30,15 +30,15 @@ Prove that magnet metadata can be obtained without transferring file data before
 
 ## Artifacts and change locations
 
-**Proposed locations:** `docs/decisions/pending-magnet.md; docs/verification/magnet-import.md`. This is a map of future code; after the project skeleton is created, check the actual paths and update the map in the architecture.
+**Actual locations:** `docs/decisions/magnet-pending-storage.md` (the register's name for O7), `docs/verification/011-magnet-metadata-storage-spike.md`, `docs/app/magnet-metadata.md`, `internal/torrentengine/pendingmagnet`, `internal/torrentengine/filestore/deferred.go`.
 **Evidence of completion:** the record `docs/verification/011-magnet-metadata-storage-spike.md` or an exact link to an existing verification or build report in the work handoff summary. One report may be reused if it proves exactly these criteria.
 
 ## Acceptance criteria
 
-- [ ] Before explicit import confirmation, file data is neither downloaded nor uploaded.
-- [ ] After confirmation, physical files are created exactly in the selected directory.
-- [ ] Cancelling the import does not change existing library records or their data.
-- [ ] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed.
+- [x] Before explicit import confirmation, file data is neither downloaded nor uploaded.
+- [x] After confirmation, physical files are created exactly in the selected directory.
+- [x] Cancelling the import does not change existing library records or their data. (Data: proven at the engine boundary; records have no store before 014/015 and are handed to 023.)
+- [x] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed. (The `.app` run is `not_run` by owner decision, owner 022.)
 
 ## Checks
 
@@ -55,9 +55,9 @@ A pending import has no right to remove the object of an existing torrent that i
 
 **From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): `swarm.Peer.AddInfohash` adds a torrent known only by its infohash (as a magnet) and `swarm.WaitInfo` bounds the wait for metadata; a BEP 52 single-file torrent is stored inside a folder of its name on v1.61.0.
 
-**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): info bytes that do not match a v1 infohash are accepted, also over the wire from a lying peer for a magnet, and that metadata's zero-length files are created as soon as it arrives (finding 11). The engine consumes peer metadata itself, so no application code can check it first: fetch the metadata into storage the application owns (never the user's save folder) and wipe it afterwards, hash the received info bytes against the requested infohash, and only then add the verified metainfo with the real folder. No payload is downloaded before the check. The engine accepts up to 16 MiB of metadata, enough for hundreds of thousands of zero-length entries: bound what the isolated storage may create.
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): info bytes that do not match a v1 infohash are accepted, also over the wire from a lying peer for a magnet, and that metadata's zero-length files are created as soon as it arrives (finding 11). The engine consumes peer metadata itself, so no application code can check it first: fetch the metadata into storage the application owns (never the user's save folder) and wipe it afterwards, hash the received info bytes against the requested infohash, and only then add the verified metainfo with the real folder. (Superseded in 011: the storage is a `filestore.Deferred` that creates nothing, so there is nothing to wipe or bound, and the real folder is attached in place instead of a second add.) No payload is downloaded before the check. The engine accepts up to 16 MiB of metadata, enough for hundreds of thousands of zero-length entries: bound what the isolated storage may create.
 
-**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): the final folder is used through `filestore.NewTorrentStorage(saveRoot, completion, session, logger)` and `AddTorrentOpts{InfoHash, Storage}` followed by `SetInfoBytes` (never `AddTorrentOpt` alone: it drops the storage error, finding 15). `filestore.Layout` says where every file will be. Metadata fetched into temporary storage must still be hashed against the infohash before it reaches the final folder (finding 11); the temporary storage is not the user's folder and must not be a `TorrentStorage` of it. A save folder on HFS+ is refused with `ErrFileSystem` (finding 21).
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): the final folder is used through `filestore.NewTorrentStorage(saveRoot, completion, session, logger)` and `AddTorrentOpts{InfoHash, Storage}` followed by `SetInfoBytes` (never `AddTorrentOpt` alone: it drops the storage error, finding 15). `filestore.Layout` says where every file will be. Metadata fetched into temporary storage must still be hashed against the infohash before it reaches the final folder (finding 11); the temporary storage is not the user's folder and must not be a `TorrentStorage` of it. (Resolved in 011: `filestore.Deferred` until `Pending.Confirm` attaches the folder's `TorrentStorage`.) A save folder on HFS+ is refused with `ErrFileSystem` (finding 21).
 
 ## Mandatory TDD cycle and architecture review
 
@@ -76,3 +76,20 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Record a short outcome: what changed, exact checks with statuses `pass`, `fail` or `not_run`, ADR, actual change locations in the code and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+## Execution result
+
+**Date:** 2026-10-18. **Status:** `done`.
+
+**What changed:**
+- `filestore.Deferred` (`internal/torrentengine/filestore/deferred.go`): the storage of a magnet waiting for confirmation. It creates nothing, reports every piece as known and not complete, refuses and counts every piece operation, and `Attach` opens the chosen folder's storage in place, outside its lock.
+- `internal/torrentengine/pendingmagnet`: `Fetch` (bounded, cancellable, cancel wins; the metadata hashed against the requested infohash and compared with the applied info), `Pending.Confirm` (refuses a folder that already holds a path of the torrent, then attaches in place: no `Drop`, no second add) and `Cancel` (drops only its own torrent).
+- `filestore`: `TorrentStorage.CheckNew` and `ErrPathExists`; `Layout` keeps a folder torrent's files strictly inside its folder.
+- Swarm: `PeerInfos`, `Peer.Lie(ctx, …)`. Engine findings 31, 32 and 33 are pinned in `lifecycle_test.go`.
+- ADR [magnet-pending-storage](../../docs/decisions/magnet-pending-storage.md) (O7 accepted for the engine part), feature doc [magnet-metadata](../../docs/app/magnet-metadata.md), notes for 018–023 and 029.
+
+**Checks:** `go test -race -count=1 ./internal/torrentengine/...` `pass` twice, without `-race` `pass` once; `go tool devtool check` `GATE PASSED`. Not run: the `.app` scenario (owner decision, 022), library records (023), trackers and DHT on a real network (022/026). Evidence: [report 011](../../docs/verification/011-magnet-metadata-storage-spike.md).
+
+**Limitations:** finding 33 is a known residual. The pinned engine applies a peer's metadata before it can be verified; v2-only info under a v1 infohash panics the engine and ends the application, and a 16 MiB info costs about 600 MiB. The product links none of this code; 018/022 must close it before magnets ship.
+
+**Next task:** the README's next tasks: [012](012-macos-trash-and-path-spike.md), [013](013-transfer-policy-state-machine.md), [014](014-sqlite-schema-migrations.md), [017](017-local-diagnostics-privacy.md), [035](035-react-bridge-state-resync.md).

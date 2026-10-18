@@ -61,7 +61,9 @@ anacrolix/torrent. The open questions were:
   `WaitEngineStopped` proves no engine goroutine is left. A `Recorder` samples payload counters for
   start, stop and residual-traffic measurements; its log reads one direction at a time (`First`, `Last`
   with a `Field`, and `Delta` of every counter, task 010). `Options.KeepAliveTimeout` gives a peer the
-  product's keep-alive interval ([global-upload-stop](global-upload-stop.md)).
+  product's keep-alive interval ([global-upload-stop](global-upload-stop.md)). `PeerInfos` returns
+  the trusted entries `Connect` gives, for code that takes peers as a list, and `Peer.Lie` serves
+  another torrent's info under an infohash, as a lying peer does (finding 11; task 011).
 - **Formats.** Transfers are verified for v1 and hybrid. v2-only torrents are parse-only on the pin:
   adding one panics.
 - **Engine limitations.** Limitations 1–4, 7 and 8 below are asserted by tests, so a version that fixes

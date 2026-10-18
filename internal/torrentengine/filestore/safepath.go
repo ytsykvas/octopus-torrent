@@ -49,3 +49,30 @@ func checkPath(root, path string, empty bool) error {
 	}
 	return nil
 }
+
+// CheckNew refuses a torrent any of whose files already exists in the save folder, for a new import:
+// its pieces are cached as not complete (011), so the engine would overwrite such a file piece by
+// piece. A path that cannot be looked up (for example a file where the torrent needs a folder) is
+// refused with the lookup's error. Like checkPaths, it is not atomic with the engine's open: a file
+// put in place between the two is not seen.
+func (s *TorrentStorage) CheckNew(info *metainfo.Info) error {
+	done, err := s.enter(opRead)
+	if err != nil {
+		return err
+	}
+	defer done()
+	_, paths, err := Layout(s.root, info)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		_, err := os.Lstat(path)
+		switch {
+		case err == nil:
+			return fmt.Errorf("%w: %s", ErrPathExists, path)
+		case !errors.Is(err, fs.ErrNotExist):
+			return fmt.Errorf("the torrent's path %s cannot be checked: %w", path, err)
+		}
+	}
+	return nil
+}

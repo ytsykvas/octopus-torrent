@@ -84,6 +84,8 @@ bytes in every format.
 | `Peer.Seed(ctx, mi)` | Adds the torrent, verifies the data and waits until no piece is still being checked. Missing pieces come back as `*IncompleteError` together with the torrent. |
 | `Peer.Leech(mi)`, `Peer.AddInfohash(h)` | Adds the torrent and downloads all of it; the infohash form waits for metainfo, as a magnet does. |
 | `Peer.Add(mi)` | Adds the torrent; an engine panic is returned as an error. A metainfo that names a tracker, web seed or DHT node is refused. |
+| `PeerInfos(peers...)` | The same trusted entries as a list, for code that takes its peers as an argument (011). |
+| `Peer.Lie(ctx, h, infoBytes)` | A torrent under infohash `h` with another torrent's info, which the engine serves to a magnet leecher as the metadata of `h` (finding 11). Returns once its pieces are checked: a torrent still checking refuses every connection. |
 | `Connect(t, peers...)` | The only peer source. Peers are trusted: they share 127.0.0.1 and the engine bans by IP, so a peer that sends bad data has its piece re-requested instead of being banned. |
 | `WaitInfo`, `WaitComplete` | Bounded by `ctx`. On expiry: `"no metainfo: …"`, or an `*IncompleteError` wrapping `ctx.Err()`. |
 | `Settle(ctx, t)` | Waits until no piece is queued, hashing or storing its verdict; bounded by `ctx`. Read piece state only after it: `VerifyDataContext` returns before the verdict is stored. `Peer.Seed` uses it, and so do the 009 storage tests. |

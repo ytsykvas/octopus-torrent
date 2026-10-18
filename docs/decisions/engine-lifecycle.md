@@ -57,8 +57,10 @@ for test fixtures only. Four things were open:
   - Before the engine sees a save folder, verify the full path plan against it (findings 8, 13).
   - Build a spec only from info bytes whose hash matches the infohash they are stored with
     (finding 11). A magnet's metadata arrives from peers and the engine consumes it itself, so no
-    application code can check it first: fetch it into storage the application owns and wipes,
-    verify it, then add the verified metainfo with the real folder (011).
+    application code can check it first. ~~Fetch it into storage the application owns and wipes,
+    verify it, then add the verified metainfo with the real folder.~~ Superseded by 011
+    ([magnet-pending-storage](magnet-pending-storage.md)): fetch it into a `filestore.Deferred`
+    that creates nothing, verify it, then attach the real folder's storage in place.
 - **v2-only torrents are rejected with a clear error before any engine call.** This covers a
   metainfo without a v1 infohash, and a magnet with `btmh` but no `btih`. The owner decided this on
   2026-10-16. It holds while the pinned engine panics on them (`panicif.Zero` in `AddTorrentOpt`).
@@ -148,8 +150,9 @@ Findings 9–13 are each asserted by a test, so a release that fixes one turns t
 - **018** builds the adapter on this API map, the completion contracts and the ownership rules. It
   reuses `fixture` and `swarm`, and replaces the "engine integration" `not_run` line with its own
   tests.
-- **019/022** reject v2-only input. **011/022** hash received metadata against the requested
-  infohash, and fetch metadata in storage that is not the user's folder.
+- **019/022** reject v2-only input. **011** hashes received metadata against the requested
+  infohash and fetches it into a storage that holds nothing (done: [magnet-pending-storage](magnet-pending-storage.md));
+  **022** builds the coordinator on it.
 - **020/023** check every torrent path for collisions before the add, not only the zero-length
   ones, because of finding 13.
 - **010** found the causes of findings 12 and 14 and measured the remedies

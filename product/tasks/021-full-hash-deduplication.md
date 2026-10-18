@@ -53,6 +53,8 @@ The full hash and the library UUID play different roles. A short name, size or a
 
 **Basis for technical decisions:** [BEP52](https://www.bittorrent.org/beps/bep_0052.html), [anacrolix API](https://pkg.go.dev/github.com/anacrolix/torrent). During implementation, reconcile signatures and constraints with the pinned version. Reading the API documentation does not replace a performed integration check.
 
+**From 011** ([magnet-pending-storage](../../docs/decisions/magnet-pending-storage.md), [feature](../../docs/app/magnet-metadata.md)): a magnet's v1 identity is the requested infohash, which `Fetch` verified against the received bytes; a hybrid's v2 identity comes from `Pending.InfoBytes()` (the engine registers it on the same torrent). `ErrDuplicate` from `Fetch` means the infohash is already in the client.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.
