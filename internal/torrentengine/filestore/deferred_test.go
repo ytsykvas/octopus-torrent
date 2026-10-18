@@ -46,6 +46,8 @@ func (s *innerStorage) OpenTorrent(context.Context, *metainfo.Info, metainfo.Has
 	return impl, nil
 }
 
+func admitAll(*metainfo.Info) error { return nil }
+
 func openedDeferred(t *testing.T) (*Deferred, storage.TorrentImpl, *metainfo.Info) {
 	t.Helper()
 	_, mi := named(t, "v1-single")
@@ -53,7 +55,7 @@ func openedDeferred(t *testing.T) (*Deferred, storage.TorrentImpl, *metainfo.Inf
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := NewDeferred()
+	d := NewDeferred(admitAll)
 	impl, err := d.OpenTorrent(context.Background(), &info, mi.HashInfoBytes())
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +154,7 @@ func TestAttachWithoutAStorageIsRefused(t *testing.T) {
 
 func TestAttachBeforeTheMetadataIsRefused(t *testing.T) {
 	inner := &innerStorage{}
-	if err := NewDeferred().Attach(context.Background(), inner); !errors.Is(err, ErrNotOpened) || inner.opened != 0 {
+	if err := NewDeferred(admitAll).Attach(context.Background(), inner); !errors.Is(err, ErrNotOpened) || inner.opened != 0 {
 		t.Errorf("Attach before OpenTorrent = %v, inner opened %d", err, inner.opened)
 	}
 }
@@ -218,4 +220,32 @@ func TestAnAttachInProgressBlocksNeitherCloseNorAnotherAttach(t *testing.T) {
 	if err := d.Attach(context.Background(), &innerStorage{}); err != nil {
 		t.Errorf("an attach after a failed one = %v", err)
 	}
+}
+
+// A refused info is never recorded: the engine gets the admission's error from the open and applies
+// nothing, and the folder cannot be attached for it.
+func TestARefusedInfoIsNotRecorded(t *testing.T) {
+	_, mi := named(t, "v1-single")
+	info, err := mi.UnmarshalInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	refusal := errors.New("refused")
+	var offered *metainfo.Info
+	d := NewDeferred(func(i *metainfo.Info) error { offered = i; return refusal })
+	if _, err := d.OpenTorrent(context.Background(), &info, mi.HashInfoBytes()); !errors.Is(err, refusal) || offered != &info {
+		t.Fatalf("OpenTorrent = %v, want the admission's refusal of the info itself", err)
+	}
+	if err := d.Attach(context.Background(), &innerStorage{}); !errors.Is(err, ErrNotOpened) {
+		t.Errorf("Attach after a refused info = %v, want ErrNotOpened", err)
+	}
+}
+
+func TestADeferredStorageNeedsAnAdmissionRule(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("NewDeferred(nil) did not panic")
+		}
+	}()
+	NewDeferred(nil)
 }

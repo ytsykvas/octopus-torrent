@@ -35,7 +35,10 @@ the ones marked "source" were read and not executed.
 - **A magnet waiting for confirmation has a `filestore.Deferred`** (011,
   [magnet-pending-storage](magnet-pending-storage.md)): it opens with no file, refuses every piece
   operation until `Attach` opens the chosen folder's `TorrentStorage` with the same metadata, and is
-  never a `TorrentStorage` of the user's folder before that.
+  never a `TorrentStorage` of the user's folder before that. `NewDeferred(admit)` runs an admission
+  rule when the engine opens it, before the engine applies the info; a refused info fails
+  `SetInfoBytes` and is never applied. It is the second guard: `pendingmagnet`'s gate keeps peers'
+  metadata from the engine until `infocheck` has checked the bytes (findings 33–43).
 - **Add with `AddTorrentOpts{InfoHash, Storage}` and then `SetInfoBytes`.** `AddTorrentOpt` drops the
   storage error: with the info in its options it neither sets the info nor reports anything (test,
   finding 15). `SetInfoBytes` returns the error. How often the engine opens a storage is not something to

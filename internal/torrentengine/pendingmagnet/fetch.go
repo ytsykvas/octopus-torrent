@@ -10,6 +10,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 
 	"octopustorrent/internal/torrentengine/filestore"
+	"octopustorrent/internal/torrentengine/infocheck"
 )
 
 var (
@@ -28,29 +29,35 @@ var (
 	ErrNoMetadata = errors.New("no metadata within the wait")
 )
 
-// Request is a magnet to fetch: its v1 infohash, the peers to ask, and how long to wait.
+// Request is a magnet to fetch: its v1 infohash, the peers to ask, how long to wait, and what its
+// metadata may be and describe.
 type Request struct {
 	InfoHash metainfo.Hash
 	Peers    []torrent.PeerInfo
 	Wait     time.Duration
+	Limits   infocheck.Limits
 }
 
 // Fetch adds the magnet to the client with a deferred storage and both directions disallowed, waits
-// for its metadata and verifies it. It returns a Pending import that owns the torrent, or an error
-// after which the client holds nothing of it. A request that cannot work is refused before the
-// engine is touched. When the caller's context ends, the result is its error, also when the metadata
-// arrived at the same moment: a cancelled import never yields metadata.
-func Fetch(ctx context.Context, cl *torrent.Client, req Request) (*Pending, error) {
+// until the gate has assembled its metadata, vets it and only then gives it to the engine. It
+// returns a Pending import that owns the torrent, or an error after which the client holds nothing
+// of it. A request that cannot work is refused before the engine is touched. When the caller's
+// context ends, the result is its error, also when the metadata arrived at the same moment: a
+// cancelled import never yields metadata. cl must have been started with the gate's configuration.
+func (g *Gate) Fetch(ctx context.Context, cl *torrent.Client, req Request) (*Pending, error) {
 	switch {
 	case req.Wait <= 0:
 		return nil, fmt.Errorf("%w: %v", ErrInvalidWait, req.Wait)
 	case req.InfoHash == metainfo.Hash{}:
 		return nil, ErrInvalidSource
 	}
+	if err := req.Limits.Validate(); err != nil {
+		return nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	store := filestore.NewDeferred()
+	store := filestore.NewDeferred(func(info *metainfo.Info) error { return infocheck.Check(info, req.Limits) })
 	t, isNew := cl.AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: req.InfoHash, Storage: store, DisableInitialPieceCheck: true})
 	if !isNew {
 		return nil, ErrDuplicate
@@ -60,6 +67,8 @@ func Fetch(ctx context.Context, cl *torrent.Client, req Request) (*Pending, erro
 		t.Drop()
 		return nil, ErrClientClosed
 	}
+	metadata := g.register(t, req.Limits.MetadataBytes)
+	defer g.unregister(t)
 	t.DisallowDataDownload()
 	t.DisallowDataUpload()
 	t.AddPeers(req.Peers)
@@ -68,7 +77,7 @@ func Fetch(ctx context.Context, cl *torrent.Client, req Request) (*Pending, erro
 	defer limit.Stop()
 	timedOut := false
 	select {
-	case <-t.GotInfo():
+	case <-metadata.done:
 	case <-ctx.Done():
 	case <-cl.Closed():
 	case <-t.Closed():
@@ -77,20 +86,30 @@ func Fetch(ctx context.Context, cl *torrent.Client, req Request) (*Pending, erro
 	}
 	err := ended(ctx, cl, t)
 	// The limit and the metadata may be ready in the same instant; metadata that arrived is used.
-	if err == nil && timedOut && !isClosed(t.GotInfo()) {
+	if err == nil && timedOut && !isClosed(metadata.done) {
 		err = fmt.Errorf("%w (%v): %w", ErrNoMetadata, req.Wait, context.DeadlineExceeded)
 	}
-	var info metainfo.Info
 	var infoBytes []byte
+	var info *metainfo.Info
 	if err == nil {
-		infoBytes = t.Metainfo().InfoBytes
-		info, err = verify(req.InfoHash, infoBytes, t.Info())
+		infoBytes, err = metadata.result()
+	}
+	if err == nil {
+		if info, err = vet(req.InfoHash, infoBytes, req.Limits); err != nil {
+			err = metadata.refused(err)
+		}
+	}
+	if err == nil {
+		err = t.SetInfoBytes(infoBytes)
+	}
+	if err == nil {
+		err = sameInfo(info, t.Info())
 	}
 	if err != nil {
 		t.Drop()
 		return nil, err
 	}
-	return &Pending{client: cl, torrent: t, storage: store, info: info, infoBytes: infoBytes}, nil
+	return &Pending{client: cl, torrent: t, storage: store, info: *info, infoBytes: infoBytes}, nil
 }
 
 // ended reports why an import can go no further, in a fixed order: the caller's cancel first, then a

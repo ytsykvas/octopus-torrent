@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -15,7 +16,9 @@ import (
 
 	"github.com/anacrolix/chansync/events"
 	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
+	pp "github.com/anacrolix/torrent/peer_protocol"
 	"github.com/anacrolix/torrent/storage"
 
 	"octopustorrent/internal/torrentengine/filestore"
@@ -685,32 +688,179 @@ func TestPinnedEngineKeepsThePeersInfoWhenSetInfoBytesComesLate(t *testing.T) {
 	}
 }
 
-// v2OnlyChildDirEnv runs TestPinnedEnginePanicsOnV2OnlyInfoUnderAV1Infohash as the child that panics.
-const v2OnlyChildDirEnv = "OCTOPUS_ENGINE_V2_ONLY_CHILD_DIR"
+// hostileChildDirEnv and hostileShapeEnv run TestPinnedEnginePanicsOnHostileInfo as the child that
+// applies one hostile info and panics.
+const (
+	hostileChildDirEnv = "OCTOPUS_ENGINE_HOSTILE_CHILD_DIR"
+	hostileShapeEnv    = "OCTOPUS_ENGINE_HOSTILE_SHAPE"
+)
 
-// Finding 33: v2-only info set on a torrent added by a v1 infohash panics inside the engine
-// ("piece request order has {} and pending pieces has ..."). The check is sampled; the first one in a
-// process runs, so a fresh child panics every time. A peer can send such info for a magnet whose btih
-// is the SHA-1 of its bytes, so the metadata passes every hash check, and the engine panics in a
-// goroutine of its own before Fetch can look at it: the whole application ends. 011 records it as a
-// known residual; 018/022 must close it (own metadata handling, or an engine release that fixes it).
-func TestPinnedEnginePanicsOnV2OnlyInfoUnderAV1Infohash(t *testing.T) {
-	if dir := childDir(t, v2OnlyChildDirEnv); dir != "" {
-		infoBytes := metaInfo(t, named(t, "v2-single")).InfoBytes
-		p, err := swarm.NewPeer(dir, swarm.Options{})
+// childPeer starts a swarm peer in a child process's folder, closed when the child's test ends.
+func childPeer(t *testing.T, dir string) *swarm.Peer {
+	t.Helper()
+	p, err := swarm.NewPeer(dir, swarm.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := p.Close(deadline(t, closeLimit)); err != nil {
+			t.Error(err)
+		}
+	})
+	return p
+}
+
+// runChild runs test in a child process with env set to a fresh temporary folder plus extra, and
+// returns its output and exit error. The child's own timeout ends it even if this process dies.
+func runChild(t *testing.T, test, env string, extra ...string) (string, error) {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], "-test.run=^"+test+"$", "-test.count=1", "-test.v", "-test.timeout=60s")
+	cmd.Env = append(append(os.Environ(), env+"="+t.TempDir()), extra...)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// Findings 33–37: info that the pinned engine parses or applies without checking it, and that
+// crashes it. A peer can serve such info for a magnet whose btih is its SHA-1, so it passes every
+// hash check; over the wire the crash is in an engine goroutine and ends the application.
+//   - 33: v2-only info under a v1 infohash ("piece request order has {} and pending pieces has …").
+//     The check is sampled; the first one in a process runs, so a fresh child panics every time.
+//   - 34: "meta version 2" info whose file tree needs more pieces than "pieces" holds: makePieces
+//     slices past the end of "pieces" ("slice bounds out of range"), every time.
+//   - 35: a file tree node the engine reads unchecked: a pieces root that is not 32 bytes
+//     ("PiecesRootAsByteArray"), or a folder with a length, which the engine counts as pieces while
+//     no file holds them ("mustGetOnlyFile"), every time.
+//   - 36: "meta version 2" with no piece length: validateInfo divides by it before the storage is
+//     opened ("integer divide by zero").
+//   - 37: an unknown key nested 4M levels: the recursive decoder overflows the stack before anything
+//     else runs ("fatal error: stack overflow", which no recover can catch).
+//
+// Each shape runs in a child process, applied as the engine applies a peer's complete metadata.
+// pendingmagnet's gate keeps peers' metadata from the engine, and infocheck.CheckBytes refuses every
+// shape before Fetch gives the engine the bytes (TestFetchRefusesHostileMetadataBeforeTheEngineParsesIt);
+// when a release fixes the engine, this test fails and names what to re-check.
+func TestPinnedEnginePanicsOnHostileInfo(t *testing.T) {
+	if dir := childDir(t, hostileChildDirEnv); dir != "" {
+		for _, h := range fixture.HostileInfos() {
+			if h.Name == os.Getenv(hostileShapeEnv) {
+				lt, _ := childPeer(t, dir).Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: metainfo.HashBytes(h.InfoBytes), Storage: filestore.NewDeferred(func(*metainfo.Info) error { return nil }), DisableInitialPieceCheck: true})
+				t.Logf("SetInfoBytes returned %v", lt.SetInfoBytes(h.InfoBytes))
+				return
+			}
+		}
+		t.Fatalf("no hostile info named %q", os.Getenv(hostileShapeEnv))
+	}
+	for _, h := range fixture.HostileInfos() {
+		out, err := runChild(t, "TestPinnedEnginePanicsOnHostileInfo", hostileChildDirEnv, hostileShapeEnv+"="+h.Name)
+		if err == nil || !strings.Contains(out, h.Panic) {
+			t.Errorf("%s: the child ended with %v and no %q, so finding %d may be fixed: re-check the magnet-pending-storage ADR and infocheck\n%s", h.Name, err, h.Panic, h.Finding, out)
+		}
+	}
+}
+
+// Finding 38: the engine's file tree decoder parses every folder again for each folder above it,
+// so a chain of folders costs the square of its depth, under the client lock (100 KB took 18–30 s).
+// Twice the depth must cost more than three times the allocation; when a release makes it linear,
+// re-check infocheck's maxTreeWork.
+func TestPinnedEngineDecodesAFileTreeInQuadraticWork(t *testing.T) {
+	alloc := func(depth int) uint64 {
+		b := []byte("d9:file tree" + strings.Repeat("d1:a", depth) + "de" + strings.Repeat("e", depth) + "e")
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		var info metainfo.Info
+		if err := bencode.Unmarshal(b, &info); err != nil {
+			t.Fatal(err)
+		}
+		runtime.ReadMemStats(&after)
+		return after.TotalAlloc - before.TotalAlloc
+	}
+	if small, large := alloc(1000), alloc(2000); large < 3*small {
+		t.Errorf("a tree twice as deep allocated %d bytes against %d: the decoder may be linear now; re-check infocheck's maxTreeWork", large, small)
+	}
+}
+
+// infoPastTheIndexEnv runs TestPinnedEnginePanicsPlanningPastItsRequestIndex as the child.
+const infoPastTheIndexEnv = "OCTOPUS_ENGINE_INDEX_CHILD_DIR"
+
+// Finding 39: an info with a piece length of 2^32 is applied without complaint, and the engine
+// panics once a peer has its pieces: the request planner divides by a chunk count its uint32 index
+// truncated to zero. infocheck refuses such a piece length; when a release fixes the engine, this
+// test fails and names what to re-check.
+func TestPinnedEnginePanicsPlanningPastItsRequestIndex(t *testing.T) {
+	if dir := childDir(t, infoPastTheIndexEnv); dir != "" {
+		var m map[string]any
+		if err := bencode.Unmarshal(metaInfo(t, named(t, "v1-single")).InfoBytes, &m); err != nil {
+			t.Fatal(err)
+		}
+		m["piece length"], m["pieces"] = int64(1)<<32, string(make([]byte, 20))
+		b := bencode.MustMarshal(m)
+		h := metainfo.HashBytes(b)
+		seeder, err := swarm.ServeMetadata(h, b, swarm.MetadataOptions{HaveAll: true})
 		if err != nil {
 			t.Fatal(err)
 		}
-		lt, _ := p.Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: metainfo.HashBytes(infoBytes), Storage: filestore.NewDeferred()})
-		err = lt.SetInfoBytes(infoBytes)
-		t.Logf("SetInfoBytes returned %v", err)
+		t.Cleanup(seeder.Close)
+		lt, _ := childPeer(t, dir).Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: h})
+		if err := lt.SetInfoBytes(b); err != nil {
+			t.Fatalf("SetInfoBytes = %v; the engine now refuses the piece length: re-check infocheck's maxPieceLength", err)
+		}
+		lt.DownloadAll()
+		lt.AddPeers([]torrent.PeerInfo{seeder.PeerInfo()})
+		waitClosed(lt.Closed(), 10*time.Second) // the panic ends the child long before this
 		return
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=^TestPinnedEnginePanicsOnV2OnlyInfoUnderAV1Infohash$", "-test.count=1", "-test.v", "-test.timeout=60s")
-	cmd.Env = append(os.Environ(), v2OnlyChildDirEnv+"="+t.TempDir())
-	out, err := cmd.CombinedOutput()
-	if err == nil || !strings.Contains(string(out), "piece request order has") {
-		t.Fatalf("the child ended with %v and no request-order panic, so finding 33 may be fixed: re-check 011, 018 and 022's notes\n%s", err, out)
+	if out, err := runChild(t, "TestPinnedEnginePanicsPlanningPastItsRequestIndex", infoPastTheIndexEnv); err == nil || !strings.Contains(out, "integer divide by zero") {
+		t.Errorf("the child ended with %v and no panic, so finding 39 may be fixed: re-check infocheck's piece length and chunk bounds\n%s", err, out)
+	}
+}
+
+// peerMessageEnv runs TestPinnedEnginePanicsOnAPeersMessage as the child that connects to a hostile
+// MetadataPeer and crashes on the message it sends.
+const peerMessageEnv = "OCTOPUS_ENGINE_PEER_MESSAGE_CHILD_DIR"
+
+// metadataAttacks are shapes a peer sends that crash the pinned engine when it handles them, apart
+// from the metadata it may apply. The gate turns each into something harmless (findings 41–43);
+// each child must still crash, so a release that fixes the engine fails this test.
+var metadataAttacks = map[string]struct {
+	panic string
+	size  int
+	send  func(send func(pp.Message), utMetadata pp.ExtensionNumber)
+}{
+	// 42: the extended handshake's metadata_size passes a 32-bit check, then the engine allocates it.
+	"a metadata size the engine cannot hold": {"out of range", 1 << 62, nil},
+	// 43: a v2 hash message dereferences the torrent's files, nil before the info.
+	"a v2 hashes message": {"invalid memory address or nil pointer dereference", 0, func(send func(pp.Message), _ pp.ExtensionNumber) {
+		send(pp.Message{Type: pp.Hashes, PiecesRoot: [32]byte{1}})
+	}},
+	// 41: once a size is set the engine allocates the metadata buffer, then a request for a negative
+	// piece slices it from a negative offset.
+	"a metadata request for a negative piece": {"index out of range", 1 << 20, func(send func(pp.Message), utMetadata pp.ExtensionNumber) {
+		send(pp.Message{Type: pp.Extended, ExtendedID: utMetadata, ExtendedPayload: bencode.MustMarshal(pp.ExtendedMetadataRequestMsg{Type: pp.RequestMetadataExtensionMsgType, Piece: -1})})
+	}},
+}
+
+// Findings 41–43: a peer of a pending magnet ends the application with one message, apart from the
+// metadata. Each runs in a child process whose engine dials a hostile MetadataPeer; the gate (in
+// Fetch, not here) turns each message into something harmless.
+func TestPinnedEnginePanicsOnAPeersMessage(t *testing.T) {
+	if dir := childDir(t, peerMessageEnv); dir != "" {
+		a := metadataAttacks[os.Getenv(hostileShapeEnv)]
+		mi := metaInfo(t, named(t, "v1-single"))
+		m, err := swarm.ServeMetadata(mi.HashInfoBytes(), mi.InfoBytes, swarm.MetadataOptions{MetadataSize: a.size, Attack: a.send})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(m.Close)
+		lt, _ := childPeer(t, dir).Client().AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: mi.HashInfoBytes()})
+		lt.AddPeers([]torrent.PeerInfo{m.PeerInfo()})
+		waitClosed(lt.GotInfo(), 10*time.Second) // the crash ends the child long before this
+		return
+	}
+	for name, a := range metadataAttacks {
+		out, err := runChild(t, "TestPinnedEnginePanicsOnAPeersMessage", peerMessageEnv, hostileShapeEnv+"="+name)
+		if err == nil || !strings.Contains(out, a.panic) {
+			t.Errorf("%s: the child ended with %v and no %q, so the engine may be fixed: re-check the gate's callbacks\n%s", name, err, a.panic, out)
+		}
 	}
 }
 

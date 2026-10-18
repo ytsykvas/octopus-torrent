@@ -15,10 +15,14 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 
 	"octopustorrent/internal/torrentengine/filestore"
+	"octopustorrent/internal/torrentengine/infocheck"
 	"octopustorrent/internal/torrentengine/testutil/fixture"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
 	"octopustorrent/internal/torrentengine/transferswitch"
 )
+
+// limits admit every fixture; the refusals are infocheck's own tests and the hostile-peer test.
+var limits = infocheck.Limits{Files: 100, Pieces: 1000, MetadataBytes: 16 << 20}
 
 const (
 	transferLimit = 30 * time.Second
@@ -82,14 +86,16 @@ func seeder(t *testing.T, fx fixture.Fixture, mi *metainfo.MetaInfo, rateLimit i
 type leecher struct {
 	peer    *swarm.Peer
 	client  *torrent.Client
+	gate    *Gate
 	dataDir string
 }
 
 func newLeecher(t *testing.T) leecher {
 	t.Helper()
 	dataDir := t.TempDir()
-	p := newPeer(t, swarm.Options{DefaultStorage: filestore.Refusing(), DataDir: dataDir})
-	return leecher{peer: p, client: p.Client(), dataDir: dataDir}
+	var gate *Gate
+	p := newPeer(t, swarm.Options{DefaultStorage: filestore.Refusing(), DataDir: dataDir, Configure: func(cfg *torrent.ClientConfig) { gate = NewGate(cfg) }})
+	return leecher{peer: p, client: p.Client(), gate: gate, dataDir: dataDir}
 }
 
 // dirs are the folders a pending import must leave as they are.

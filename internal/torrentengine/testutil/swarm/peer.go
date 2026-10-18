@@ -36,6 +36,9 @@ type Options struct {
 	// KeepAliveTimeout replaces the engine's keep-alive interval, which also bounds how long a
 	// connection's writer can sleep through a lost wake-up (task 010); 0 keeps the engine default.
 	KeepAliveTimeout time.Duration
+	// Configure, when set, changes the engine configuration last, before the client starts: how a
+	// test installs what the product installs, such as pendingmagnet's gate.
+	Configure func(*torrent.ClientConfig)
 }
 
 // Settings is what a peer's engine configuration allows, for reports and for the tests that prove
@@ -100,6 +103,9 @@ func NewPeer(dir string, opts Options) (*Peer, error) {
 		// Burst 0: the engine sets each limiter's burst itself (to at least one chunk) when it is 0.
 		cfg.UploadRateLimiter = rate.NewLimiter(rate.Limit(opts.RateLimit), 0)
 		cfg.DownloadRateLimiter = rate.NewLimiter(rate.Limit(opts.RateLimit), 0)
+	}
+	if opts.Configure != nil {
+		opts.Configure(cfg)
 	}
 	client, err := newClient(cfg)
 	if err != nil {

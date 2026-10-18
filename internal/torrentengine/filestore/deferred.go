@@ -34,7 +34,12 @@ var (
 // read, write and mark, counting them. Attach opens the final storage with the same metadata and
 // makes every later piece operation go there: the engine looks a piece's storage up on every access,
 // so the torrent needs neither a Drop nor a second add. One Deferred serves one torrent.
+//
+// The engine opens the storage with an info before it applies it, and fails SetInfoBytes when the
+// open fails. OpenTorrent therefore runs an admission rule first: an info it refuses is never
+// applied, whichever add path set it on the torrent.
 type Deferred struct {
+	admit     func(*metainfo.Info) error
 	mu        sync.Mutex // orders OpenTorrent, Close and each step of Attach; never held during file work
 	info      *metainfo.Info
 	infoHash  metainfo.Hash
@@ -44,16 +49,23 @@ type Deferred struct {
 	touched   atomic.Int64
 }
 
-// NewDeferred returns a Deferred with nothing attached.
-func NewDeferred() *Deferred {
-	return &Deferred{}
+// NewDeferred returns a Deferred with nothing attached that admits only the info admit accepts. A
+// nil admit is a programming error and panics here, not later under the engine's lock.
+func NewDeferred(admit func(*metainfo.Info) error) *Deferred {
+	if admit == nil {
+		panic("filestore: NewDeferred needs an admission rule")
+	}
+	return &Deferred{admit: admit}
 }
 
-// OpenTorrent records the metadata and returns a torrent that goes to the final storage once it is
-// attached.
+// OpenTorrent admits the info, records it and returns a torrent that goes to the final storage once
+// it is attached. A refused info is not recorded, and the refusal is the engine's error.
 func (d *Deferred) OpenTorrent(_ context.Context, info *metainfo.Info, infoHash metainfo.Hash) (storage.TorrentImpl, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if err := d.admit(info); err != nil {
+		return storage.TorrentImpl{}, err
+	}
 	d.info, d.infoHash = info, infoHash
 	return storage.TorrentImpl{
 		Piece: func(p metainfo.Piece) storage.PieceImpl {

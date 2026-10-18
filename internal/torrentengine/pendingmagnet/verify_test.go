@@ -6,31 +6,37 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
 	infohash_v2 "github.com/anacrolix/torrent/types/infohash-v2"
+
+	"octopustorrent/internal/torrentengine/infocheck"
 )
 
-func TestVerifiedMetadataHashesToTheRequestedInfohash(t *testing.T) {
+func TestVettedMetadataHashesToTheRequestedInfohash(t *testing.T) {
 	_, mi := named(t, "v1-tree")
-	info, err := verify(mi.HashInfoBytes(), mi.InfoBytes, applied(t, mi.InfoBytes))
+	info, err := vet(mi.HashInfoBytes(), mi.InfoBytes, limits)
 	if err != nil || info.Name != "tree" {
-		t.Fatalf("verify = %q, %v", info.Name, err)
+		t.Fatalf("vet = %v, %v", info, err)
 	}
 	_, other := named(t, "v1-single")
-	if _, err := verify(other.HashInfoBytes(), mi.InfoBytes, applied(t, mi.InfoBytes)); !errors.Is(err, ErrInfoMismatch) {
+	if _, err := vet(other.HashInfoBytes(), mi.InfoBytes, limits); !errors.Is(err, ErrInfoMismatch) {
 		t.Errorf("another torrent's info: %v, want ErrInfoMismatch", err)
 	}
 }
 
 // The engine keeps the first info it applied, while a later SetInfoBytes on the same torrent (another
-// add path) replaces only the bytes (finding 31). Bytes that hash right are refused unless they are
-// the info the engine applied, so the folder is never opened with a stranger's file list.
-func TestVerifiedBytesMustBeTheInfoTheEngineApplied(t *testing.T) {
+// add path) replaces only the bytes (finding 31). Vetted bytes are refused unless they are the info
+// the engine applied, so the folder is never opened with a stranger's file list.
+func TestVettedBytesMustBeTheInfoTheEngineApplied(t *testing.T) {
 	_, mi := named(t, "v1-tree")
 	_, other := named(t, "v1-single")
-	if _, err := verify(mi.HashInfoBytes(), mi.InfoBytes, applied(t, other.InfoBytes)); !errors.Is(err, ErrInfoReplaced) {
+	if err := sameInfo(applied(t, mi.InfoBytes), applied(t, other.InfoBytes)); !errors.Is(err, ErrInfoReplaced) {
 		t.Errorf("bytes that are not the applied info: %v, want ErrInfoReplaced", err)
+	}
+	if err := sameInfo(applied(t, mi.InfoBytes), applied(t, mi.InfoBytes)); err != nil {
+		t.Errorf("the applied info itself: %v", err)
 	}
 }
 
@@ -49,23 +55,16 @@ func applied(t *testing.T, infoBytes []byte) *metainfo.Info {
 func TestATruncatedV2InfohashIsAMismatch(t *testing.T) {
 	_, mi := named(t, "hybrid-tree")
 	full := infohash_v2.HashBytes(mi.InfoBytes)
-	v2 := *full.ToShort()
-	if _, err := verify(v2, mi.InfoBytes, applied(t, mi.InfoBytes)); !errors.Is(err, ErrInfoMismatch) {
+	if _, err := vet(*full.ToShort(), mi.InfoBytes, limits); !errors.Is(err, ErrInfoMismatch) {
 		t.Errorf("truncated v2 hash: %v, want ErrInfoMismatch", err)
 	}
 }
 
-func TestMetadataThatCannotBeReadOrIsV2OnlyIsRefused(t *testing.T) {
+// Bytes that hash right are still parsed only once infocheck has scanned them.
+func TestMetadataThatCannotBeReadIsRefused(t *testing.T) {
 	garbage := []byte("not bencode")
-	if _, err := verify(metainfo.HashBytes(garbage), garbage, &metainfo.Info{}); !errors.Is(err, ErrBadInfo) {
-		t.Errorf("unreadable info: %v, want ErrBadInfo", err)
-	}
-	v2only, err := bencode.Marshal(metainfo.Info{Name: "v2", PieceLength: 16 << 10, MetaVersion: 2})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := verify(metainfo.HashBytes(v2only), v2only, applied(t, v2only)); !errors.Is(err, ErrV2Only) {
-		t.Errorf("v2-only info: %v, want ErrV2Only", err)
+	if _, err := vet(metainfo.HashBytes(garbage), garbage, limits); !errors.Is(err, infocheck.ErrMalformed) {
+		t.Errorf("unreadable info: %v, want infocheck.ErrMalformed", err)
 	}
 }
 
@@ -83,9 +82,10 @@ func TestARequestThatCannotWorkNeverReachesTheEngine(t *testing.T) {
 		{"no wait", context.Background(), Request{InfoHash: mi.HashInfoBytes()}, ErrInvalidWait},
 		{"negative wait", context.Background(), Request{InfoHash: mi.HashInfoBytes(), Wait: -time.Second}, ErrInvalidWait},
 		{"no infohash", context.Background(), Request{Wait: time.Second}, ErrInvalidSource},
-		{"canceled", done, Request{InfoHash: mi.HashInfoBytes(), Wait: time.Second}, context.Canceled},
+		{"no limits", context.Background(), Request{InfoHash: mi.HashInfoBytes(), Wait: time.Second}, infocheck.ErrInvalidLimits},
+		{"canceled", done, Request{InfoHash: mi.HashInfoBytes(), Wait: time.Second, Limits: limits}, context.Canceled},
 	} {
-		if p, err := Fetch(c.ctx, nil, c.req); p != nil || !errors.Is(err, c.want) {
+		if p, err := NewGate(torrent.NewDefaultClientConfig()).Fetch(c.ctx, nil, c.req); p != nil || !errors.Is(err, c.want) {
 			t.Errorf("%s: Fetch = %v, %v; want %v", c.name, p, err, c.want)
 		}
 	}

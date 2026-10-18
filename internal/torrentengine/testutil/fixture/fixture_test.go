@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
 )
 
@@ -374,4 +375,77 @@ func load(t *testing.T, fx Fixture) *metainfo.MetaInfo {
 		t.Fatalf("%s: %v", fx.Name, err)
 	}
 	return mi
+}
+
+func TestHostileInfosAreTheMeasuredShapes(t *testing.T) {
+	hostile := HostileInfos()
+	base := func(name string) metainfo.Info {
+		fx, err := Named(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mi, err := fx.MetaInfo()
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := mi.UnmarshalInfo()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+	parsed := map[string]metainfo.Info{}
+	for _, h := range hostile {
+		if h.Finding < 33 || h.Finding > 37 || h.Panic == "" {
+			t.Errorf("%s: finding %d, panic %q", h.Name, h.Finding, h.Panic)
+		}
+		if h.Finding == 37 {
+			// The engine's decoder would overflow this test's stack; check the bytes instead.
+			deep := "2:zz" + strings.Repeat("l", DeepNesting) + strings.Repeat("e", DeepNesting) + "e"
+			if !bytes.HasSuffix(h.InfoBytes, []byte(deep)) || len(h.InfoBytes) > 16<<20 {
+				t.Errorf("%s: %d bytes without the nested key at the end", h.Name, len(h.InfoBytes))
+			}
+			parsed[h.Name] = metainfo.Info{}
+			continue
+		}
+		var info metainfo.Info
+		if err := bencode.Unmarshal(h.InfoBytes, &info); err != nil {
+			t.Fatalf("%s: the engine cannot read it: %v", h.Name, err)
+		}
+		parsed[h.Name] = info
+	}
+	if len(parsed) != 9 {
+		t.Fatalf("%d hostile infos with distinct names, want 9", len(parsed))
+	}
+	if got := parsed["a hybrid without a piece length"]; got.PieceLength != 0 || got.MetaVersion != 2 {
+		t.Errorf("a hybrid without a piece length: %d, meta version %d", got.PieceLength, got.MetaVersion)
+	}
+	if got, want := parsed["v2-only tree"], base("v2-tree"); !reflect.DeepEqual(got, want) {
+		t.Error("the v2-only tree is not the v2-tree fixture's info")
+	}
+	if got := parsed["v2 with a v1 length and no pieces"]; got.Length != 57344 || len(got.Pieces) != 0 || got.MetaVersion != 2 {
+		t.Errorf("v2 with a v1 length: length %d, %d piece bytes, meta version %d", got.Length, len(got.Pieces), got.MetaVersion)
+	}
+	tree := base("hybrid-tree")
+	if root := parsed["a hybrid with a short pieces root"].FileTree.Dir["docs"].Dir["readme.txt"].File.PiecesRoot; len(root) != 5 {
+		t.Errorf("the short pieces root has %d bytes", len(root))
+	}
+	if got := parsed["a hybrid whose root folder has a length"]; got.FileTree.File.Length != got.PieceLength || len(got.Pieces) != len(tree.Pieces)+20 {
+		t.Errorf("the root folder's length is %d, %d piece bytes", got.FileTree.File.Length, len(got.Pieces))
+	}
+	if got := parsed["a hybrid one v1 piece short"]; len(got.Pieces) != len(tree.Pieces)-20 || got.PieceLength != tree.PieceLength {
+		t.Errorf("a hybrid one piece short: %d piece bytes of %d", len(got.Pieces), len(tree.Pieces))
+	}
+	if got := parsed["a hybrid with half its piece length"]; got.PieceLength != tree.PieceLength/2 || !bytes.Equal(got.Pieces, tree.Pieces) {
+		t.Errorf("a hybrid with half its piece length: %d", got.PieceLength)
+	}
+}
+
+func TestAnUnknownSpecIsAProgrammingError(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("specNamed of an unknown name did not panic")
+		}
+	}()
+	specNamed("no such fixture")
 }

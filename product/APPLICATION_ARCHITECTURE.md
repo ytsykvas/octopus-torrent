@@ -62,6 +62,7 @@ internal/torrentengine/testutil/ fixture (own v1/v2/hybrid test torrents), swarm
 internal/torrentengine/          engine contract tests on the pinned version (exist, 007); the adapter comes in 018
 internal/torrentengine/transferswitch/  confirmed upload stop, resume without a stall, the writer wake bound (prototype from 010; 018 moves it into the adapter)
 internal/torrentengine/pendingmagnet/   a magnet's metadata without payload, confirmed into the chosen folder in place (prototype from 011; 018/022 build on it)
+internal/torrentengine/infocheck/       which info bytes the engine may parse and apply: bounded size, syntax, depth and decode work, a complete v1 part, a v2 part that matches it, the engine's index bounds, limits (011; 019 reuses it for .torrent files)
 cmd/engine-spike/, internal/enginespike/, frontend/src/spike/   temporary EngineSpike.app (exists, 007; deleted by 034)
 internal/library/               SQLite: Open/Write/Read and error kinds (008), the piece-completion marks (009); repositories and migrations
 internal/torrentengine/filestore/   the engine storage: guard, marks completion, session record (prototype from 009; 018 builds on it)

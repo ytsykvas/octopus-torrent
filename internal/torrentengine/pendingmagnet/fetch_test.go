@@ -2,17 +2,25 @@ package pendingmagnet
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/bencode"
+	"github.com/anacrolix/torrent/metainfo"
+	pp "github.com/anacrolix/torrent/peer_protocol"
 
 	"octopustorrent/internal/torrentengine/filestore"
+	"octopustorrent/internal/torrentengine/infocheck"
+	"octopustorrent/internal/torrentengine/testutil/fixture"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
 )
 
@@ -24,7 +32,7 @@ func TestFetchGetsVerifiedMetadataAndThePendingImportMovesNoPayload(t *testing.T
 			l := newLeecher(t)
 			before := tree(t, l.dirs()...)
 
-			p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+			p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -70,7 +78,7 @@ func TestFetchWithNoPeerEndsAtItsLimit(t *testing.T) {
 	l := newLeecher(t)
 	const wait = 300 * time.Millisecond
 	start := time.Now()
-	p, err := Fetch(context.Background(), l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: wait})
+	p, err := l.gate.Fetch(context.Background(), l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: wait, Limits: limits})
 	if p != nil || !errors.Is(err, ErrNoMetadata) || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Fetch = %v, %v; want ErrNoMetadata wrapping DeadlineExceeded", p, err)
 	}
@@ -87,7 +95,7 @@ func TestACanceledFetchReturnsTheContextErrorAndLeavesNothing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(200*time.Millisecond, cancel)
 	start := time.Now()
-	p, err := Fetch(ctx, l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: transferLimit})
+	p, err := l.gate.Fetch(ctx, l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: transferLimit, Limits: limits})
 	if p != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("Fetch = %v, %v; want context.Canceled", p, err)
 	}
@@ -132,7 +140,7 @@ func TestACancelAsTheMetadataArrivesLeavesNothing(t *testing.T) {
 				}
 			}
 		}()
-		p, err := Fetch(ctx, l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+		p, err := l.gate.Fetch(ctx, l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 		close(done)
 		<-watched
 		cancel()
@@ -173,7 +181,7 @@ func TestFetchRefusesMetadataThatDoesNotMatchTheInfohash(t *testing.T) {
 
 	l := newLeecher(t)
 	before := tree(t, l.dirs()...)
-	p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: want.HashInfoBytes(), Peers: swarm.PeerInfos(liar), Wait: transferLimit})
+	p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: want.HashInfoBytes(), Peers: swarm.PeerInfos(liar), Wait: transferLimit, Limits: limits})
 	if p != nil || !errors.Is(err, ErrInfoMismatch) {
 		t.Fatalf("Fetch from a liar = %v, %v; want ErrInfoMismatch", p, err)
 	}
@@ -181,6 +189,146 @@ func TestFetchRefusesMetadataThatDoesNotMatchTheInfohash(t *testing.T) {
 	sameTree(t, before, l.dirs()...)
 	if read, written := l.payload(); read != 0 || written != 0 {
 		t.Errorf("payload read %d, written %d", read, written)
+	}
+}
+
+// infoWith is a fixture's info bytes changed as a hostile peer would change them.
+func infoWith(t *testing.T, name string, edit func(m map[string]any)) []byte {
+	t.Helper()
+	_, mi := named(t, name)
+	var m map[string]any
+	if err := bencode.Unmarshal(mi.InfoBytes, &m); err != nil {
+		t.Fatal(err)
+	}
+	edit(m)
+	return bencode.MustMarshal(m)
+}
+
+// A hostile peer serves an info whose SHA-1 is the magnet's btih, so it passes every hash check, and
+// which crashes or stalls the pinned engine once the engine parses or applies it (findings 33–39),
+// some before any storage hook. The gate keeps the pieces from the engine, and Fetch refuses the
+// bytes before it gives them to the engine: Fetch ends at once and leaves nothing. Without the gate
+// this test binary dies.
+func TestFetchRefusesHostileMetadataBeforeTheEngineParsesIt(t *testing.T) {
+	serve := func(t *testing.T, infoBytes []byte) (*swarm.MetadataPeer, metainfo.Hash) {
+		t.Helper()
+		h := metainfo.HashBytes(infoBytes)
+		m, err := swarm.ServeMetadata(h, infoBytes, swarm.MetadataOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(m.Close)
+		return m, h
+	}
+	fetch := func(t *testing.T, infoBytes []byte, l infocheck.Limits, want error) {
+		t.Helper()
+		m, h := serve(t, infoBytes)
+		lc := newLeecher(t)
+		before := tree(t, lc.dirs()...)
+		start := time.Now()
+		p, err := lc.gate.Fetch(deadline(t, transferLimit), lc.client, Request{InfoHash: h, Peers: []torrent.PeerInfo{m.PeerInfo()}, Wait: transferLimit, Limits: l})
+		if p != nil || !errors.Is(err, want) {
+			t.Fatalf("Fetch = %v, %v; want %v", p, err, want)
+		}
+		if took := time.Since(start); took > transferLimit/2 {
+			t.Errorf("the refusal took %v: Fetch waited instead of ending at the refusal", took)
+		}
+		if m.Served() == 0 {
+			t.Error("the hostile peer served nothing: the refusal was not about its metadata")
+		}
+		lc.empty(t)
+		sameTree(t, before, lc.dirs()...)
+		if read, written := lc.payload(); read != 0 || written != 0 {
+			t.Errorf("payload read %d, written %d", read, written)
+		}
+	}
+	for _, h := range fixture.HostileInfos() {
+		t.Run(h.Name, func(t *testing.T) {
+			want := map[int]error{33: infocheck.ErrV2Only, 37: infocheck.ErrMalformed}[h.Finding]
+			fetch(t, h.InfoBytes, limits, cmp.Or(want, infocheck.ErrInconsistentInfo))
+		})
+	}
+	// Finding 38: 20 000 nested folders, about 100 KB, cost the engine 18–30 s under its lock.
+	t.Run("a deeply nested file tree", func(t *testing.T) {
+		_, mi := named(t, "v1-single")
+		deep := "9:file tree" + strings.Repeat("d1:a", 20_000) + "de" + strings.Repeat("e", 20_000)
+		fetch(t, bytes.Replace(mi.InfoBytes, []byte("6:lengthi"), []byte(deep+"6:lengthi"), 1), limits, infocheck.ErrMalformed)
+	})
+	// Finding 39: a piece length past the engine's request index panics it once a peer has pieces.
+	t.Run("a piece length of 2^32", func(t *testing.T) {
+		fetch(t, infoWith(t, "v1-single", func(m map[string]any) {
+			m["piece length"], m["pieces"] = int64(1)<<32, string(make([]byte, 20))
+		}), limits, infocheck.ErrInfoTooLarge)
+	})
+	t.Run("more files than the limit", func(t *testing.T) {
+		_, mi := named(t, "v1-tree")
+		fetch(t, mi.InfoBytes, infocheck.Limits{Files: 2, Pieces: 1000, MetadataBytes: 1 << 20}, infocheck.ErrInfoTooLarge)
+	})
+	t.Run("more metadata than the limit", func(t *testing.T) {
+		_, mi := named(t, "v1-tree")
+		fetch(t, mi.InfoBytes, infocheck.Limits{Files: 100, Pieces: 1000, MetadataBytes: len(mi.InfoBytes) - 1}, infocheck.ErrInfoTooLarge)
+	})
+}
+
+// A peer that serves the real metadata but also sends a message that crashes the pinned engine
+// (findings 41–43): the gate neutralizes each, so Fetch still returns the import and the engine
+// lives. Without the gate's callbacks the child dies (TestPinnedEnginePanicsOnAPeersMessage).
+func TestFetchSurvivesAPeersCrashingMessages(t *testing.T) {
+	for name, a := range map[string]struct {
+		size int
+		send func(send func(pp.Message), utMetadata pp.ExtensionNumber)
+	}{
+		"a lie about the metadata size": {1 << 62, nil},
+		"a v2 hashes message": {0, func(send func(pp.Message), _ pp.ExtensionNumber) {
+			send(pp.Message{Type: pp.Hashes, PiecesRoot: [32]byte{1}})
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, mi := named(t, "v1-single")
+			// The peer both serves the metadata and attacks: send the attack, then the pieces.
+			served := make(chan struct{})
+			m, err := swarm.ServeMetadata(mi.HashInfoBytes(), mi.InfoBytes, swarm.MetadataOptions{MetadataSize: a.size, Attack: func(send func(pp.Message), ut pp.ExtensionNumber) {
+				if a.send != nil {
+					a.send(send, ut)
+				}
+				for begin := 0; begin < len(mi.InfoBytes); begin += 1 << 14 {
+					end := min(begin+1<<14, len(mi.InfoBytes))
+					header := bencode.MustMarshal(pp.ExtendedMetadataRequestMsg{Type: pp.DataMetadataExtensionMsgType, Piece: begin >> 14, TotalSize: len(mi.InfoBytes)})
+					send(pp.Message{Type: pp.Extended, ExtendedID: ut, ExtendedPayload: append(header, mi.InfoBytes[begin:end]...)})
+				}
+				close(served)
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(m.Close)
+			l := newLeecher(t)
+			p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: []torrent.PeerInfo{m.PeerInfo()}, Wait: transferLimit, Limits: limits})
+			if err != nil || p == nil {
+				t.Fatalf("Fetch = %v, %v; want the import despite the attack", p, err)
+			}
+			<-served
+		})
+	}
+}
+
+// A peer that lies about one metadata piece ends the fetch, and the error names the peers that
+// took part, so the caller can retry without them.
+func TestFetchNamesThePeersThatSentRefusedMetadata(t *testing.T) {
+	_, mi := named(t, "v1-tree")
+	m, err := swarm.ServeMetadata(mi.HashInfoBytes(), mi.InfoBytes, swarm.MetadataOptions{Attack: func(send func(pp.Message), ut pp.ExtensionNumber) {
+		send(pp.Message{Type: pp.Extended, ExtendedID: ut, ExtendedPayload: bencode.MustMarshal(pp.ExtendedMetadataRequestMsg{Type: pp.DataMetadataExtensionMsgType, Piece: 99, TotalSize: len(mi.InfoBytes)})})
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Close)
+	l := newLeecher(t)
+	_, err = l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: []torrent.PeerInfo{m.PeerInfo()}, Wait: transferLimit, Limits: limits})
+	host, _, _ := net.SplitHostPort(m.Addr().String())
+	var pe *PeerError
+	if !errors.As(err, &pe) || len(pe.Peers) != 1 || pe.Peers[0] != host {
+		t.Fatalf("Fetch = %v; want a PeerError naming %s", err, host)
 	}
 }
 
@@ -196,13 +344,13 @@ func TestFetchOfAKnownInfohashLeavesTheExistingTorrentAlone(t *testing.T) {
 	existing.DownloadAll()
 	swarm.Connect(existing, sd)
 
-	if p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit}); p != nil || !errors.Is(err, ErrDuplicate) {
+	if p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits}); p != nil || !errors.Is(err, ErrDuplicate) {
 		t.Fatalf("Fetch of a known infohash = %v, %v; want ErrDuplicate", p, err)
 	}
 	_, single := named(t, "v1-single")
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	if _, err := Fetch(ctx, l.client, Request{InfoHash: single.HashInfoBytes(), Wait: transferLimit}); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := l.gate.Fetch(ctx, l.client, Request{InfoHash: single.HashInfoBytes(), Wait: transferLimit, Limits: limits}); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("a cancelled fetch of another torrent = %v", err)
 	}
 
@@ -228,7 +376,7 @@ func TestShutdownEndsAFetchAndRefusesLaterCalls(t *testing.T) {
 		l := newLeecher(t)
 		time.AfterFunc(200*time.Millisecond, func() { l.client.Close() })
 		start := time.Now()
-		if p, err := Fetch(context.Background(), l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: transferLimit}); p != nil || !errors.Is(err, ErrClientClosed) {
+		if p, err := l.gate.Fetch(context.Background(), l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: transferLimit, Limits: limits}); p != nil || !errors.Is(err, ErrClientClosed) {
 			t.Fatalf("Fetch = %v, %v; want ErrClientClosed", p, err)
 		}
 		if took := time.Since(start); took > 200*time.Millisecond+promptLimit {
@@ -239,7 +387,7 @@ func TestShutdownEndsAFetchAndRefusesLaterCalls(t *testing.T) {
 	t.Run("a fetch after the shutdown", func(t *testing.T) {
 		l := newLeecher(t)
 		l.client.Close()
-		if p, err := Fetch(context.Background(), l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: transferLimit}); p != nil || !errors.Is(err, ErrClientClosed) {
+		if p, err := l.gate.Fetch(context.Background(), l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: transferLimit, Limits: limits}); p != nil || !errors.Is(err, ErrClientClosed) {
 			t.Fatalf("Fetch = %v, %v; want ErrClientClosed", p, err)
 		}
 		if _, ok := l.client.Torrent(mi.HashInfoBytes()); ok {
@@ -250,7 +398,7 @@ func TestShutdownEndsAFetchAndRefusesLaterCalls(t *testing.T) {
 	t.Run("a confirmation after the shutdown", func(t *testing.T) {
 		sd := seeder(t, fx, mi, 0)
 		l := newLeecher(t)
-		p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+		p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -282,7 +430,7 @@ func TestATorrentClosedByAnotherHolderEndsTheImport(t *testing.T) {
 				time.Sleep(time.Millisecond)
 			}
 		}()
-		if p, err := Fetch(context.Background(), l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: transferLimit}); p != nil || !errors.Is(err, ErrTorrentClosed) {
+		if p, err := l.gate.Fetch(context.Background(), l.client, Request{InfoHash: mi.HashInfoBytes(), Wait: transferLimit, Limits: limits}); p != nil || !errors.Is(err, ErrTorrentClosed) {
 			t.Fatalf("Fetch = %v, %v; want ErrTorrentClosed", p, err)
 		}
 	})
@@ -290,7 +438,7 @@ func TestATorrentClosedByAnotherHolderEndsTheImport(t *testing.T) {
 	t.Run("before the confirmation", func(t *testing.T) {
 		sd := seeder(t, fx, mi, 0)
 		l := newLeecher(t)
-		p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+		p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -312,7 +460,7 @@ func TestConfirmPutsTheFilesExactlyInTheChosenFolder(t *testing.T) {
 			fx, mi := named(t, name)
 			sd := seeder(t, fx, mi, 0)
 			l := newLeecher(t)
-			p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+			p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -383,7 +531,7 @@ func TestConfirmAndCancelRaceToExactlyOneOutcome(t *testing.T) {
 	sd := seeder(t, fx, mi, 0)
 	fetch := func(t *testing.T, l leecher) *Pending {
 		t.Helper()
-		p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+		p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -453,7 +601,7 @@ func TestConfirmAppliesTheSwitches(t *testing.T) {
 	t.Run("no download until started", func(t *testing.T) {
 		sd := seeder(t, fx, mi, 0)
 		l := newLeecher(t)
-		p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+		p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -471,7 +619,7 @@ func TestConfirmAppliesTheSwitches(t *testing.T) {
 	t.Run("no upload while the global stop is on", func(t *testing.T) {
 		sd := seeder(t, fx, mi, 128<<10)
 		l := newLeecher(t)
-		p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+		p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -500,7 +648,7 @@ func TestCallsAfterTheEndAreRefused(t *testing.T) {
 	fx, mi := named(t, "v1-single")
 	sd := seeder(t, fx, mi, 0)
 	l := newLeecher(t)
-	p, err := Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+	p, err := l.gate.Fetch(deadline(t, transferLimit), l.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -522,7 +670,7 @@ func TestCallsAfterTheEndAreRefused(t *testing.T) {
 	filesAreTheFixture(t, fx, mi, root)
 
 	l2 := newLeecher(t)
-	p2, err := Fetch(deadline(t, transferLimit), l2.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit})
+	p2, err := l2.gate.Fetch(deadline(t, transferLimit), l2.client, Request{InfoHash: mi.HashInfoBytes(), Peers: swarm.PeerInfos(sd), Wait: transferLimit, Limits: limits})
 	if err != nil {
 		t.Fatal(err)
 	}
