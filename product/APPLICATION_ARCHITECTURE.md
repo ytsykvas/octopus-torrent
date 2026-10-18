@@ -69,7 +69,7 @@ internal/torrentengine/filestore/   the engine storage: guard, marks completion,
 internal/torrentengine/classicio/   restarts the process with classic file IO (009)
 internal/files/                 the rehash rule and file fingerprints (009); access, paths, folders, deletion
 internal/automation/            rules and watch folder
-internal/platform/              Wails runtime, Finder, URL, system dialogs
+internal/platform/              Wails runtime, Finder, URL, system dialogs; Trash via NSFileManager with os.Root confinement (012)
 internal/diagnostics/            local errors and logs
 frontend/src/features/          UI by feature
 frontend/src/bridge/            our own adapter for generated bindings

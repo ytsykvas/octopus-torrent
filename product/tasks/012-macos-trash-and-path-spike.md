@@ -1,6 +1,6 @@
 # 012 — Check the macOS Trash and file path protection
 
-**Status:** `planned`  
+**Status:** `blocked`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** mandatory feature or check of the agreed scope  
 **Size:** Gate/spike with a recorded result  
@@ -35,10 +35,10 @@ Verify a supported way of moving files to the macOS Trash and the protection of 
 
 ## Acceptance criteria
 
-- [ ] Only explicitly selected test files end up in the Trash.
-- [ ] An error contains the exact list of files that remained on disk.
-- [ ] All checks are performed on specially created test data and do not touch personal files.
-- [ ] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed.
+- [x] Only explicitly selected test files end up in the Trash.
+- [x] An error contains the exact list of files that remained on disk.
+- [x] All checks are performed on specially created test data and do not touch personal files.
+- [x] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed.
 
 ## Checks
 
@@ -70,3 +70,32 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Record a short outcome: what changed, exact checks with statuses `pass`, `fail` or `not_run`, ADR, actual change locations in the code and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+## Execution result
+
+**Date:** 2026-10-19. **Status:** `blocked` on [069](069-native-code-coverage-gate.md).
+
+- **Changes:** new `internal/platform` (macOS, the repo's first cgo). `Trash(saveDir, names, Trasher)`
+  moves each named file to the macOS Trash with `NSFileManager trashItemAtURL` (`trash_darwin.m`,
+  `-framework Foundation`) behind a `Trasher` interface. Confinement is structural (`os.OpenRoot`);
+  a name must be `filepath.IsLocal` and the move acts on the opened file's own path (`fcntl
+  F_GETPATH`), so it cannot be redirected by its name; a non-regular file (symlink, FIFO, device) is
+  refused by `Lstat` before any open; a volume root (Statfs `f_mntonname`) or the home is refused; a
+  bad path to the native `Trasher` is refused in Go so NSString/NSURL cannot abort the process. One
+  `Result` per name and `ErrSomeRemain` naming the files that stayed (DEL-04); never `os.Remove`.
+  ADR [trash-and-paths](../../docs/decisions/trash-and-paths.md), feature
+  [doc](../../docs/app/trash.md), report [012](../../docs/verification/012-macos-trash-and-path-spike.md).
+- **Checks:** `go test -race ./internal/platform` `pass`, 100% of own **Go** (fake `Trasher` on temp
+  dirs + the real `NSFileManager` on an APFS disk image, so nothing reaches `~/.Trash`). The Go/TS
+  gate passes, but it does not measure the Objective-C `.m`.
+- **Why blocked:** the policy (TDD_AND_QUALITY §3) requires a coverage measurement for own code in
+  another language before it is accepted. The gate has none for the `.m`. The three-agent review also
+  found and this change fixed a reproduced confinement escape and a volume-root miss; the remaining
+  gap is the native measurement. [069](069-native-code-coverage-gate.md) adds it and brings
+  `trash_darwin.m` to 100%; 012 completes together with it.
+- **Independent work that can continue:** 069 itself (the tooling); 013, 014 (unrelated).
+- **Limitations:** the full UI→Go→Trash flow is `not_run` (no delete UI yet; owner decision); a
+  regular→regular same-name swap, or an intermediate-directory swap, inside the folder between the
+  check and the move is a path-based-API residual for 032 (the move is reversible).
+- **Next:** [069](069-native-code-coverage-gate.md) (unblocks this), then
+  [020](020-destination-filesystem-service.md), [032](032-safe-payload-trash-journal.md).
