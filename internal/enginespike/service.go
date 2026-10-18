@@ -14,6 +14,7 @@ import (
 	"octopustorrent/internal/app/contracts"
 	"octopustorrent/internal/torrentengine/testutil/fixture"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
+	"octopustorrent/internal/torrentengine/transferswitch"
 )
 
 // Seams for the tests.
@@ -26,10 +27,6 @@ var (
 	seedLimit    = 20 * time.Second
 	// releaseLimit bounds the clean-up of a failed Start, which no caller's context covers.
 	releaseLimit = 5 * time.Second
-	// stallTicks is how many ticks a running transfer may stand still before the ticker switches the
-	// seeder's upload off and on again (engine finding 14): 2 s.
-	stallTicks   = 8
-	setUpload    = switchUpload
 	mkdirTemp    = os.MkdirTemp
 	writePayload = fixture.Fixture.WritePayload
 )
@@ -78,8 +75,6 @@ type Service struct {
 	lt      *torrent.Torrent // the leecher's torrent: the published progress
 	stop    chan struct{}    // closes the ticker
 	ticking chan struct{}    // closed when the ticker has returned
-	still   int              // ticks the running transfer has stood still
-	waking  bool             // the ticker switched the upload off; the next tick switches it on
 
 	shutdown sync.Once
 	closed   error
@@ -190,7 +185,8 @@ func (s *Service) launch() error {
 	if err := writePayload(fx, seedDir); err != nil {
 		return fmt.Errorf("write the payload: %w", err)
 	}
-	opts := swarm.Options{RateLimit: rateLimit}
+	// The product's keep-alive interval bounds a lost writer wake-up (engine findings 14 and 22).
+	opts := swarm.Options{RateLimit: rateLimit, KeepAliveTimeout: transferswitch.WakeInterval}
 	if s.seeder, err = s.newPeer(seedDir, opts); err != nil {
 		return fmt.Errorf("start the seeder: %w", err)
 	}
@@ -222,8 +218,9 @@ func switchUpload(t *torrent.Torrent, allowed bool) {
 
 // command applies the seeder's upload switch and publishes the result. The engine is called only
 // when the state changes. The leecher's download switch is not used: allowing download right after
-// disallowing it stalls the pinned engine's transfer (engine finding 12). The upload switch stalls
-// far more rarely (finding 14), and the ticker wakes such a stall.
+// disallowing it stalls the pinned engine's transfer (engine finding 12; the product resumes with
+// transferswitch.ResumeDownload). A stall after the upload switch (finding 14) ends within the
+// clients' keep-alive interval.
 func (s *Service) command(next State) (Transfer, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -231,9 +228,9 @@ func (s *Service) command(next State) (Transfer, error) {
 		return s.state, errNotRunning
 	}
 	if s.state.State != next {
-		setUpload(s.st, next == Running)
+		switchUpload(s.st, next == Running)
 	}
-	s.state.State, s.still, s.waking = next, 0, false
+	s.state.State = next
 	s.publish()
 	return s.state, nil
 }
@@ -249,36 +246,13 @@ func (s *Service) tick(stop <-chan struct{}, ticking chan<- struct{}) {
 			return
 		case <-ticker.C:
 			s.mu.Lock()
-			before := s.state.BytesCompleted
 			s.publish()
-			s.wake(before)
 			done := s.state.State == Complete
 			s.mu.Unlock()
 			if done {
 				return
 			}
 		}
-	}
-}
-
-// wake switches the seeder's upload off when a running transfer has stood still for stallTicks, and
-// on again at the next tick, and counts it; the caller holds mu. Engine finding 14: after the upload
-// is allowed again the pinned engine can keep a queued request unserved, and a second off and on
-// serves it. A paused or finished transfer is left alone.
-func (s *Service) wake(before contracts.ByteCount) {
-	switch {
-	case s.state.State != Running:
-	case s.waking:
-		setUpload(s.st, true)
-		s.waking, s.still = false, 0
-	case s.state.BytesCompleted != before:
-		s.still = 0
-	case s.still+1 < stallTicks:
-		s.still++
-	default:
-		setUpload(s.st, false)
-		s.waking = true
-		s.state.Recoveries++
 	}
 }
 

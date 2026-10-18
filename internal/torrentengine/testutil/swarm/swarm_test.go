@@ -2,6 +2,7 @@ package swarm
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -24,6 +25,7 @@ import (
 	"github.com/anacrolix/torrent/storage"
 
 	"octopustorrent/internal/torrentengine/testutil/fixture"
+	"octopustorrent/internal/torrentengine/transferswitch"
 )
 
 // Time limits of the scenarios; every wait in this package has one.
@@ -328,16 +330,17 @@ func TestTheRecorderMeasuresARateLimitedTransferAndItsResidualTraffic(t *testing
 	if again := rec.Stop(); len(again.Samples) != len(log.Samples) {
 		t.Errorf("a second Stop changed the log: %d samples, then %d", len(log.Samples), len(again.Samples))
 	}
-	first, ok := log.FirstPayload("leecher")
+	first, ok := log.First("leecher", PayloadRead)
 	stop := log.MarkAt("stop")
 	// A quarter of 1 MiB at 256 KiB/s takes about 1 s; well under 0.5 s means the limit does not hold.
 	if !ok || first > stop || stop < 500*time.Millisecond {
 		t.Errorf("first payload at %v (%v), a quarter of the file at %v", first, ok, stop)
 	}
-	last, _ := log.LastPayload("leecher")
-	after, err := log.PayloadAfter("stop", "leecher")
+	last, _ := log.Last("leecher", PayloadRead)
+	delta, err := log.Delta("stop", "leecher")
+	after := delta.PayloadRead
 	if err != nil || after < 0 || last > log.Samples[len(log.Samples)-1].At {
-		t.Fatalf("PayloadAfter = %d, %v; last payload %v", after, err, last)
+		t.Fatalf("Delta = %+v, %v; last payload %v", delta, err, last)
 	}
 	t.Logf("v1-large at %d B/s: first payload %v, upload disallowed at %v, last payload %v, %d payload bytes after the stop",
 		rateLimit, first, stop, last, after)
@@ -453,22 +456,33 @@ func TestErrorsAreReturnedNotHidden(t *testing.T) {
 func TestLogFunctionsReadSamples(t *testing.T) {
 	log := Log{Samples: []Sample{
 		{At: 0, Counters: map[string]Counters{"l": {}}},
-		{At: 10, Counters: map[string]Counters{"l": {PayloadRead: 5}}},
-		{At: 20, Label: "stop", Counters: map[string]Counters{"l": {PayloadRead: 8}}},
-		{At: 30, Counters: map[string]Counters{"l": {PayloadRead: 9}}},
-		{At: 40, Counters: map[string]Counters{"l": {PayloadRead: 9}}},
+		{At: 10, Counters: map[string]Counters{"l": {PayloadRead: 5, Read: 7}}},
+		{At: 20, Label: "stop", Counters: map[string]Counters{"l": {PayloadRead: 8, Read: 11}}},
+		{At: 30, Counters: map[string]Counters{"l": {PayloadRead: 9, PayloadWritten: 4, Read: 13, Written: 6}}},
+		{At: 40, Counters: map[string]Counters{"l": {PayloadRead: 9, PayloadWritten: 4, Read: 14, Written: 6}}},
 	}}
-	if at, ok := log.FirstPayload("l"); !ok || at != 10 {
-		t.Errorf("FirstPayload = %v %v", at, ok)
+	for _, c := range []struct {
+		field       Field
+		first, last time.Duration
+	}{{Payload, 10, 30}, {PayloadRead, 10, 30}, {PayloadWritten, 30, 30}} {
+		if at, ok := log.First("l", c.field); !ok || at != c.first {
+			t.Errorf("First(%d) = %v %v, want %v", c.field, at, ok, c.first)
+		}
+		if at, ok := log.Last("l", c.field); !ok || at != c.last {
+			t.Errorf("Last(%d) = %v %v, want %v", c.field, at, ok, c.last)
+		}
+		if _, ok := log.First("x", c.field); ok {
+			t.Errorf("First(%d) of a peer without payload reported one", c.field)
+		}
+		if _, ok := log.Last("x", c.field); ok {
+			t.Errorf("Last(%d) of a peer without payload reported one", c.field)
+		}
 	}
-	if at, ok := log.LastPayload("l"); !ok || at != 30 {
-		t.Errorf("LastPayload = %v %v", at, ok)
+	if d, err := log.Delta("stop", "l"); err != nil || d != (Counters{PayloadRead: 1, PayloadWritten: 4, Read: 3, Written: 6}) {
+		t.Errorf("Delta = %+v %v", d, err)
 	}
-	if n, err := log.PayloadAfter("stop", "l"); err != nil || n != 1 {
-		t.Errorf("PayloadAfter = %d %v", n, err)
-	}
-	if _, err := log.PayloadAfter("none", "l"); err == nil {
-		t.Error("PayloadAfter of an unknown mark succeeded")
+	if _, err := log.Delta("none", "l"); err == nil {
+		t.Error("Delta of an unknown mark succeeded")
 	}
 	if at := log.MarkAt("stop"); at != 20 {
 		t.Errorf("MarkAt = %v", at)
@@ -476,11 +490,8 @@ func TestLogFunctionsReadSamples(t *testing.T) {
 	if at := log.MarkAt("none"); at != 0 {
 		t.Errorf("MarkAt of an unknown label = %v", at)
 	}
-	if _, ok := log.FirstPayload("x"); ok {
-		t.Error("FirstPayload of a peer without payload reported one")
-	}
-	if _, ok := log.LastPayload("x"); ok {
-		t.Error("LastPayload of a peer without payload reported one")
+	if got := (Counters{PayloadRead: 2, PayloadWritten: 3}).Get(Payload); got != 5 {
+		t.Errorf("Get(Payload) = %d, want 5", got)
 	}
 }
 
@@ -524,6 +535,9 @@ func replace[T any](t *testing.T, seam *T, value T) {
 // pair starts a seeder with the fixture's payload and a leecher connected to it.
 func pair(t *testing.T, fx fixture.Fixture, opts Options) (seeder, leecher *Peer, st, lt *torrent.Torrent) {
 	t.Helper()
+	// Like every product client, the pair uses the keep-alive interval that bounds a lost writer
+	// wake-up (findings 22 and 26).
+	opts.KeepAliveTimeout = cmp.Or(opts.KeepAliveTimeout, transferswitch.WakeInterval)
 	seeder, leecher = peer(t, opts), peer(t, opts)
 	if err := fx.WritePayload(seeder.Dir); err != nil {
 		t.Fatal(err)
@@ -638,5 +652,14 @@ func TestClientIsTheEngineClientOfThePeer(t *testing.T) {
 	p := peer(t, Options{})
 	if p.Client() == nil || p.Client() != p.client {
 		t.Fatal("Client does not return the peer's engine client")
+	}
+}
+
+func TestAPeerTakesItsKeepAliveTimeoutFromTheCaller(t *testing.T) {
+	if got, want := peer(t, Options{}).config.KeepAliveTimeout, torrent.NewDefaultClientConfig().KeepAliveTimeout; got != want {
+		t.Errorf("default KeepAliveTimeout = %v, want the engine's %v", got, want)
+	}
+	if got := peer(t, Options{KeepAliveTimeout: 3 * time.Second}).config.KeepAliveTimeout; got != 3*time.Second {
+		t.Errorf("KeepAliveTimeout = %v, want 3s", got)
 	}
 }

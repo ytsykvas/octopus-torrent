@@ -145,7 +145,7 @@ func TestAnEngineWithoutTheGuardWritesThroughASymlinkAtTheTorrentPath(t *testing
 	}
 	plain := plainStorage(saveRoot, storage.NewMapPieceCompletion())
 	_, tor := plainTorrent(t, mi, plain)
-	connectPlain(t, tor, seed)
+	swarm.Connect(tor, seed)
 	if err := swarm.WaitComplete(deadline(t, transferLimit), tor); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestOnHFSPlusTheEngineCannotHashAnyPiece(t *testing.T) {
 	vol := volume.New(t, volume.Options{Size: "8m", FS: "HFS+", Name: "OctoHFS"})
 	plain := plainStorage(vol.Mount, storage.NewMapPieceCompletion())
 	p, tor := plainTorrent(t, mi, plain)
-	connectPlain(t, tor, seed)
+	swarm.Connect(tor, seed)
 	time.Sleep(2 * time.Second)
 	if n := len(completePieces(tor)); n != 0 {
 		t.Fatalf("%d pieces completed on HFS+: the engine can hash there now (finding 21)", n)
@@ -240,7 +240,7 @@ func TestWithoutTheGuardTheEngineRecreatesADeletedSaveFolder(t *testing.T) {
 	mustMkdir(t, saveRoot)
 	plain := plainStorage(saveRoot, storage.NewMapPieceCompletion())
 	_, tor := plainTorrent(t, mi, plain)
-	connectPlain(t, tor, seed)
+	swarm.Connect(tor, seed)
 	waitPieces(t, tor, 8)
 	if err := os.RemoveAll(saveRoot); err != nil {
 		t.Fatal(err)

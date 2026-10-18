@@ -21,8 +21,28 @@ func Count(t *torrent.Torrent) Counters {
 	return Counters{PayloadRead: s.BytesReadData.Int64(), PayloadWritten: s.BytesWrittenData.Int64(), Read: s.BytesRead.Int64(), Written: s.BytesWritten.Int64()}
 }
 
-func (c Counters) payload() int64 {
-	return c.PayloadRead + c.PayloadWritten
+// Field names one payload counter, so the log functions can follow one direction of traffic: a
+// peer that downloads and uploads at once moves both.
+type Field int
+
+const (
+	// Payload is the piece data read and written together.
+	Payload Field = iota
+	// PayloadRead is the piece data received.
+	PayloadRead
+	// PayloadWritten is the piece data sent.
+	PayloadWritten
+)
+
+// Get is the value of the field in the counters.
+func (c Counters) Get(f Field) int64 {
+	return [...]int64{c.PayloadRead + c.PayloadWritten, c.PayloadRead, c.PayloadWritten}[f]
+}
+
+// Sub is the growth of every counter from earlier to c.
+func (c Counters) Sub(earlier Counters) Counters {
+	return Counters{PayloadRead: c.PayloadRead - earlier.PayloadRead, PayloadWritten: c.PayloadWritten - earlier.PayloadWritten,
+		Read: c.Read - earlier.Read, Written: c.Written - earlier.Written}
 }
 
 // Sample is the counters of every recorded torrent at one moment, measured from the recorder's start.
@@ -97,22 +117,22 @@ func (r *Recorder) Stop() Log {
 	return r.log
 }
 
-// FirstPayload is when the torrent had first moved payload, and whether it ever did.
-func (l Log) FirstPayload(name string) (time.Duration, bool) {
+// First is when the field of the named torrent was first above zero, and whether it ever was.
+func (l Log) First(name string, f Field) (time.Duration, bool) {
 	for _, s := range l.Samples {
-		if s.Counters[name].payload() > 0 {
+		if s.Counters[name].Get(f) > 0 {
 			return s.At, true
 		}
 	}
 	return 0, false
 }
 
-// LastPayload is the time of the last sample at which the torrent's payload had changed, and
+// Last is the time of the last sample at which the field of the named torrent had changed, and
 // whether it ever changed.
-func (l Log) LastPayload(name string) (time.Duration, bool) {
+func (l Log) Last(name string, f Field) (time.Duration, bool) {
 	at, found := time.Duration(0), false
 	for i := 1; i < len(l.Samples); i++ {
-		if l.Samples[i].Counters[name].payload() != l.Samples[i-1].Counters[name].payload() {
+		if l.Samples[i].Counters[name].Get(f) != l.Samples[i-1].Counters[name].Get(f) {
 			at, found = l.Samples[i].At, true
 		}
 	}
@@ -129,13 +149,13 @@ func (l Log) MarkAt(label string) time.Duration {
 	return 0
 }
 
-// PayloadAfter is the payload the torrent moved between the labelled sample and the last sample:
-// for example the residual traffic after a stop command.
-func (l Log) PayloadAfter(label, name string) (int64, error) {
+// Delta is how much every counter of the named torrent grew between the labelled sample and the
+// last sample: for example the residual traffic after a stop command.
+func (l Log) Delta(label, name string) (Counters, error) {
 	for _, s := range l.Samples {
 		if s.Label == label {
-			return l.Samples[len(l.Samples)-1].Counters[name].payload() - s.Counters[name].payload(), nil
+			return l.Samples[len(l.Samples)-1].Counters[name].Sub(s.Counters[name]), nil
 		}
 	}
-	return 0, fmt.Errorf("no sample labelled %q", label)
+	return Counters{}, fmt.Errorf("no sample labelled %q", label)
 }

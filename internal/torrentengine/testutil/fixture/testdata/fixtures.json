@@ -133,6 +133,24 @@
       "engine": "accepted"
     },
     {
+      "name": "v1-long",
+      "purpose": "16 MiB v1 file for stop measurements: larger than the data a loopback connection holds in flight",
+      "format": "v1",
+      "pieceLength": 65536,
+      "pieces": 256,
+      "infohashV1": "b4bff3d7f6fba1b6f1d573e52d9d6cbdd4412b10",
+      "files": [
+        {
+          "path": [
+            "long.bin"
+          ],
+          "length": 16777216,
+          "sha256": "b03b580de65207d1497d9c634730e31a7d42480f102ac972e3fdd9f36fe3276f"
+        }
+      ],
+      "engine": "accepted"
+    },
+    {
       "name": "v2-single",
       "purpose": "v2-only single file; the pinned engine panics when it is added",
       "format": "v2",

@@ -16,6 +16,7 @@ import (
 
 	"octopustorrent/internal/library"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
+	"octopustorrent/internal/torrentengine/transferswitch"
 )
 
 // eventually waits until cond holds and fails the test with what once limit has passed. The deadline
@@ -33,9 +34,11 @@ func eventually(t *testing.T, limit time.Duration, what string, cond func() bool
 }
 
 // newPeer starts a swarm peer in a temporary folder and closes it when the test ends; a failed close
-// fails the test.
+// fails the test. Like every product client, it uses the keep-alive interval that bounds a lost
+// writer wake-up (engine finding 22, remedy of task 010).
 func newPeer(t *testing.T, opts swarm.Options) *swarm.Peer {
 	t.Helper()
+	opts.KeepAliveTimeout = transferswitch.WakeInterval
 	p, err := swarm.NewPeer(t.TempDir(), opts)
 	if err != nil {
 		t.Fatal(err)

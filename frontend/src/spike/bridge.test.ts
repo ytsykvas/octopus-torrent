@@ -20,7 +20,6 @@ const decoded = {
   payloadWritten: 0n,
   peers: 1,
   clientsStarted: 2,
-  recoveries: 1,
   error: '',
 }
 

@@ -41,6 +41,7 @@
 | [The engine version, its lifecycle and who may release what](decisions/engine-lifecycle.md) (O2) | accepted, [007](../product/tasks/007-engine-api-lifecycle-spike.md); [report](verification/007-engine-api-lifecycle-spike.md) |
 | [The SQLite driver and how every library database is opened](decisions/sqlite-driver.md) (O4) | accepted, [008](../product/tasks/008-sqlite-driver-durability-spike.md); [report](verification/008-sqlite-driver-durability-spike.md) |
 | [Where the engine writes, what it remembers, and what the application believes](decisions/engine-storage.md) (O5) | accepted, [009](../product/tasks/009-storage-and-completion-spike.md); [report](verification/009-storage-and-completion-spike.md) |
+| [Stopping upload without stopping download, and resuming without a stall](decisions/global-upload-stop.md) (O6) | accepted (engine part; production 053), [010](../product/tasks/010-upload-stop-and-pause-spike.md); [report](verification/010-upload-stop-and-pause-spike.md) |
 | Refactor pass after task 009: patterns, clean code, simplification | owner's request of 17 October 2026; [report](verification/refactor-after-009.md) |
 
 ## Documentation index
@@ -56,6 +57,7 @@ A feature document (from the [template](_FEATURE_TEMPLATE.md)) records one featu
 | [Operation ledger](app/operations.md) | reference | current | [005](../product/tasks/005-domain-dto-and-bridge-contract.md) |
 | [Library store: SQLite open, write, read](app/library-store.md) | feature | `implemented` (prototype: no schema yet) | [008](../product/tasks/008-sqlite-driver-durability-spike.md), [009](../product/tasks/009-storage-and-completion-spike.md) |
 | [Engine storage: payload placement, verified-piece marks, the rehash rule](app/engine-storage.md) | feature | `implemented` (prototype, not linked by the product before 018) | [009](../product/tasks/009-storage-and-completion-spike.md) |
+| [Transfer switches: confirmed upload stop, resume without a stall, writer wake bound](app/transfer-switches.md) | feature | `implemented` (prototype, not linked by the product before 018) | [010](../product/tasks/010-upload-stop-and-pause-spike.md) |
 
 ### `bridge/` — Go ↔ TypeScript
 

@@ -1,6 +1,6 @@
 # 010 — Measure stopping upload without stopping download
 
-**Status:** `planned`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** mandatory feature or check of the agreed scope  
 **Size:** Gate/spike with a recorded result  
@@ -30,15 +30,15 @@ Confirm with network measurements that upload of file data stops while the downl
 
 ## Artifacts and change locations
 
-**Proposed locations:** `docs/verification/upload-policy.md; docs/decisions/upload-policy.md`. This is a map of future code; after the project skeleton is created, check the actual paths and update the map in the architecture.
+**Actual locations:** `docs/decisions/global-upload-stop.md` (the register's name for O6), `docs/verification/010-upload-stop-and-pause-spike.md`, `docs/app/transfer-switches.md`, `internal/torrentengine/transferswitch`, `internal/torrentengine/upload_test.go`.
 **Evidence of completion:** the record `docs/verification/010-upload-stop-and-pause-spike.md` or an exact link to an existing verification or build report in the work handoff summary. One report may be reused if it proves exactly these criteria.
 
 ## Acceptance criteria
 
-- [ ] After the recorded boundary, the counters of data uploaded and data received by the other side stop growing, while the download continues.
-- [ ] Changing the global upload policy does not cancel the manual pause of any torrent.
-- [ ] A failed control check blocks acceptance of TR-08 and SET-08; independent checks of basic downloading may continue.
-- [ ] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed.
+- [x] After the recorded boundary, the counters of data uploaded and data received by the other side stop growing, while the download continues.
+- [x] Changing the global upload policy does not cancel the manual pause of any torrent.
+- [x] A failed control check blocks acceptance of TR-08 and SET-08; independent checks of basic downloading may continue.
+- [x] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed.
 
 ## Checks
 
@@ -53,11 +53,11 @@ A failed result of this prototype blocks completion of tasks 053 and 054 and fin
 
 **Basis for technical decisions:** [Upload implementation](https://raw.githubusercontent.com/anacrolix/torrent/master/torrent.go). During implementation, reconcile signatures and constraints with the pinned version. Reading the API documentation does not replace a performed integration check.
 
-**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): measure with `swarm.Record` (payload counters sampled per torrent, `Mark` for the command time, `Log.FirstPayload`/`LastPayload`/`PayloadAfter`) on the rate-limited `v1-large` fixture. 006 recorded, without interpreting: after `DisallowDataUpload` on the seeder at 256 KiB/s, 0 payload bytes reached the leecher in the next second (50 ms sampling); `Count` separates payload from protocol bytes. `swarm.Connect` marks peers trusted (all share 127.0.0.1 and the engine bans by IP); a trusted peer that sends bad data is never banned and its piece is re-requested in a loop.
+**From 006** ([controlled-swarm](../../docs/decisions/controlled-swarm.md)): measure with `swarm.Record` (payload counters sampled per torrent, `Mark` for the command time, `Log.FirstPayload`/`LastPayload`/`PayloadAfter`, replaced in 010 by the per-direction `Log.First`/`Last`/`Delta`) on the rate-limited `v1-large` fixture. 006 recorded, without interpreting: after `DisallowDataUpload` on the seeder at 256 KiB/s, 0 payload bytes reached the leecher in the next second (50 ms sampling); `Count` separates payload from protocol bytes. `swarm.Connect` marks peers trusted (all share 127.0.0.1 and the engine bans by IP); a trusted peer that sends bad data is never banned and its piece is re-requested in a loop.
 
-**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): the `DisallowDataUpload`/`DisallowDataDownload` fields of `AddTorrentOpts` are never read (finding 10): use the `Torrent` methods. Allowing download right after disallowing it stalls the transfer for good (finding 12: 20 of 20 runs at once, 2 of 20 with a 1 s gap). The seeder's upload switch stalls too, but rarely and only under CPU load (finding 14: 1 in 50–60 runs of the spike's sequence with 14 busy processes, never without load); a second off and on wakes it, and the spike app counts such wake-ups. The cause inside the engine is not established for either. This task owns the product's remedy and a test that measures it; `TestPinnedEngineStallsWhenDownloadIsAllowedRightAfterDisallowing` tracks finding 12.
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): the `DisallowDataUpload`/`DisallowDataDownload` fields of `AddTorrentOpts` are never read (finding 10): use the `Torrent` methods. Allowing download right after disallowing it stalls the transfer for good (finding 12: 20 of 20 runs at once, 2 of 20 with a 1 s gap). The seeder's upload switch stalls too, but rarely and only under CPU load (finding 14: 1 in 50–60 runs of the spike's sequence with 14 busy processes, never without load); a second off and on wakes it, and the spike app counts such wake-ups. The cause inside the engine was not established for either (010 found both: findings 25 and 26). This task owns the product's remedy and a test that measures it; `TestPinnedEngineStallsWhenDownloadIsAllowedRightAfterDisallowing` tracks finding 12.
 
-**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): a fresh transfer on the closed loopback swarm sometimes stands still for good, with no upload switch used: one request sits unserved in the seeder's queue and both sides wait (finding 22). Measured with 300 fresh transfers per row and a 4 s limit: with `-race` 13 stalled with classic file IO (4.3%) and 5 with mmap (1.7%), without `-race` none. A second upload switch off and on, 50 ms apart, serves the request; the test helper `keepMoving` in `internal/torrentengine/filestore/run_test.go` does that when the seeder uploaded nothing for 1.5 s, and the count of wake-ups is logged. The product remedy and its measurement are yours; the helper is not product code.
+**From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): a fresh transfer on the closed loopback swarm sometimes stands still for good, with no upload switch used: one request sits unserved in the seeder's queue and both sides wait (finding 22). Measured with 300 fresh transfers per row and a 4 s limit: with `-race` 13 stalled with classic file IO (4.3%) and 5 with mmap (1.7%), without `-race` none. A second upload switch off and on, 50 ms apart, serves the request; the test helper `keepMoving` in `internal/torrentengine/filestore/run_test.go` does that when the seeder uploaded nothing for 1.5 s, and the count of wake-ups is logged. The product remedy and its measurement are yours; the helper is not product code. (Resolved in 010: `KeepAliveTimeout = transferswitch.WakeInterval`, finding 26; `keepMoving` deleted.)
 
 ## Mandatory TDD cycle and architecture review
 
@@ -76,3 +76,14 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Record a short outcome: what changed, exact checks with statuses `pass`, `fail` or `not_run`, ADR, actual change locations in the code and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+## Execution result
+
+**Date:** 2026-10-18. **Status:** `done`.
+
+- **Changes:** `internal/torrentengine/transferswitch` (new prototype): `WakeInterval` (1 s keep-alive for every client), `StopUpload` (confirmed stop from the sent-payload counter, `ErrNotConfirmed` after 2 s), `ResumeDownload` + `Nudge` (resume without the finding-12 stall, watching until complete), `Limits`/`DefaultLimits()`. Real-engine scenarios in `internal/torrentengine/upload_test.go`; swarm `Options.KeepAliveTimeout` and per-direction log functions; fixture `v1-long`. Refactor: the filestore harness's `keepMoving` and the spike's wake-up (and its `recoveries` DTO field, bindings regenerated) deleted.
+- **Findings:** 25 (cause of 12: no request after the last cancelled request is rejected), 26 (cause of 14/22: a lost writer wake-up, ended only by the keep-alive timer), 27–30 (no buffering after the switch and the residual, a complete stopped torrent refuses connections, Fast keeps requests through a choke, the nudge mechanism). ADR [global-upload-stop](../../docs/decisions/global-upload-stop.md) (O6 accepted for the engine part; production 053); feature [transfer-switches](../../docs/app/transfer-switches.md); TR-08 wording corrected.
+- **Checks:** `go tool devtool check` → `GATE PASSED`; engine and spike suites `pass` with and without `-race`; `.app` QA of EngineSpike.app 7 of 7 `pass`; `/branch-review` findings resolved. Details and every RED/GREEN in the [report](../../docs/verification/010-upload-stop-and-pause-spike.md).
+- **Not run:** the "policy saved" time (053), the residual on a real network and the product `.app` (054).
+- **Limitations:** bytes already handed to a connection still arrive (up to about 1 MiB per connection on loopback, at the receiver's pace); the stop covers piece data only; the engine package's tests take about 95 s with `-race`.
+- **Next task:** [011 — magnet metadata and the final folder](011-magnet-metadata-storage-spike.md).

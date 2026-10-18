@@ -13,11 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anacrolix/torrent"
-
 	"octopustorrent/internal/app/contracts"
 	"octopustorrent/internal/torrentengine/testutil/fixture"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
+	"octopustorrent/internal/torrentengine/transferswitch"
 )
 
 func TestMain(m *testing.M) { os.Exit(swarm.Main(m)) }
@@ -157,42 +156,41 @@ func TestPauseHoldsTheBytesAndResumeCompletesTheTransfer(t *testing.T) {
 	ev.await(t, transferLimit, "state complete", func(tr Transfer) bool { return tr.State == Complete })
 }
 
-// The pinned engine can leave the transfer standing still after the seeder's upload is allowed again
-// (engine finding 14). The test makes that stall certain by dropping the first "allow": the ticker
-// must notice that the running transfer stands still, switch the upload off and on again, count it,
-// and the transfer completes.
-func TestAStalledTransferIsWokenAndCounted(t *testing.T) {
+// Both clients use the keep-alive interval that bounds a lost writer wake-up (engine findings 14
+// and 22, remedy of task 010), so the spike needs no wake-up of its own: five pauses and resumes in
+// one transfer still complete it.
+func TestRepeatedPausesCompleteWithTheProductKeepAlive(t *testing.T) {
 	var mu sync.Mutex
-	var calls []bool
-	dropped := false
-	replace(t, &setUpload, func(tor *torrent.Torrent, allowed bool) {
+	var keepAlives []time.Duration
+	s, ev := started(t, 64<<10, func(dir string, opts swarm.Options) (*swarm.Peer, error) {
 		mu.Lock()
-		defer mu.Unlock()
-		calls = append(calls, allowed)
-		if allowed && !dropped {
-			dropped = true
-			return
-		}
-		switchUpload(tor, allowed)
+		keepAlives = append(keepAlives, opts.KeepAliveTimeout)
+		mu.Unlock()
+		return swarm.NewPeer(dir, opts)
 	})
-	s, ev := started(t, 256<<10, swarm.NewPeer)
 	api := s.API()
 	if _, err := api.Start(); err != nil {
 		t.Fatal(err)
 	}
-	ev.await(t, transferLimit, "payload", func(tr Transfer) bool { return tr.BytesCompleted > 0 })
-	if _, err := api.Pause(); err != nil {
-		t.Fatal(err)
-	}
-	if resumed, err := api.Resume(); err != nil || resumed.State != Running || resumed.Recoveries != 0 {
-		t.Fatalf("Resume = %+v, %v", resumed, err)
-	}
-	done := ev.await(t, transferLimit, "state complete", func(tr Transfer) bool { return tr.State == Complete })
 	mu.Lock()
-	defer mu.Unlock()
-	if done.Recoveries != 1 || !slices.Equal(calls, []bool{false, true, false, true}) {
-		t.Errorf("recoveries %d, upload switched %v; want one recovery: pause, the dropped resume, off, on", done.Recoveries, calls)
+	if !slices.Equal(keepAlives, []time.Duration{transferswitch.WakeInterval, transferswitch.WakeInterval}) {
+		t.Errorf("the clients started with keep-alive %v, want %v for both", keepAlives, transferswitch.WakeInterval)
 	}
+	mu.Unlock()
+	for cycle := range 5 {
+		from := ev.last().BytesCompleted
+		ev.await(t, transferLimit, "progress", func(tr Transfer) bool { return tr.BytesCompleted > from || tr.State == Complete })
+		if ev.last().State == Complete {
+			t.Fatalf("the transfer completed before cycle %d: the pauses were not exercised", cycle)
+		}
+		if _, err := api.Pause(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := api.Resume(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ev.await(t, transferLimit, "state complete", func(tr Transfer) bool { return tr.State == Complete })
 }
 
 // A repeated Pause must not reach the engine twice (engine finding 12): the transfer still completes
@@ -515,7 +513,7 @@ func TestTheSharedExampleIsATransferAsGoWritesIt(t *testing.T) {
 		t.Errorf("testdata/transfer.json states = %v, Go has %v", example.States, states)
 	}
 	tr := Transfer{Revision: 7, State: Paused, BytesCompleted: 524288, Length: oneMiB, PayloadRead: 540672,
-		PayloadWritten: 0, Peers: 1, ClientsStarted: 2, Recoveries: 1, Error: ""}
+		PayloadWritten: 0, Peers: 1, ClientsStarted: 2, Error: ""}
 	want, err := json.Marshal(tr)
 	if err != nil {
 		t.Fatal(err)

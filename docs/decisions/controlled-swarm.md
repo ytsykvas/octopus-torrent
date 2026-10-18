@@ -59,7 +59,9 @@ anacrolix/torrent. The open questions were:
   ends. Every wait takes a context and reports what is missing
   (`IncompleteError`). `Close` checks that the listen address refuses connections.
   `WaitEngineStopped` proves no engine goroutine is left. A `Recorder` samples payload counters for
-  start, stop and residual-traffic measurements.
+  start, stop and residual-traffic measurements; its log reads one direction at a time (`First`, `Last`
+  with a `Field`, and `Delta` of every counter, task 010). `Options.KeepAliveTimeout` gives a peer the
+  product's keep-alive interval ([global-upload-stop](global-upload-stop.md)).
 - **Formats.** Transfers are verified for v1 and hybrid. v2-only torrents are parse-only on the pin:
   adding one panics.
 - **Engine limitations.** Limitations 1–4, 7 and 8 below are asserted by tests, so a version that fixes
@@ -157,7 +159,8 @@ and real-network checks are not part of AI-08.
   - the default piece completion is SQLite through cgo when cgo is on, which is the case for Wails;
   - the `nosqlite,disable_libutp` tags avoid both C dependencies;
   - BEP 52 single files get an extra folder.
-- **010** measures the pause and upload policy with `Recorder`.
+- **010** measured the upload stop with `Recorder` on the new `v1-long` fixture (16 MiB, larger than a
+  connection holds in flight) — see [global-upload-stop](global-upload-stop.md).
 - **019** must reject what the engine accepts: the hybrid mismatch, any `..`, `.` or empty
   component, and any component with a separator.
 - **019/020/023** must validate the metainfo and the path plan **before** the engine sees the

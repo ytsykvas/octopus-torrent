@@ -51,8 +51,9 @@ for test fixtures only. Four things were open:
     background work.
   - Never call `VerifyDataContext` on a dropped torrent (finding 9).
   - Set the upload and download switches with the `Torrent` methods, never with the `AddTorrentOpts`
-    fields (finding 10). Never allow download right after disallowing it (finding 12), and expect
-    the upload switch to stall now and then too (finding 14).
+    fields (finding 10). Resume download only through `transferswitch.ResumeDownload` (finding 12), and
+    give every client `KeepAliveTimeout = transferswitch.WakeInterval` (finding 14); see
+    [global-upload-stop](global-upload-stop.md).
   - Before the engine sees a save folder, verify the full path plan against it (findings 8, 13).
   - Build a spec only from info bytes whose hash matches the infohash they are stored with
     (finding 11). A magnet's metadata arrives from peers and the engine consumes it itself, so no
@@ -111,7 +112,9 @@ Findings 9–13 are each asserted by a test, so a release that fixes one turns t
     over the wire, from a lying peer's metadata for a magnet. That peer's zero-length files are
     created as soon as the metadata arrives.
 12. **Allowing download right after disallowing it stalls the transfer for good.** It happened in
-    20 of 20 runs, and in 2 of 20 with a 1 s gap. The cause inside the engine is not established.
+    20 of 20 runs, and in 2 of 20 with a 1 s gap. Cause (010, finding 25): the last Reject of a
+    cancelled request triggers a request update that adds nothing, and nothing asks again. Remedy:
+    `transferswitch.ResumeDownload`.
 13. **When a piece fails its check, every existing file of that piece is renamed to
     `<name>.part`, and a download then overwrites it.** This includes a user's file that happens to
     sit at a torrent path. The engine writes the torrent's bytes into the renamed file and gives it
@@ -123,8 +126,8 @@ Findings 9–13 are each asserted by a test, so a release that fixes one turns t
     50 and 1 of 60 runs of the spike's sequence; without load, 0 of 52, and on the bare engine 0 of
     65. In the one stall caught with the engine's status, the
     seeder was not choking, the leecher was interested, and one request sat in the seeder's queue
-    unserved. A second off and on served it. The cause inside the engine is not established. The
-    spike wakes such a stall and counts it.
+    unserved. A second off and on served it. Cause (010, finding 26): a lost writer wake-up. Remedy:
+    a 1 s keep-alive interval on every client; the spike's own wake-up is gone.
 
 **Build facts of the spike.**
 - `go list -deps` with cgo on finds cgo in `go-libutp` and crawshaw sqlite. `-tags
@@ -149,9 +152,8 @@ Findings 9–13 are each asserted by a test, so a release that fixes one turns t
   infohash, and fetch metadata in storage that is not the user's folder.
 - **020/023** check every torrent path for collisions before the add, not only the zero-length
   ones, because of finding 13.
-- **010/013/025** own the product pause: they must not resume download right after disallowing it,
-  must expect the upload switch to stall (finding 14), and must find a remedy that a test can
-  measure.
+- **010** found the causes of findings 12 and 14 and measured the remedies
+  ([global-upload-stop](global-upload-stop.md)); **013/025** build the product pause on them.
 - **029/030** check existing bytes with the application's own hashing before the engine sees a
   folder, and **031/032** include `.part` names in deletion lists (finding 13).
 - **018** refuses to start with `GOPPROF` set, calls `classicio.Require` first in `main` (**009 replaced

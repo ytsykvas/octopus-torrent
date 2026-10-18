@@ -33,6 +33,9 @@ type Options struct {
 	DefaultStorage storage.ClientImpl
 	// DataDir is the engine's own data folder; it defaults to the peer's Dir.
 	DataDir string
+	// KeepAliveTimeout replaces the engine's keep-alive interval, which also bounds how long a
+	// connection's writer can sleep through a lost wake-up (task 010); 0 keeps the engine default.
+	KeepAliveTimeout time.Duration
 }
 
 // Settings is what a peer's engine configuration allows, for reports and for the tests that prove
@@ -66,6 +69,7 @@ func NewPeer(dir string, opts Options) (*Peer, error) {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.SetListenAddr("127.0.0.1:0")
 	cfg.DataDir = cmp.Or(opts.DataDir, dir)
+	cfg.KeepAliveTimeout = cmp.Or(opts.KeepAliveTimeout, cfg.KeepAliveTimeout)
 	if opts.DefaultStorage != nil {
 		cfg.DefaultStorage = opts.DefaultStorage
 	} else {

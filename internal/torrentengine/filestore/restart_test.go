@@ -222,7 +222,6 @@ func TestAKilledProcessLeavesNothingTrustedAndNothingValidIsDownloadedAgain(t *t
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
-	keepMoving(t, seed, mi.HashInfoBytes())
 	reported := map[int]bool{}
 	lines := bufio.NewScanner(stdout)
 	for len(reported) < 20 && lines.Scan() {

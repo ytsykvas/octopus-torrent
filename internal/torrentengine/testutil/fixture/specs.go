@@ -3,8 +3,9 @@ package fixture
 import "slices"
 
 const (
-	singleLength = 57344   // 3.5 pieces of 16 KiB
-	largeLength  = 1 << 20 // 64 pieces of 16 KiB
+	singleLength = 57344    // 3.5 pieces of 16 KiB
+	largeLength  = 1 << 20  // 64 pieces of 16 KiB
+	longLength   = 16 << 20 // 256 pieces of 64 KiB
 )
 
 var (
@@ -34,6 +35,8 @@ func specs() []spec {
 			engine: StageAccepted},
 		{name: "v1-large", purpose: "1 MiB v1 file for rate-limited transfers, measurement and cancellation", set: "large", format: V1,
 			pieceLength: 16 << 10, files: []entry{{"large.bin", largeLength}}, engine: StageAccepted},
+		{name: "v1-long", purpose: "16 MiB v1 file for stop measurements: larger than the data a loopback connection holds in flight", set: "long", format: V1,
+			pieceLength: 64 << 10, files: []entry{{"long.bin", longLength}}, engine: StageAccepted},
 		{name: "v2-single", purpose: "v2-only single file; the pinned engine panics when it is added", set: "single", format: V2,
 			pieceLength: 16 << 10, files: singleFiles, engine: StageAdd},
 		{name: "v2-tree", purpose: "v2-only tree; the pinned engine panics when it is added", set: "tree", format: V2,

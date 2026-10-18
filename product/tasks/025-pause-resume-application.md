@@ -55,7 +55,9 @@ Commands are passed through our own DTOs and applied sequentially by the service
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): pause/resume start through the single acceptance path `accept(kind, request, mutation)` added by the first command (024 or this task, whichever lands first).
 
-**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): do not resume download right after disallowing it — the pinned engine stalls the transfer for good (finding 12); 010 owns the remedy. Call a switch only when its state changes.
+**From 007** ([engine-lifecycle](../../docs/decisions/engine-lifecycle.md)): do not resume download right after disallowing it — the pinned engine stalls the transfer for good (finding 12); 010 found the remedy (below). Call a switch only when its state changes.
+
+**From 010** ([global-upload-stop](../../docs/decisions/global-upload-stop.md)): the cause of finding 12 is known (finding 25: no request after the last cancelled request is rejected). Resume download with `transferswitch.ResumeDownload(ctx, t, nudge, limits)` and keep it running for as long as the torrent is not paused, under the torrent's context, cancelled on pause or drop (apply the pause switch after it returned): the stall can form after the first bytes of the resume. Run `nudge` under the per-torrent command lock as `transferswitch.Nudge(t, uploadAllowed)` with the policy read at that moment, so a global stop is never undone. Transmission and libtorrent pause by disconnecting peers, which avoids the trap altogether; evaluate that (`SetMaxEstablishedConns(0)`, and how the pinned engine reconnects) before settling on the switch-based pause.
 
 ## Mandatory TDD cycle and architecture review
 

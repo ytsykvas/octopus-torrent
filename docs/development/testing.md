@@ -91,15 +91,16 @@ real SQLite, never a fake:
   keys its locks by device and inode, and a new volume can get the same numbers. A package that attaches
   volumes uses `volume.Main` in `TestMain`, which fails on an image left by an ended run.
 - Engine tests that write files run under classic file IO: `swarm.MainClassicIO` in `TestMain`.
-  A transfer on a closed loopback swarm sometimes stands still under `-race` (finding 22); the scenario
-  harness of `internal/torrentengine/filestore` wakes it and logs the count.
+  A peer of a transfer that must complete uses the product's keep-alive interval
+  (`swarm.Options{KeepAliveTimeout: transferswitch.WakeInterval}`): with the engine default a fresh
+  transfer stands still now and then under `-race` (findings 22 and 26, [global-upload-stop](../decisions/global-upload-stop.md)).
 - Statements run through `library.Tx`, so they honour the operation's context.
 
 ## Commands
 
 ```sh
 go test -race ./internal/app/... -run TestName -v
-go test -race -count=1 ./internal/torrentengine/...                 # fixtures, the swarm, the engine contract tests, about 15 s
+go test -race -count=1 ./internal/torrentengine/...                 # fixtures, the swarm, engine contract, storage and upload-stop tests, about 90 s
 go test -race -count=1 ./internal/enginespike ./cmd/engine-spike     # the engine spike app's Go side
 go test -race -count=1 ./internal/library                           # real SQLite: durability, locks, read-only, full disk, about 8 s
 go test ./internal/torrentengine/testutil/fixture -args -update     # rewrite the committed torrents
