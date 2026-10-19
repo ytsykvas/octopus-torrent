@@ -41,6 +41,8 @@
 | [The engine version, its lifecycle and who may release what](decisions/engine-lifecycle.md) (O2) | accepted, [007](../product/tasks/007-engine-api-lifecycle-spike.md); [report](verification/007-engine-api-lifecycle-spike.md) |
 | [The SQLite driver and how every library database is opened](decisions/sqlite-driver.md) (O4) | accepted, [008](../product/tasks/008-sqlite-driver-durability-spike.md); [report](verification/008-sqlite-driver-durability-spike.md) |
 | [Where the engine writes, what it remembers, and what the application believes](decisions/engine-storage.md) (O5) | accepted, [009](../product/tasks/009-storage-and-completion-spike.md); [report](verification/009-storage-and-completion-spike.md) |
+| [macOS Trash and confined path deletion](decisions/trash-and-paths.md) (O8) | accepted, [012](../product/tasks/012-macos-trash-and-path-spike.md); [report](verification/012-macos-trash-and-path-spike.md) |
+| [Native (cgo/Objective-C) code coverage in the gate](decisions/native-coverage.md) | accepted, [069](../product/tasks/069-native-code-coverage-gate.md); [report](verification/069-native-code-coverage-gate.md) |
 | [Stopping upload without stopping download, and resuming without a stall](decisions/global-upload-stop.md) (O6) | accepted (engine part; production 053), [010](../product/tasks/010-upload-stop-and-pause-spike.md); [report](verification/010-upload-stop-and-pause-spike.md) |
 | [A magnet's metadata without payload, then the chosen folder in place](decisions/magnet-pending-storage.md) (O7) | accepted (engine part; coordinator 022), [011](../product/tasks/011-magnet-metadata-storage-spike.md); [report](verification/011-magnet-metadata-storage-spike.md) |
 | Refactor pass after task 009: patterns, clean code, simplification | owner's request of 17 October 2026; [report](verification/refactor-after-009.md) |
@@ -60,6 +62,7 @@ A feature document (from the [template](_FEATURE_TEMPLATE.md)) records one featu
 | [Engine storage: payload placement, verified-piece marks, the rehash rule](app/engine-storage.md) | feature | `implemented` (prototype, not linked by the product before 018) | [009](../product/tasks/009-storage-and-completion-spike.md) |
 | [Transfer switches: confirmed upload stop, resume without a stall, writer wake bound](app/transfer-switches.md) | feature | `implemented` (prototype, not linked by the product before 018) | [010](../product/tasks/010-upload-stop-and-pause-spike.md) |
 | [Magnet metadata: fetched without payload, confirmed into the chosen folder](app/magnet-metadata.md) | feature | `implemented` (prototype, not linked by the product before 018) | [011](../product/tasks/011-magnet-metadata-storage-spike.md) |
+| [Moving payload to the Trash, confined to the torrent's folder](app/trash.md) | feature | `implemented` (prototype; `.m` measured by 069) | [012](../product/tasks/012-macos-trash-and-path-spike.md) |
 
 ### `bridge/` — Go ↔ TypeScript
 

@@ -184,6 +184,7 @@ func (c *checker) steps() []checkStep {
 		{"go tests", c.goTests},
 		{".app coverage run", c.appRun},
 		{"go coverage", c.goCoverage},
+		{"native coverage", c.nativeCoverage},
 		{"escape hatches", c.escapeHatches},
 		{"scripts", c.scripts},
 		{"product isolation", c.isolation},
@@ -338,6 +339,10 @@ func (c *checker) goCoverage() stepResult {
 		return notRun("func main is covered only by the .app run: " + strings.Join(deferred, ", "))
 	}
 	return pass("every block of every own Go file is covered (unit tests + .app run)")
+}
+
+func (c *checker) nativeCoverage() stepResult {
+	return NativeCoverage(c.sys, c.root, c.files)
 }
 
 func (c *checker) escapeHatches() stepResult {

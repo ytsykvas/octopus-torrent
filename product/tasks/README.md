@@ -156,7 +156,7 @@ This is a way of organizing work, not a requirement to run additional agents. Co
 | [009](009-storage-and-completion-spike.md) | Check file placement and persistence of verified-piece state | P1 | [007](007-engine-api-lifecycle-spike.md), [008](008-sqlite-driver-durability-spike.md) | SET-02, TR-05, ADD-04 | `done` |
 | [010](010-upload-stop-and-pause-spike.md) | Measure stopping upload without stopping download | P1 | [007](007-engine-api-lifecycle-spike.md) | TR-01, TR-08, SET-08 | `done` |
 | [011](011-magnet-metadata-storage-spike.md) | Check magnet metadata retrieval and the final file folder | P1 | [009](009-storage-and-completion-spike.md) | ADD-02, ADD-04, ADD-07 | `done` |
-| [012](012-macos-trash-and-path-spike.md) | Check the macOS Trash and file path protection | P1 | [003](003-wails-macos-build-spike.md), [007](007-engine-api-lifecycle-spike.md) | DEL-02, DEL-04, STACK-01 | `planned` |
+| [012](012-macos-trash-and-path-spike.md) | Check the macOS Trash and file path protection | P1 | [003](003-wails-macos-build-spike.md), [007](007-engine-api-lifecycle-spike.md), [069](069-native-code-coverage-gate.md) | DEL-02, DEL-04, STACK-01 | `done` |
 | [013](013-transfer-policy-state-machine.md) | Describe torrent transfer states and policy | P2 | [005](005-domain-dto-and-bridge-contract.md), [007](007-engine-api-lifecycle-spike.md) | TR-01, TR-03, STACK-03, AI-04 | `planned` |
 | [014](014-sqlite-schema-migrations.md) | Create the SQLite schema and safe migrations | P2 | [005](005-domain-dto-and-bridge-contract.md), [008](008-sqlite-driver-durability-spike.md) | STACK-04, SET-02 | `planned` |
 | [015](015-transactional-repositories.md) | Isolate SQL and ensure transactional writes | P2 | [014](014-sqlite-schema-migrations.md), [013](013-transfer-policy-state-machine.md) | STACK-04, SET-02, DATA-01 | `planned` |
@@ -213,6 +213,7 @@ This is a way of organizing work, not a requirement to run additional agents. Co
 | [066](066-personal-build-install-license-audit.md) | Build and install the personal release | P7 | [063](063-failure-race-fuzz-regression.md), [064](064-scale-profiling-lifecycle-soak.md), [065](065-native-accessibility-language-gate.md) | REL-01, REL-02, STACK-05, DATA-02 | `planned` |
 | [067](067-owner-help-upgrade-recovery-runbook.md) | Write local help and the recovery procedure | P7 | [066](066-personal-build-install-license-audit.md), [062](062-automation-end-to-end-gate.md), [029](029-restore-recheck-reconciliation.md) | REL-03, AI-06, AI-09, QA-04 | `planned` |
 | [068](068-full-acceptance-clean-context-handoff.md) | Close all requirements and hand off the project without chat | P7 | [067](067-owner-help-upgrade-recovery-runbook.md), [063](063-failure-race-fuzz-regression.md), [064](064-scale-profiling-lifecycle-soak.md), [065](065-native-accessibility-language-gate.md), [066](066-personal-build-install-license-audit.md) | AI-10, AI-01, AI-09, AI-08, QA-01, QA-02, QA-03, QA-04, QA-05, QA-06, QA-07, QA-08 | `planned` |
+| [069](069-native-code-coverage-gate.md) | Measure native (cgo/Objective-C) code coverage in the gate | P1 | [004](004-reproducible-check-commands.md) | STACK-01, STACK-05, QA-01, QA-02, QA-05 | `done` |
 <!-- TASKS-NAV:END -->
 
 ## Full coverage of the 80 requirements
