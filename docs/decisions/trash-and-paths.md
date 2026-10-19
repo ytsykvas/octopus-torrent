@@ -1,6 +1,6 @@
 # macOS Trash and confined path deletion
 
-**Status:** `accepted` (the Trash mechanism and path confinement). Accepting the Objective-C binding into the product is gated on native-code coverage in the gate ([069](../../product/tasks/069-native-code-coverage-gate.md)); the partial-result journal is [032](../../product/tasks/032-safe-payload-trash-journal.md), folder selection and collisions [020](../../product/tasks/020-destination-filesystem-service.md)  
+**Status:** `accepted` (the Trash mechanism and path confinement; the `.m` is covered by the native coverage gate step, [069](../../product/tasks/069-native-code-coverage-gate.md)). The partial-result journal is [032](../../product/tasks/032-safe-payload-trash-journal.md), folder selection and collisions [020](../../product/tasks/020-destination-filesystem-service.md)  
 **Date:** 2026-10-19  
 **Task:** [012](../../product/tasks/012-macos-trash-and-path-spike.md)  
 **Register item:** O8 ([baseline](project-baseline.md#6-open-decision-register))  
@@ -66,11 +66,9 @@ capabilities) with a one-function native seam behind an interface.
 - **Not supported / `not_run`:** the full UI→Go→Trash flow (no delete UI yet) is `not_run`, proven at
   the API level by the cgo disk-image test; 020 adds folder selection and collision reporting; 032
   adds the partial-result journal.
-- **Native-code coverage is required before the `.m` is accepted.** The policy
-  ([TDD_AND_QUALITY §3](../engineering/TDD_AND_QUALITY.md), "New own code in another language requires a measurement
-  tool") is not met by the Go/TS gate. [069](../../product/tasks/069-native-code-coverage-gate.md)
-  adds clang source coverage + `llvm-cov` to the gate and brings `trash_darwin.m` to 100%; 012 is
-  blocked on it and completes together with it.
+- **Native-code coverage** is provided by [069](../../product/tasks/069-native-code-coverage-gate.md)
+  (clang source coverage + `llvm-cov` in the gate), which brings `trash_darwin.m` to 100%; 012 was
+  completed together with it, satisfying the policy ([TDD_AND_QUALITY §3](../engineering/TDD_AND_QUALITY.md)).
 
 ## Verified grounds
 
@@ -79,4 +77,4 @@ orchestration and every safety branch are covered in pure Go with a fake `Trashe
 in a temporary directory; the real `NSFileManager` call is exercised on a temporary `hdiutil` disk
 image (`internal/testutil/volume`), so the trashed test files land in that volume's `.Trashes` and
 vanish when it is detached — the owner's `~/.Trash` is never touched. 100% of the package's own Go
-statements, `-race`. The `.m` has no coverage measurement yet (blocked on 069).
+statements, `-race`; `trash_darwin.m` at 100% by the native coverage step (069).

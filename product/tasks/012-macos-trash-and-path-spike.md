@@ -1,10 +1,10 @@
 # 012 — Check the macOS Trash and file path protection
 
-**Status:** `blocked`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** mandatory feature or check of the agreed scope  
 **Size:** Gate/spike with a recorded result  
-**Hard dependencies:** [003](003-wails-macos-build-spike.md), [007](007-engine-api-lifecycle-spike.md)  
+**Hard dependencies:** [003](003-wails-macos-build-spike.md), [007](007-engine-api-lifecycle-spike.md), [069](069-native-code-coverage-gate.md)  
 **Requirements:** `DEL-02`, `DEL-04`, `STACK-01`
 
 ## Outcome
@@ -73,7 +73,7 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 
 ## Execution result
 
-**Date:** 2026-10-19. **Status:** `blocked` on [069](069-native-code-coverage-gate.md).
+**Date:** 2026-10-19. **Status:** `done` (with [069](069-native-code-coverage-gate.md), which added the native coverage the policy required).
 
 - **Changes:** new `internal/platform` (macOS, the repo's first cgo). `Trash(saveDir, names, Trasher)`
   moves each named file to the macOS Trash with `NSFileManager trashItemAtURL` (`trash_darwin.m`,
@@ -85,17 +85,13 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
   `Result` per name and `ErrSomeRemain` naming the files that stayed (DEL-04); never `os.Remove`.
   ADR [trash-and-paths](../../docs/decisions/trash-and-paths.md), feature
   [doc](../../docs/app/trash.md), report [012](../../docs/verification/012-macos-trash-and-path-spike.md).
-- **Checks:** `go test -race ./internal/platform` `pass`, 100% of own **Go** (fake `Trasher` on temp
-  dirs + the real `NSFileManager` on an APFS disk image, so nothing reaches `~/.Trash`). The Go/TS
-  gate passes, but it does not measure the Objective-C `.m`.
-- **Why blocked:** the policy (TDD_AND_QUALITY §3) requires a coverage measurement for own code in
-  another language before it is accepted. The gate has none for the `.m`. The three-agent review also
-  found and this change fixed a reproduced confinement escape and a volume-root miss; the remaining
-  gap is the native measurement. [069](069-native-code-coverage-gate.md) adds it and brings
-  `trash_darwin.m` to 100%; 012 completes together with it.
-- **Independent work that can continue:** 069 itself (the tooling); 013, 014 (unrelated).
+- **Checks:** `go tool devtool check` → `GATE PASSED`; `trash_darwin.m` is measured at 100% by the
+  new `native coverage` step (069); `internal/platform` is 100% Go (fake `Trasher` on temp dirs +
+  the real `NSFileManager` on an APFS disk image, so nothing reaches `~/.Trash`).
+- **Review:** the three-agent review found and this change fixed a reproduced confinement escape and
+  a volume-root miss; the last gap, a coverage measurement for the `.m` (TDD_AND_QUALITY §3), is
+  closed by [069](069-native-code-coverage-gate.md), delivered together.
 - **Limitations:** the full UI→Go→Trash flow is `not_run` (no delete UI yet; owner decision); a
   regular→regular same-name swap, or an intermediate-directory swap, inside the folder between the
   check and the move is a path-based-API residual for 032 (the move is reversible).
-- **Next:** [069](069-native-code-coverage-gate.md) (unblocks this), then
-  [020](020-destination-filesystem-service.md), [032](032-safe-payload-trash-journal.md).
+- **Next:** [020](020-destination-filesystem-service.md) (folder selection, collisions), [032](032-safe-payload-trash-journal.md) (partial-result journal); the facade wires `Trash` in a delete task.

@@ -63,6 +63,8 @@ The Wails CLI, `govulncheck` and `devtool` run only through `go tool` (`tool` di
 
 TS: the gate derives the inventory from the repository listing (`frontend/src/**/*.ts(x)` except tests, `src/test/` and `.d.ts`), not from `vite.config.ts`, and requires covered == total on all four metrics for every file. `frontend/wailsjs/` lies outside `src/` and is not own code (it is checked by regeneration); own wrappers over it live in `frontend/src/bridge` and are measured. Ignore directives, lint disables and skipped tests fail the gate.
 
+Native (cgo C/Objective-C): the `native coverage` step (task 069, `internal/devtool/nativecov.go`) measures every own `.m`/`.c` source (found from the repository listing) and requires every region covered. It builds an instrumented test binary (`CGO_CFLAGS=-fprofile-instr-generate -fcoverage-mapping`, scoped to that build, never the product), runs it, and reads `xcrun llvm-cov export`. A Go test binary exits with `os.Exit`, which skips the C profile writer, so the package's `TestMain` calls `internal/testutil/nativecov.Flush` (test support; a weak `__llvm_profile_write_file`) before exiting. Missing `xcrun`/`llvm-cov` is `not_run`, never a silent pass.
+
 ## Big picture
 
 - More than one Wails app: every project is a row of `wailsApps` (`internal/devtool/appcov.go`); the gate builds, runs and checks the bindings of each, and the `product isolation` step keeps the spike, `testutil` and (until 018) anacrolix out of the product binary.

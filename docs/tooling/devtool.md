@@ -55,6 +55,7 @@ Everything except the two `wailsjs/` directories is gitignored.
 | `check.go` | gate modes, the step runner, the report, tool steps |
 | `toolchain.go` | the npm cooldown and go env checks |
 | `frontendcov.go`, `gocov.go`, `appcov.go` | coverage inventories, profiles, the `wailsApps` table and the instrumented run of every app |
+| `nativecov.go` | the `native coverage` step: clang source coverage + `llvm-cov` for own cgo C/Objective-C (task 069). A package with native code must have its `TestMain` call `internal/testutil/nativecov.Flush` before `os.Exit`, or the profile is empty and the step fails |
 | `escapehatches.go` | the escape-hatch scan of TS and Go sources and tests |
 | `isolation.go` | the `product isolation` step |
 | `scripts.go` | the `scripts` step: shell scripts only hand over to `devtool` |

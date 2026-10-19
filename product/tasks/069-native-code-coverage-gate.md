@@ -1,10 +1,10 @@
 # 069 — Measure native (cgo/Objective-C) code coverage in the gate
 
-**Status:** `planned`  
+**Status:** `done`  
 **Phase:** P1 — Prototypes of risky contracts  
 **Priority:** mandatory feature or check of the agreed scope  
 **Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
-**Hard dependencies:** [004](004-reproducible-check-commands.md), [012](012-macos-trash-and-path-spike.md)  
+**Hard dependencies:** [004](004-reproducible-check-commands.md)  
 **Requirements:** `STACK-01`, `STACK-05`, `QA-01`, `QA-02`, `QA-05`
 
 ## Outcome
@@ -35,10 +35,10 @@ is enforced, not only asserted. This unblocks [012](012-macos-trash-and-path-spi
 
 ## Acceptance criteria
 
-- [ ] The gate measures every own native source and fails if any region is uncovered; `trash_darwin.m` is at 100%.
-- [ ] The measurement is derived from the repository listing, not a hand-kept include list, and cannot be silently narrowed.
-- [ ] The `devtool` code added for this is itself at 100% by the project's metrics, with a fake `System` for the external tools.
-- [ ] All checks below are run at the appropriate level; a check not run or failed is not marked passed.
+- [x] The gate measures every own native source and fails if any region is uncovered; `trash_darwin.m` is at 100%.
+- [x] The measurement is derived from the repository listing, not a hand-kept include list, and cannot be silently narrowed.
+- [x] The `devtool` code added for this is itself at 100% by the project's metrics, with a fake `System` for the external tools.
+- [x] All checks below are run at the appropriate level; a check not run or failed is not marked passed.
 
 ## Checks
 

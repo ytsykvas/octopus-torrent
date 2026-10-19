@@ -58,7 +58,7 @@ disk image) so real-API test files land in that volume's `.Trashes`, never the o
 | orchestration GREEN | `go test -race ./internal/platform` (fake `Trasher`, `t.TempDir`) | `pass`; two branches (an f.Stat error folded into the regular-file check; a non-directory folder) covered by a directory and a regular-file-as-folder case; 100% |
 | real API | `go test -race ./internal/platform` (cgo, APFS disk image) | `pass`; a file on the image is trashed to the volume's `.Trashes` (not `~/.Trash`), a missing path returns the `NSError`, and `Trash` drives the real `NSFileManager` end to end on a volume subfolder |
 | review rewrite | `go test -race ./internal/platform` after the three-agent review | `pass`, 100% Go: the confinement escape (C1), the volume-root miss (M1), the FIFO/symlink handling (L1/L2) and the invalid-path process abort (M3) are fixed and tested |
-| gate (Go/TS) | `go tool devtool check` | passes at 100% Go and TS; it does not yet measure the `.m` (see Coverage: blocked on 069) |
+| gate | `go tool devtool check` | `GATE PASSED`, 100% Go and TS, and `trash_darwin.m` 100% via the native coverage step (069) |
 
 Commands, working directory `/Users/tsykvas/projects/torrent`, data: synthetic files in `t.TempDir()`
 and on a temporary `hdiutil` APFS image; `-race`; exit 0.
@@ -86,15 +86,12 @@ tests give deterministic 100% of the orchestration, the seams (`openRoot`, `fdPa
 cover the syscall error paths, and `systemTrasher`'s Go wrapper is covered by the real cgo tests
 (success, a missing file, a bad path).
 
-**Open:** the Objective-C body (`trash_darwin.m`) has no coverage measurement. The policy
-([TDD_AND_QUALITY §3](../engineering/TDD_AND_QUALITY.md), "New own code in another language requires a
-measurement tool before it is accepted") requires one, and the gate only measures Go and TypeScript.
-Its behaviour is proven by the real `NSFileManager` tests (a file trashed to a volume's `.Trashes`, a
-missing path's error), but that is not the required source-coverage measurement. **This blocks 012.**
-[Task 069](../../product/tasks/069-native-code-coverage-gate.md) adds native-code coverage
-(clang `-fcoverage-mapping` + `llvm-cov`) to the gate and brings `trash_darwin.m` to 100%; 012 is
-completed together with it. The earlier draft of this report wrongly claimed the policy permits an
-unmeasured adapter; it does not.
+The Objective-C body (`trash_darwin.m`) is measured by the `native coverage` gate step
+([069](../../product/tasks/069-native-code-coverage-gate.md), clang `-fcoverage-mapping` + `llvm-cov`)
+at 100% (9/9 regions), satisfying the policy ([TDD_AND_QUALITY §3](../engineering/TDD_AND_QUALITY.md),
+"New own code in another language requires a measurement tool before it is accepted"). 012 was
+delivered together with 069. (An earlier draft of this report wrongly claimed the policy permits an
+unmeasured adapter; it does not.)
 
 ## Refactoring and debt
 

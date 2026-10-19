@@ -1,6 +1,6 @@
 # Moving payload to the Trash, confined to the torrent's folder
 
-**Status:** `implemented` in Go (prototype `internal/platform`, 100% Go); the Objective-C binding awaits native-code coverage in the gate ([069](../../product/tasks/069-native-code-coverage-gate.md)), on which [012](../../product/tasks/012-macos-trash-and-path-spike.md) is blocked; the facade wires it in a later delete task  
+**Status:** `implemented` (prototype `internal/platform`; 100% Go and `trash_darwin.m` 100% via the native coverage gate step, task [069](../../product/tasks/069-native-code-coverage-gate.md)); the facade wires it in a later delete task  
 **Requirements:** `DEL-02`, `DEL-04`, `STACK-01`  
 **Related tasks:** [012](../../product/tasks/012-macos-trash-and-path-spike.md); next [020](../../product/tasks/020-destination-filesystem-service.md) (folder selection, collisions), [032](../../product/tasks/032-safe-payload-trash-journal.md) (partial-result journal)  
 **ADR:** [trash-and-paths](../decisions/trash-and-paths.md)  
