@@ -185,6 +185,29 @@ func TestResumeDownloadKeepsWatchingAfterPayloadAndNudgesAgain(t *testing.T) {
 	}
 }
 
+// The wait is counted from the end of a nudge: the caller's nudge waits for the torrent's turn, so a
+// slow nudge must not use up the next wait. This also makes the gaps the other tests measure inside
+// nudge at least the wait, whatever the delay before each callback reads the clock.
+func TestTheNextWaitStartsWhenTheNudgeReturns(t *testing.T) {
+	f := &fakeTorrent{}
+	var returned, second time.Time
+	n, err := ResumeDownload(context.Background(), f, func() {
+		if returned.IsZero() {
+			time.Sleep(3 * fast.Nudge) // longer than the next wait, 2 × Nudge
+			returned = time.Now()
+			return
+		}
+		second = time.Now()
+		f.finish()
+	}, fast)
+	if err != nil || n != 2 {
+		t.Fatalf("ResumeDownload = %d, %v; want 2 nudges", n, err)
+	}
+	if gap := second.Sub(returned); gap < 2*fast.Nudge {
+		t.Errorf("second nudge %v after the first returned, want the doubled wait %v", gap, 2*fast.Nudge)
+	}
+}
+
 func TestTheNudgeWaitStopsGrowingAtItsCap(t *testing.T) {
 	f := &fakeTorrent{}
 	var at []time.Time
