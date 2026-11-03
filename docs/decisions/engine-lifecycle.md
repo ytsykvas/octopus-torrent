@@ -112,7 +112,9 @@ Findings 9–13 are each asserted by a test, so a release that fixes one turns t
     read.**
 11. **Info bytes that do not match a v1-only infohash are accepted.** This happens from a spec and,
     over the wire, from a lying peer's metadata for a magnet. That peer's zero-length files are
-    created as soon as the metadata arrives.
+    created as soon as the metadata arrives; the first check of the missing data, started right
+    after `GotInfo`, then renames them to `<name>.part` (finding 13), so the test accepts either
+    name (it raced with that check under load before 2026-11-03).
 12. **Allowing download right after disallowing it stalls the transfer for good.** It happened in
     20 of 20 runs, and in 2 of 20 with a 1 s gap. Cause (010, finding 25): the last Reject of a
     cancelled request triggers a request update that adds nothing, and nothing asks again. Remedy:
