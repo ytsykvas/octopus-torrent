@@ -65,6 +65,8 @@ Stay within the boundaries of our own DTOs, repository and engine adapter. An er
 
 **From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): the marks of a removed torrent stay in `piece-completion.sqlite`; 009 built no delete for them, so add a `DeleteMarks(infohash)` to `library.CompletionStore` and call it with the record's removal. Stop the torrent's `TorrentStorage` before any file action.
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): the removal runs with `commandorder.Torrents(torrentIDs)` keys in this order: journal → `registry.BeginRemoval` (intent and phase frozen, an older fault cleared) → `Reconcile` (both off) → engine drop and record removal → `registry.Forget` (tombstone: every later call, a late import included, gets `ErrRemoved`). A resume queued behind it is refused; a late outcome fails `Record`.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

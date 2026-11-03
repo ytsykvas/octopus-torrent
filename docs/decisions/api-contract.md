@@ -110,7 +110,8 @@ UI validated (STACK-01). The TypeScript encoders write exactly the keys of each 
   only when nothing took effect); a finished one keeps its final state. A mutation that can be
   partly done — removing files of several torrents (031/032), confirming an import (023) — is not
   cancellable once it runs: it finishes, and a partial result is `failed` with a code whose params
-  list what was done. Those tasks add the codes.
+  list what was done. Those tasks add the codes. Pause, resume, setFilesWanted and updateSettings
+  are not cancellable once running either (013): only quit cuts their apply short.
 - The ledger (`internal/app/operations`) is in memory, one per run, and never evicts (an evicted
   ID would let a retry run again); persistence of import and deletion operations is the Operations
   table of 014. It owns every operation goroutine: Wails `OnShutdown` cancels them and waits at
@@ -118,13 +119,14 @@ UI validated (STACK-01). The TypeScript encoders write exactly the keys of each 
 - `operation.notFound` carries the current `runtimeID`. From the runtime that accepted the
   operation it means "never accepted" (resending with the same ID is safe); from another runtime
   Go restarted and the outcome is **unknown**: read the full state, never resend because of it.
-- **Order (STACK-03).** The ledger itself does not order work: every accepted operation gets its own
-  goroutine, so acceptance order is lost once `Start` returns, and serializing inside the mutation
-  (a per-torrent lock) could still let a later command win. Commands for one torrent must be
-  ordered **at acceptance**: task 013 extends `Start` with ordering keys (the sorted torrent IDs of
-  the request; an operation runs when the previous one holding any of its keys has finished; keys
-  are taken in sorted order, so multi-torrent commands cannot deadlock). This is a planned change of
-  the ledger API, owned by 013.
+- **Order (STACK-03).** Serializing inside the mutation (a per-torrent lock) could let a later
+  command win, so commands for one torrent are ordered **at acceptance** (implemented in 013,
+  [transfer-status-model](transfer-status-model.md#the-order-of-commands-commandorder)):
+  `Start(id, kind, fingerprint, keys, mutation)` joins the operation to the queue of every key
+  (`commandorder.Torrents(torrentIDs)`, or `commandorder.Settings`) at once; it runs when every
+  operation accepted earlier with one of its keys has finished. Joins form one total order, so
+  multi-torrent commands cannot deadlock; a key set mixing the settings key and torrent keys is
+  refused.
 - **One acceptance path.** The first command (024/025) adds a single `accept(kind, request,
   mutation)` that validates the request, takes its operation ID from the request (an
   `operationID()` method on `Request`), computes the fingerprint and starts the mutation; facade

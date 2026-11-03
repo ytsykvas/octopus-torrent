@@ -17,6 +17,7 @@ import (
 	"octopustorrent/internal/app"
 	"octopustorrent/internal/app/contracts"
 	"octopustorrent/internal/app/operations"
+	"octopustorrent/internal/commandorder"
 	"octopustorrent/internal/library"
 )
 
@@ -32,7 +33,10 @@ const shutdownTimeout = 5 * time.Second
 // main has no branches: all logic lives in run, which is unit-tested; main
 // itself is covered by the instrumented run of the real .app (see README).
 func main() {
-	os.Exit(run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID()), library.SQLiteVersion))
+	// The runtime's one command order: the ledger's now, and every service's that changes a torrent
+	// or the settings (025, 053) gets this same value, or their steps would not wait for each other.
+	order := commandorder.New()
+	os.Exit(run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID(), order), library.SQLiteVersion))
 }
 
 // run starts the application of the ledger's runtime through start

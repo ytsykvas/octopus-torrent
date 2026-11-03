@@ -1,6 +1,6 @@
 # 013 — Describe torrent transfer states and policy
 
-**Status:** `planned`  
+**Status:** `done`  
 **Phase:** P2 — Types, data and service boundaries  
 **Priority:** critical path of the main scenario or completion  
 **Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
@@ -35,10 +35,10 @@ Create a verifiable policy table and define a sequential order of commands that 
 
 ## Acceptance criteria
 
-- [ ] Resuming a torrent does not cancel the global upload ban.
-- [ ] Re-enabling global upload does not start manually paused entries.
-- [ ] The policy computation functions are tested without Wails, disk and network.
-- [ ] All checks listed below have been performed at the appropriate level; checks that were not performed or failed are not marked as successful.
+- [x] Resuming a torrent does not cancel the global upload ban.
+- [x] Re-enabling global upload does not start manually paused entries.
+- [x] The policy computation functions are tested without Wails, disk and network.
+- [x] All checks listed below have been performed at the appropriate level; checks that were not performed or failed are not marked as successful.
 
 ## Checks
 
@@ -74,3 +74,43 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Write a short result: what was changed, the exact checks with the statuses `pass`, `fail` or `not_run`, ADRs, the actual change locations in the code and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock it and the independent tasks that can continue.
 - Update the documentation, the contract and the README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+## Execution result
+
+**Date:** 2026-11-03. **Status:** `done`.
+
+- **Changes:** new `internal/commandorder`: per-key FIFO turns joined atomically at acceptance (one
+  total order, so multi-key turns cannot deadlock). Keys have two levels: a settings step may run
+  torrent steps, a torrent step none (`ErrHeld`); `ErrMixedLevels`, `ErrLeft`, `(*Order).Holds`, a
+  holding context cancelled at `Leave`. `operations.Ledger.Start` takes ordering keys and joins their
+  turns at acceptance; `main.go` creates the runtime's one order. New `internal/transfer`: pure
+  `Decide` (download and upload separately, from the manual pause, the global upload stop, the
+  phase, a payload fault and quitting) and `DisplayStatus` (one status by a fixed priority). Both
+  tables are in the ADR between markers, and a test keeps them equal to the code. `Registry` mirrors
+  the durable intent: `CheckIntentChange` → persist → mutate → `Reconcile`, revisions, a CAS
+  `Record`, tombstones after removal, a global change that returns the torrents to reconcile.
+  `Reconcile` (Lookup now → Decide → `Switches.Apply` → Record, again while the revision moves) is the
+  command dispatcher 018/025/053 build on. ADR
+  [transfer-status-model](../../docs/decisions/transfer-status-model.md) (closes 013's part of O11),
+  feature [doc](../../docs/app/transfer-policy.md), report
+  [013](../../docs/verification/013-transfer-policy-state-machine.md); "From 013" notes in the
+  later tasks.
+- **Checks:** `go tool devtool check` → `GATE PASSED` (run 2, on top of the dependency branch of
+  [PR #18](https://github.com/ytsykvas/octopus-torrent/pull/18)); 100% of statements for
+  `commandorder`, `transfer` and `operations`; both tables over every combination of inputs; seeded
+  concurrent command orders through the real ledger; a late answer after removal discarded, the
+  removed torrent never back; 13 mutation checks, each caught. `not_run`: engine integration (018)
+  and test-bridge UI tests (035).
+- **Review:** three agents (code, security, tech lead) found no critical defect. Every finding was
+  fixed with a test first or answered in the report: four medium findings (no retry of a failed
+  apply, a bulk pause stopping at the first refusal, a resume stored before its refusal, zero values
+  permitting everything) and five low ones.
+- **Limitations:** no real engine applies the permissions (the `Switches` port is driven by a
+  recording double; the real engine is 018/025/053), no persistence (015/023/025), no facade command
+  or `AppError` code for the new refusals (024/025/031). The branch is based on PR #18, which merges
+  first.
+- **Next:** [018](018-torrent-engine-adapter.md) (the engine side of `Switches`, unblocked by this
+  task), [014](014-sqlite-schema-migrations.md), [017](017-local-diagnostics-privacy.md) and
+  [035](035-react-bridge-state-resync.md) can start now; [025](025-pause-resume-application.md) and
+  [053](053-global-upload-policy-production.md) apply the policy once their other dependencies are
+  done.

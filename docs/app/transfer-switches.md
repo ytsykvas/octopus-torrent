@@ -37,8 +37,9 @@ product never claims more than "no new payload after the switch".
 
 - Layer: engine adapter side (`internal/torrentengine/...`, the only place with anacrolix types).
   The product binary does not link it yet; the isolation step still keeps anacrolix out (018 lifts it).
-- No policy here: when to stop or resume, and which torrents are manually paused, is 013 (pure
-  policy) and 053/025 (application). The package only makes one switch's effect provable.
+- No policy here: when to stop or resume, and which torrents are manually paused, is the
+  [transfer policy](transfer-policy.md) of 013 and its application in 053/025 (018 wraps these
+  functions in the policy's `Switches` port). The package only makes one switch's effect provable.
 - Reused: the swarm and fixtures (006), the classic-IO filestore harness (009). Replaced: the test
   helper `keepMoving` and the spike's wake-up, both workarounds for finding 14/22.
 

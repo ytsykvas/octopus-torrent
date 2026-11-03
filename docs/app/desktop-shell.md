@@ -4,7 +4,7 @@
 **Requirements:** REL-01, REL-02, STACK-05, UI-04 (partially), AI-07, QA-01, QA-02, QA-05 (partially)  
 **Related tasks:** [003](../../product/tasks/003-wails-macos-build-spike.md); next — [004](../../product/tasks/004-reproducible-check-commands.md) (single check command), [034](../../product/tasks/034-wails-facade-real-bindings.md) (real facade), [035](../../product/tasks/035-react-bridge-state-resync.md) (bridge and state)  
 **Last verified version:** refactor after 009 (runtime info as a `Result`); task 005 (startup and quit wiring); task 003 (window and check UI)  
-**Last updated:** 2026-10-18
+**Last updated:** 2026-11-03
 
 ## Goal and behavior
 
@@ -16,8 +16,10 @@ Only this proof of the path is implemented. The torrent list, themes, i18n and t
 
 ```
 Finder / `open` → OctopusTorrent.app/Contents/MacOS/OctopusTorrent
-  main() → run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID()))
-    wails.Run(options.App{ embedded frontend/dist, Bind: app.New(ledger),
+  main() → order := commandorder.New()   (the runtime's one command order, task 013)
+           run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID(), order), library.SQLiteVersion)
+    sqliteVersion(ctx) fails → "OctopusTorrent: read the SQLite version: <error>" on stderr, exit 1
+    wails.Run(options.App{ embedded frontend/dist, Bind: app.New(ledger, version),
                            ErrorFormatter: app.ErrorFormatter(stderr), OnShutdown: stopOperations })
       window (WKWebView) loads index.html → src/main.tsx → <App/>
   Cmd+Q / Apple Event quit → OnShutdown → ledger.Shutdown (≤ 5 s) → process exits 0

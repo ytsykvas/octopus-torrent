@@ -57,6 +57,8 @@ Full snapshots may be aggregated, skipping intermediate revisions. A missed part
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): after a frontend reload React has lost its operation IDs: add pending operations to the snapshot or a `ListOperations` method (with 035).
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): build the snapshot from `registry.All()` (one consistent moment): `status = transfer.DisplayStatus(view.Input, progress)`, `uploadAllowed = transfer.Decide(view.Input).Upload`, `manualPaused = view.Input.ManualPaused`; a `Pending` view or a `Problem` goes into `errors`. A removed torrent is absent from `All` and must not be upserted from a late engine read. The registry sends no change notification: read `All()` when building a snapshot, or add a hook to the registry with its own tests.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

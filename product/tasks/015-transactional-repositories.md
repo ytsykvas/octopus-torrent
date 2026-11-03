@@ -55,6 +55,8 @@ A successful write of a policy to SQLite does not prove it was applied in the en
 
 **From 008** ([sqlite-driver](../../docs/decisions/sqlite-driver.md)): repositories use `library.Store`: `Write` is the single serialized writer (not FIFO: concurrent writes commit in any order, so per-torrent order comes from the service's queue) and returns nil only after a durable commit; an I/O error from `COMMIT` (`SQLITE_IOERR`, unclassified in 008) has an unknown outcome, so map it and re-read the state; `Read` is a snapshot on the read pool. Statements go through `library.Tx`, which binds them to the operation's context. Map the error kinds (`ErrBusy`, `ErrFull`, `ErrCannotOpen`, `ErrReadOnly`, `ErrCanceled`, `ErrConstraint`, `ErrCorrupt`, `ErrReplaced`) to `AppError` codes in one place; the cause stays in diagnostics. `Store` and `Tx` are exported today, so SQL-only-in-the-repository (STACK-04) is a convention: enforce it (an unexported surface, or an import test that only repositories import `internal/library`).
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): `transfer.Registry` is the in-memory mirror of the durable intent: persist first (the repository commits), then change the registry, then `Reconcile`. A failed write never touches the registry, so there is no rollback path. The registry is per runtime; after a restart SQLite is the truth (029 rebuilds it).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

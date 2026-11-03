@@ -62,7 +62,11 @@ func (a *App) SetFilesWanted(r contracts.SetFilesWantedRequest) (contracts.Opera
 ```
 
 Start it through the single acceptance path (`accept(kind, request, mutation)`, added by the first
-command in 024/025): validate, take the operation ID from the request, fingerprint, `ledger.Start`.
+command in 024/025): validate, take the operation ID and the ordering keys from the request,
+fingerprint, `ledger.Start`. The keys say what the command changes (`commandorder.Torrents(ids)`,
+`commandorder.Torrent(id)` or `commandorder.Settings`; the table is in the
+[ADR](../decisions/transfer-status-model.md#the-order-of-commands-commandorder)), so commands for
+one torrent run in acceptance order.
 Return a nil `error` explicitly, never a typed-nil `*AppError` ([facade](../app/facade.md)).
 
 ## 5. Bindings
