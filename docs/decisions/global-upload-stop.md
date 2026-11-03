@@ -102,7 +102,8 @@ with a "return at the first byte" remedy, 2 of 3 with "wait for a quiet counter,
 without touching the engine if it is already done; call `AllowDataDownload`; then, until nothing is
 missing or the context ends, call `nudge` whenever no payload arrived for the current wait, which
 starts at `Nudge` (1 s), doubles with each nudge up to `MaxNudge` (16 s) and resets when payload
-arrives. The nudge is `Nudge(t, uploadAllowed)`: `DisallowDataUpload` — which always requests an
+arrives. The wait is counted from the last payload or from the moment the last nudge returned (since
+2026-11-03): the nudge waits for the torrent's turn, and a slow one must not use up the next wait. The nudge is `Nudge(t, uploadAllowed)`: `DisallowDataUpload` — which always requests an
 update — and `AllowDataUpload` only when the policy allows upload now. **The caller runs the nudge
 under its per-torrent command lock and reads the policy at that moment**, so a global stop or a pause
 applied during a resume is never undone by a later nudge (unit test). 025 runs `ResumeDownload` for

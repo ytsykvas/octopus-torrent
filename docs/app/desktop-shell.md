@@ -4,11 +4,11 @@
 **Requirements:** REL-01, REL-02, STACK-05, UI-04 (partially), AI-07, QA-01, QA-02, QA-05 (partially)  
 **Related tasks:** [003](../../product/tasks/003-wails-macos-build-spike.md); next — [004](../../product/tasks/004-reproducible-check-commands.md) (single check command), [034](../../product/tasks/034-wails-facade-real-bindings.md) (real facade), [035](../../product/tasks/035-react-bridge-state-resync.md) (bridge and state)  
 **Last verified version:** refactor after 009 (runtime info as a `Result`); task 005 (startup and quit wiring); task 003 (window and check UI)  
-**Last updated:** 2026-10-18
+**Last updated:** 2026-11-03
 
 ## Goal and behavior
 
-The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window (system WebView) shows a local React UI with a **Check Go connection** button. Clicking it calls a Go method through the generated bindings and shows the response `Go go1.27.2 · darwin/arm64 · SQLite 3.53.4`; the SQLite part, added by [008](../../product/tasks/008-sqlite-driver-durability-spike.md), is the version compiled into the binary. A failed or malformed answer is shown as `role="alert"` with the bridge's English fallback for its error code (for example `The application did not answer.`); diagnostic text is never shown. The UI is embedded in the binary and works without internet; the finished package does not need Go, Node.js or the Wails CLI.
+The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window (system WebView) shows a local React UI with a **Check Go connection** button. Clicking it calls a Go method through the generated bindings and shows the response `Go go1.27.3 · darwin/arm64 · SQLite 3.53.4`; the SQLite part, added by [008](../../product/tasks/008-sqlite-driver-durability-spike.md), is the version compiled into the binary. A failed or malformed answer is shown as `role="alert"` with the bridge's English fallback for its error code (for example `The application did not answer.`); diagnostic text is never shown. The UI is embedded in the binary and works without internet; the finished package does not need Go, Node.js or the Wails CLI.
 
 Only this proof of the path is implemented. The torrent list, themes, i18n and the rest are in later tasks (prototype texts are in English; localization is added by 041).
 
@@ -16,8 +16,10 @@ Only this proof of the path is implemented. The torrent list, themes, i18n and t
 
 ```
 Finder / `open` → OctopusTorrent.app/Contents/MacOS/OctopusTorrent
-  main() → run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID()))
-    wails.Run(options.App{ embedded frontend/dist, Bind: app.New(ledger),
+  main() → order := commandorder.New()   (the runtime's one command order, task 013)
+           run(wails.Run, os.Stderr, operations.NewLedger(contracts.NewRuntimeID(), order), library.SQLiteVersion)
+    sqliteVersion(ctx) fails → "OctopusTorrent: read the SQLite version: <error>" on stderr, exit 1
+    wails.Run(options.App{ embedded frontend/dist, Bind: app.New(ledger, version),
                            ErrorFormatter: app.ErrorFormatter(stderr), OnShutdown: stopOperations })
       window (WKWebView) loads index.html → src/main.tsx → <App/>
   Cmd+Q / Apple Event quit → OnShutdown → ledger.Shutdown (≤ 5 s) → process exits 0

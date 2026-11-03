@@ -1,7 +1,9 @@
 // Package operations runs the non-trivial mutations the frontend asks for, once per operation ID.
 // Accepting a command and completing it are separate: Start returns at once with the accepted
 // status, and the final state is read again with Get (or seen in the full state), so a response
-// lost on the bridge never hides the outcome and a retry never repeats the mutation.
+// lost on the bridge never hides the outcome and a retry never repeats the mutation. Operations
+// that name the same torrent (or the settings) run one after another in the order Start accepted
+// them (STACK-03): each takes its turn in a commandorder.Order when it is accepted.
 package operations
 
 import (
@@ -10,6 +12,7 @@ import (
 	"sync"
 
 	"octopustorrent/internal/app/contracts"
+	"octopustorrent/internal/commandorder"
 )
 
 // Mutation performs one operation. It returns nil when the change took effect, an error with
@@ -24,6 +27,7 @@ type Mutation func(ctx context.Context) *contracts.AppError
 // operations across runs belongs to the Operations table (task 014).
 type Ledger struct {
 	runtimeID contracts.RuntimeID
+	order     *commandorder.Order
 	root      context.Context
 	stop      context.CancelFunc
 	running   sync.WaitGroup
@@ -41,10 +45,12 @@ type entry struct {
 	cancel      context.CancelFunc
 }
 
-// NewLedger makes the ledger of the runtime runtimeID.
-func NewLedger(runtimeID contracts.RuntimeID) *Ledger {
+// NewLedger makes the ledger of the runtime runtimeID. order is the runtime's one command order: the
+// services run their own steps for a torrent through it too, so those steps and the operations of
+// that torrent share one queue.
+func NewLedger(runtimeID contracts.RuntimeID, order *commandorder.Order) *Ledger {
 	root, stop := context.WithCancel(context.Background())
-	l := &Ledger{runtimeID: runtimeID, root: root, stop: stop, entries: map[contracts.OperationID]*entry{}}
+	l := &Ledger{runtimeID: runtimeID, order: order, root: root, stop: stop, entries: map[contracts.OperationID]*entry{}}
 	l.spawn = l.running.Go
 	return l
 }
@@ -56,7 +62,14 @@ func (l *Ledger) RuntimeID() contracts.RuntimeID { return l.runtimeID }
 // request (contracts.Fingerprint). The same id with the same kind and fingerprint returns the
 // current status without running anything; with another kind or fingerprint it is
 // operation.idConflict. After Shutdown nothing starts: operation.cancelled.
-func (l *Ledger) Start(id contracts.OperationID, kind contracts.OperationKind, fingerprint string, mutation Mutation) (contracts.OperationStatus, *contracts.AppError) {
+//
+// keys name what the operation changes (commandorder.Torrents of its torrent IDs, or
+// commandorder.Settings). The operation takes its turn in every key's queue now, at acceptance, and
+// its mutation runs only after every operation accepted earlier with one of those keys has
+// finished; until then it stays accepted. The mutation's context holds the keys
+// (Order.Holds) until it returns. A key set the order refuses (two levels) is
+// internal.unexpected and nothing is recorded.
+func (l *Ledger) Start(id contracts.OperationID, kind contracts.OperationKind, fingerprint string, keys []commandorder.Key, mutation Mutation) (contracts.OperationStatus, *contracts.AppError) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if existing, found := l.entries[id]; found {
@@ -68,6 +81,10 @@ func (l *Ledger) Start(id contracts.OperationID, kind contracts.OperationKind, f
 	if l.stopped {
 		return contracts.OperationStatus{}, contracts.NewAppError(contracts.CodeOperationCancelled, nil).WithOperation(id)
 	}
+	turn, err := l.order.Join(keys) // the lock order is always l.mu, then the order's own
+	if err != nil {
+		return contracts.OperationStatus{}, contracts.NewAppError(contracts.CodeInternalUnexpected, nil).WithOperation(id)
+	}
 	ctx, cancel := context.WithCancel(l.root)
 	e := &entry{
 		fingerprint: fingerprint,
@@ -77,10 +94,13 @@ func (l *Ledger) Start(id contracts.OperationID, kind contracts.OperationKind, f
 	l.entries[id] = e
 	l.spawn(func() {
 		defer cancel()
+		defer turn.Leave()
+		// A wait ended by Cancel or Shutdown leaves the queues; begin then records cancelled.
+		_ = turn.Wait(ctx)
 		if !l.begin(ctx, e) {
 			return
 		}
-		problem := mutation(ctx)
+		problem := mutation(turn.Holding(ctx))
 		switch {
 		case problem == nil:
 			l.setState(e, contracts.OperationSucceeded, nil)

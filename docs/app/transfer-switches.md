@@ -5,7 +5,7 @@
 **Related tasks:** [010](../../product/tasks/010-upload-stop-and-pause-spike.md); next [013](../../product/tasks/013-transfer-policy-state-machine.md), [018](../../product/tasks/018-torrent-engine-adapter.md), [025](../../product/tasks/025-pause-resume-application.md), [053](../../product/tasks/053-global-upload-policy-production.md), [054](../../product/tasks/054-global-upload-ui-mvp-gate.md)  
 **See also:** [ADR global-upload-stop](../decisions/global-upload-stop.md), [engine storage](engine-storage.md), [test torrents and swarm](../tooling/test-torrents.md)  
 **Last verified version:** branch `task/010-upload-stop`  
-**Last updated:** 2026-10-18
+**Last updated:** 2026-11-03
 
 ## Goal and behavior
 
@@ -21,8 +21,9 @@ make transfers stand still. `internal/torrentengine/transferswitch` gives later 
 `Confirmation` holds `Accepted`, `Applied` (the switch returned), `Confirmed` (one quiet window of
 the sent counter later) and `Handed` (payload handed to connections after `Applied`; 0 on the pin).
 `ErrNotConfirmed` means the counter kept moving until the deadline; upload stays disallowed.
-`DefaultLimits()`: poll 25 ms, quiet 250 ms, deadline 2 s, first nudge after 1 s, doubling up to 16 s;
-limits that cannot work are `ErrInvalidLimits`.
+`DefaultLimits()`: poll 25 ms, quiet 250 ms, deadline 2 s, first nudge after 1 s, doubling up to 16 s,
+each wait counted from the last payload or from the moment the last nudge returned; limits that
+cannot work are `ErrInvalidLimits`.
 
 `ResumeDownload` keeps watching until nothing is missing or its context ends: the caller runs it for
 as long as the torrent is not paused and runs the nudge under its per-torrent lock, reading the
@@ -36,8 +37,9 @@ product never claims more than "no new payload after the switch".
 
 - Layer: engine adapter side (`internal/torrentengine/...`, the only place with anacrolix types).
   The product binary does not link it yet; the isolation step still keeps anacrolix out (018 lifts it).
-- No policy here: when to stop or resume, and which torrents are manually paused, is 013 (pure
-  policy) and 053/025 (application). The package only makes one switch's effect provable.
+- No policy here: when to stop or resume, and which torrents are manually paused, is the
+  [transfer policy](transfer-policy.md) of 013 and its application in 053/025 (018 wraps these
+  functions in the policy's `Switches` port). The package only makes one switch's effect provable.
 - Reused: the swarm and fixtures (006), the classic-IO filestore harness (009). Replaced: the test
   helper `keepMoving` and the spike's wake-up, both workarounds for finding 14/22.
 
@@ -56,7 +58,7 @@ product never claims more than "no new payload after the switch".
 | Scenario | Test | Level |
 |---|---|---|
 | Confirmed after a quiet window; growth restarts it; steady growth is `ErrNotConfirmed`; cancel | `transferswitch/switch_test.go` | unit, test double |
-| Resume allows and returns when complete; keeps watching after payload; the wait doubles to its cap; a stop during a resume is not undone; cancel before and after the allow; invalid limits | `transferswitch/switch_test.go` | unit, test double |
+| Resume allows and returns when complete; keeps watching after payload; the wait doubles to its cap and starts when a nudge returns; a stop during a resume is not undone; cancel before and after the allow; invalid limits | `transferswitch/switch_test.go` | unit, test double |
 | Chain S→A→L: A's upload stops, L drains then holds, A keeps downloading | `TestStoppingUploadKeepsTheDownloadGoing` | real engine |
 | Five stops and starts with full buffers | `TestRepeatedStopsWithDataInTheBufferEndWithinTheMeasuredResidual` | real engine |
 | New connection to a stopped, downloading torrent | `TestANewConnectionGetsNoPayloadWhileUploadIsStopped` | real engine |

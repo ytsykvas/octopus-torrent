@@ -100,7 +100,7 @@ no TODOs.
 
 ## Usage and recovery
 
-- Prerequisites: Go 1.27.2, Node 26 / npm 11.20, Xcode Command Line Tools; a logged-in GUI session;
+- Prerequisites: Go 1.27.3, Node 26 / npm 11.20, Xcode Command Line Tools; a logged-in GUI session;
   the terminal's Automation permission for OctopusTorrent and for EngineSpike (macOS asks once per
   app; if refused, the `.app` step is `not_run` and names System Settings → Privacy & Security →
   Automation); the network for the full gate.

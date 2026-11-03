@@ -68,6 +68,8 @@ Respect the boundaries of our own DTOs, the repository and the engine adapter. A
 
 **From the 009 checkpoint** ([refactor after 009](../../docs/verification/refactor-after-009.md)): when this task (or 018, whichever touches `run` first) changes `main.go`, split the start test of `main_test.go`: extract `startedOptions(t)` for the repeated start-capture closure, assert the error formatter on its exact JSON text instead of equality with a second formatter, and give the formatter/stderr check its own test; window, assets and bind stay together.
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): quit order for the policy: `registry.BeginShutdown()` first (one-way and keyless: every later `Decide` is off, the stored intent is unchanged, late outcomes are discarded, and a mutation that outlives the ledger's bounded shutdown still applies "off") → the ledger's `Shutdown` → the adapter stops data requests → engine close. A record whose removal journal is unfinished is restored with `PhaseRemoving`.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

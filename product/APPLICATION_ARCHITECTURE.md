@@ -56,7 +56,9 @@ main.go / wails.json             shell startup and configuration
 go.mod / go.sum                 Go toolchain and dependencies
 internal/app/                   facade, lifecycle, command coordination
 internal/app/contracts/         bridge DTOs, AppError, strict requests, shared examples (exists, 005)
-internal/app/operations/        idempotent operation ledger (exists, 005)
+internal/app/operations/        idempotent operation ledger (exists, 005); ordering keys (013)
+internal/commandorder/          per-key order: commands for one torrent, or the settings, run in acceptance order (exists, 013)
+internal/transfer/              transfer policy: permissions, display status, the policy registry and its apply step (exists, 013; linked from 025)
 internal/torrentengine/         interface and anacrolix adapter
 internal/torrentengine/testutil/ fixture (own v1/v2/hybrid test torrents), swarm (closed loopback swarm) (exists, 006)
 internal/torrentengine/          engine contract tests on the pinned version (exist, 007); the adapter comes in 018
@@ -118,7 +120,7 @@ Stored policy is separate from actual state:
 - file wanted/priority defines the target download;
 - an access or deletion error has its own state and does not silently change the manual pause.
 
-Effective upload permission is computed from all these conditions. Turning off globalUploadDisabled does not start a manualPaused torrent. Saving the desired state in SQLite and applying it to the engine have a visible result: if the engine or the DB write failed, the UI shows incompleteness/an error. On restart the policy is applied before payload is permitted.
+Effective upload permission is computed from all these conditions. Turning off globalUploadDisabled does not start a manualPaused torrent. The decision table, the status priority, the order of commands per torrent (`commandorder` keys taken at acceptance) and the level-triggered apply step are fixed in [transfer-status-model](../docs/decisions/transfer-status-model.md) (task 013) and implemented in `internal/transfer` and `internal/commandorder`. Saving the desired state in SQLite and applying it to the engine have a visible result: if the engine or the DB write failed, the UI shows incompleteness/an error. On restart the policy is applied before payload is permitted.
 
 Applying the upload policy to the engine is confirmed, not assumed: a stop counts as applied when the torrent's own sent-payload counter stays unchanged for a quiet window after `DisallowDataUpload` returns; bytes already sent may still arrive at the peer. New and restored torrents receive the switch before their metadata is attached, and download is resumed with a nudge that ends the engine's stall after a pause ([global-upload-stop](../docs/decisions/global-upload-stop.md)).
 

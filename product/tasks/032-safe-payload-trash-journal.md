@@ -62,6 +62,8 @@ Deletion by the name of the download folder is forbidden: we work with a verifie
 
 **From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): stop the torrent's `TorrentStorage` (`Stop`) before any file action, so no write races the move to the Trash. The storage runs with part files off, so it creates no `.part` names; a `<name>.part` can still exist from the engine's default storage in earlier tests or from another client, and from finding 13 elsewhere, so keep such names in the deletion list.
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): a failed or partial deletion keeps the record in `PhaseRemoving` with `SetPayloadFault(true)`: status `error`, both directions off, never restarted. `Forget` only after verified success. The removal holds its keys through the move to the Trash (a rename on the same volume, 012); any longer work runs outside the step.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

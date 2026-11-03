@@ -14,6 +14,7 @@ import (
 	"octopustorrent/internal/app"
 	"octopustorrent/internal/app/contracts"
 	"octopustorrent/internal/app/operations"
+	"octopustorrent/internal/commandorder"
 )
 
 const (
@@ -27,7 +28,7 @@ func sqliteVersion(context.Context) (string, error) { return "3.53.4", nil }
 func TestRunStartsApplicationWithEmbeddedFrontendAndFacade(t *testing.T) {
 	var got *options.App
 	var stderr bytes.Buffer
-	ledger := operations.NewLedger(runtimeID)
+	ledger := operations.NewLedger(runtimeID, commandorder.New())
 
 	code := run(func(opts *options.App) error {
 		got = opts
@@ -67,7 +68,7 @@ func TestRunStartsApplicationWithEmbeddedFrontendAndFacade(t *testing.T) {
 // Quitting stops the operations: no goroutine of the ledger outlives the application.
 func TestRunStopsOperationsOnShutdown(t *testing.T) {
 	var got *options.App
-	ledger := operations.NewLedger(runtimeID)
+	ledger := operations.NewLedger(runtimeID, commandorder.New())
 	run(func(opts *options.App) error {
 		got = opts
 		return nil
@@ -75,17 +76,17 @@ func TestRunStopsOperationsOnShutdown(t *testing.T) {
 
 	got.OnShutdown(context.Background())
 
-	_, problem := ledger.Start(opID, contracts.OperationPauseTorrents, "fp", func(context.Context) *contracts.AppError { return nil })
+	_, problem := ledger.Start(opID, contracts.OperationPauseTorrents, "fp", nil, func(context.Context) *contracts.AppError { return nil })
 	if problem == nil || problem.Code != contracts.CodeOperationCancelled {
 		t.Fatalf("Start after OnShutdown = %+v, want operation.cancelled", problem)
 	}
 }
 
 func TestStopOperationsReportsMutationsThatDidNotStop(t *testing.T) {
-	ledger := operations.NewLedger(runtimeID)
+	ledger := operations.NewLedger(runtimeID, commandorder.New())
 	started, release := make(chan struct{}), make(chan struct{})
 	defer close(release)
-	ledger.Start(opID, contracts.OperationPauseTorrents, "fp", func(context.Context) *contracts.AppError {
+	ledger.Start(opID, contracts.OperationPauseTorrents, "fp", nil, func(context.Context) *contracts.AppError {
 		close(started)
 		<-release
 		return nil
@@ -105,7 +106,7 @@ func TestStopOperationsReportsMutationsThatDidNotStop(t *testing.T) {
 func TestRunReportsStartFailureWithNonZeroCode(t *testing.T) {
 	var stderr bytes.Buffer
 
-	code := run(func(*options.App) error { return errors.New("webview unavailable") }, &stderr, operations.NewLedger(runtimeID), sqliteVersion)
+	code := run(func(*options.App) error { return errors.New("webview unavailable") }, &stderr, operations.NewLedger(runtimeID, commandorder.New()), sqliteVersion)
 
 	if code != 1 {
 		t.Fatalf("run() = %d, want 1", code)
@@ -120,7 +121,7 @@ func TestRunRefusesToStartWithoutAWorkingSQLite(t *testing.T) {
 	started := false
 	broken := func(context.Context) (string, error) { return "", errors.New("no driver") }
 
-	code := run(func(*options.App) error { started = true; return nil }, &stderr, operations.NewLedger(runtimeID), broken)
+	code := run(func(*options.App) error { started = true; return nil }, &stderr, operations.NewLedger(runtimeID, commandorder.New()), broken)
 
 	if code != 1 || started {
 		t.Fatalf("run() = %d, started %v; want 1 without starting", code, started)

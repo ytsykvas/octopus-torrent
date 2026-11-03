@@ -30,7 +30,7 @@ silently bypasses), there was no linter, and dependency age was checked by a one
   refused, another OctopusTorrent running) is a mandatory `not_run` and fails the full gate. A tier that
   does not exist yet — real-engine integration (018), test-bridge UI tests (035) — is printed as
   `not_run (not implemented yet)` and does not block; the line disappears when the tier is built.
-- **TS coverage, independent of the tool.** Vitest 5.0.3 with `@vitest/coverage-v8` 5.0.3 (pinned,
+- **TS coverage, independent of the tool.** Vitest 5.0.5 with `@vitest/coverage-v8` 5.0.5 (pinned,
   four metrics, `perFile` thresholds 100) writes `coverage-summary.json`; the gate then derives the
   inventory from the repository listing (every `frontend/src/**/*.ts(x)` except tests, the test setup
   and `.d.ts`) and requires every file in the report with `covered == total` on lines, statements,
@@ -48,7 +48,7 @@ silently bypasses), there was no linter, and dependency age was checked by a one
   modifier such as `.concurrent`) `.skip|only|todo|skipIf|runIf|fails`, and `xit|xtest|xdescribe`; in
   Go, `//nolint` anywhere and `t.Skip` in tests.
 - **Analyzers.** Go: `gofmt -l .` must be empty, `go vet ./...`. TS: `tsc --noEmit` (strict, plus
-  `noImplicitReturns`) and Oxlint 1.86.0 with oxlint-tsgolint 7.0.2003 (`oxlint --type-aware
+  `noImplicitReturns`) and Oxlint 1.89.0 with oxlint-tsgolint 7.0.2004 (`oxlint --type-aware
   --deny-warnings`, `frontend/.oxlintrc.json`): categories correctness and suspicious are errors, perf
   is a warning that fails through `--deny-warnings`, React hooks rules are errors; the `jsx-a11y`
   plugin is on, and `typescript/ban-ts-comment`, `no-explicit-any` and `no-non-null-assertion` are

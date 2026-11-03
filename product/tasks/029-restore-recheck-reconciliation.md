@@ -59,6 +59,8 @@ Checking the disk after a crash does not mean downloading again from the network
 
 **From 011** ([magnet-pending-storage](../../docs/decisions/magnet-pending-storage.md), [feature](../../docs/app/magnet-metadata.md)): data already on disk is restored through the add path (storage, then `SetInfoBytes`, then peers), never through a pending magnet: a pending import's torrent caches every piece as not complete.
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): create the registry with the runtime's order and the stored global value (`NewRegistry(order, globalUploadDisabled)`, no default), then for each record, in its own step, `Add` with the stored `ManualPaused` and `PhaseChecking` (files to hash) or `PhaseReady`, `PhaseRemoving` for an unfinished removal (the zero phase is refused), and `Reconcile`; move a checked record to `PhaseReady` and reconcile again. Steps are short: the hashing runs outside every step under its own lifetime context, between the step that sets `PhaseChecking` and the one that ends it. Nothing transfers before its reconcile.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.

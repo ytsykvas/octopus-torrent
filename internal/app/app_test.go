@@ -11,6 +11,7 @@ import (
 
 	"octopustorrent/internal/app/contracts"
 	"octopustorrent/internal/app/operations"
+	"octopustorrent/internal/commandorder"
 )
 
 const (
@@ -19,7 +20,7 @@ const (
 )
 
 func newApp() (*App, *operations.Ledger) {
-	ledger := operations.NewLedger(runtimeID)
+	ledger := operations.NewLedger(runtimeID, commandorder.New())
 	return New(ledger, "3.53.4"), ledger
 }
 
@@ -63,7 +64,7 @@ func TestGetLibrarySnapshotDescribesThisRuntimesEmptyLibrary(t *testing.T) {
 func TestGetOperationReturnsTheLedgersStatus(t *testing.T) {
 	a, ledger := newApp()
 	ran := make(chan struct{})
-	ledger.Start(opID, contracts.OperationPauseTorrents, "fp", func(context.Context) *contracts.AppError {
+	ledger.Start(opID, contracts.OperationPauseTorrents, "fp", nil, func(context.Context) *contracts.AppError {
 		close(ran)
 		return nil
 	})
