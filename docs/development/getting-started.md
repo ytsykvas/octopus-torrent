@@ -12,7 +12,7 @@ them in and what to do when something goes wrong.
 |---|---|---|
 | macOS | 27.0+ on Apple Silicon | the only verified environment ([macos-target](../decisions/macos-target.md)) |
 | Xcode Command Line Tools | current | `xcode-select --install` |
-| Go | ≥ 1.27 | `go.mod` pulls the exact toolchain (1.27.2) |
+| Go | ≥ 1.27 | `go.mod` pulls the exact toolchain (1.27.3) |
 | Node.js / npm | ≥ 22.12 / ≥ 11.20 | verified 26.11.1 / 11.20.0 |
 
 There is no global Wails CLI: `go tool wails`, `go tool govulncheck` and `go tool devtool` take

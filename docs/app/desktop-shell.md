@@ -8,7 +8,7 @@
 
 ## Goal and behavior
 
-The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window (system WebView) shows a local React UI with a **Check Go connection** button. Clicking it calls a Go method through the generated bindings and shows the response `Go go1.27.2 · darwin/arm64 · SQLite 3.53.4`; the SQLite part, added by [008](../../product/tasks/008-sqlite-driver-durability-spike.md), is the version compiled into the binary. A failed or malformed answer is shown as `role="alert"` with the bridge's English fallback for its error code (for example `The application did not answer.`); diagnostic text is never shown. The UI is embedded in the binary and works without internet; the finished package does not need Go, Node.js or the Wails CLI.
+The owner opens `OctopusTorrent.app` from Finder on their Mac. The Wails window (system WebView) shows a local React UI with a **Check Go connection** button. Clicking it calls a Go method through the generated bindings and shows the response `Go go1.27.3 · darwin/arm64 · SQLite 3.53.4`; the SQLite part, added by [008](../../product/tasks/008-sqlite-driver-durability-spike.md), is the version compiled into the binary. A failed or malformed answer is shown as `role="alert"` with the bridge's English fallback for its error code (for example `The application did not answer.`); diagnostic text is never shown. The UI is embedded in the binary and works without internet; the finished package does not need Go, Node.js or the Wails CLI.
 
 Only this proof of the path is implemented. The torrent list, themes, i18n and the rest are in later tasks (prototype texts are in English; localization is added by 041).
 

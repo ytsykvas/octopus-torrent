@@ -136,9 +136,7 @@ func EscapeModulePath(p string) string {
 // accepted before they were minReleaseAgeDays old: only security fixes, each with its decision, also
 // recorded in the toolchain-versions ADR. An entry fails the gate once its version is old enough,
 // so it is removed as soon as the ordinary rule covers it.
-var releaseAgeExceptions = map[string]string{
-	"golang.org/x/net@v0.60.0": "owner's decision of 2026-10-16 (task 006): fixes GO-2026-6603, -6610, -6611, -6612 and -6617, reachable once the torrent engine is linked; 14 days old on 2026-10-22",
-}
+var releaseAgeExceptions = map[string]string{}
 
 // ReleaseAgeProblem describes a version published less than minReleaseAgeDays before now, or "".
 func ReleaseAgeProblem(version string, published, now time.Time) string {

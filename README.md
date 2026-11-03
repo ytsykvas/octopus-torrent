@@ -14,7 +14,7 @@ A personal local BitTorrent client for macOS (the owner's own Apple Silicon Mac)
 
 ## Stack
 
-React 19 + TypeScript 7 (strict) and Vite 8 · Wails v2.16.0 (system WebView) · Go 1.27.2 · [anacrolix/torrent](https://github.com/anacrolix/torrent) (version pinned by 007) · SQLite through a repository: modernc.org/sqlite v1.60.1, SQLite 3.53.4 ([sqlite-driver](docs/decisions/sqlite-driver.md)). Exact versions, the **update policy** (latest stable version at least 14 days old; Go/Node patch releases — immediately) and reasons — [toolchain-versions](docs/decisions/toolchain-versions.md); macOS target and bundle ID — [macos-target](docs/decisions/macos-target.md).
+React 19 + TypeScript 7 (strict) and Vite 8 · Wails v2.16.0 (system WebView) · Go 1.27.3 · [anacrolix/torrent](https://github.com/anacrolix/torrent) (version pinned by 007) · SQLite through a repository: modernc.org/sqlite v1.60.1, SQLite 3.53.4 ([sqlite-driver](docs/decisions/sqlite-driver.md)). Exact versions, the **update policy** (latest stable version at least 14 days old; Go/Node patch releases — immediately) and reasons — [toolchain-versions](docs/decisions/toolchain-versions.md); macOS target and bundle ID — [macos-target](docs/decisions/macos-target.md).
 
 ## Documents
 
@@ -46,7 +46,7 @@ product/                      everything about the product concept and plan:
   tasks/                      plan and 68 numbered tasks
   archive/                    historical materials, read-only
 main.go, main_test.go         Wails entry point: embedded frontend/dist, run(start, stderr, ledger)
-go.mod, go.sum                Go 1.27.2, Wails v2.16.0 (library + CLI as go tool), anacrolix/torrent v1.61.0 (tests and the engine spike; not the product)
+go.mod, go.sum                Go 1.27.3, Wails v2.16.0 (library + CLI as go tool), anacrolix/torrent v1.61.0 (tests and the engine spike; not the product)
 wails.json                    Wails configuration (npm ci, npm run build)
 internal/app/                 Wails facade (AppAPI): GetRuntimeInfo, GetLibrarySnapshot, GetOperation, ErrorFormatter
 internal/app/contracts/       bridge DTOs, AppError, strict requests, shared JSON examples (testdata/)
@@ -84,7 +84,7 @@ M4 / macOS 27.0.1 in tasks [003](docs/verification/003-wails-macos-build-spike.m
 path.
 
 **Development prerequisites** (the finished `.app` does not need them): Xcode Command Line Tools
-(`xcode-select --install`), Go ≥ 1.27 (`brew install go`; the exact 1.27.2 is pulled in by `go.mod`),
+(`xcode-select --install`), Go ≥ 1.27 (`brew install go`; the exact 1.27.3 is pulled in by `go.mod`),
 Node.js ≥ 22.12 with npm ≥ 11.20 (verified 26.11.1 / 11.20.0; `frontend/.npmrc` sets
 `min-release-age=14`, so npm will not install a version younger than 14 days). A global Wails CLI is
 **not needed**: `go tool wails`, `go tool govulncheck` and `go tool devtool` take their versions from
