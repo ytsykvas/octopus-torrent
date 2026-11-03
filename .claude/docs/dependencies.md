@@ -49,7 +49,10 @@ entry is removed then.
 go tool devtool check deps        # release age of every locked version, npm audit, govulncheck
 ```
 Then the full [`/check`](../commands/check.md) (`go tool devtool check`), and `/qa` if the change can
-affect the `.app`.
+affect the `.app`. After `go get`, `go.sum` still holds the hashes of the replaced versions; the
+gate's release build (`wails build` tidies the module) removes them during the run, so the first
+gate fails `single code version` naming `go.sum`. Check that `go.mod` did not change, then run the
+gate again on the now stable `go.sum`.
 
 ## 5. Record
 
