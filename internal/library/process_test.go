@@ -16,11 +16,12 @@ import (
 	"time"
 )
 
-// The child processes of these tests: another application instance that holds the write lock, and
-// one that commits until it is killed.
+// The child processes of these tests: another application instance that holds the write lock, one
+// that commits until it is killed, and one that migrates until it is killed (schema_test.go).
 const (
-	lockChildEnv   = "OCTOPUS_LIBRARY_LOCK_CHILD"
-	commitChildEnv = "OCTOPUS_LIBRARY_COMMIT_CHILD"
+	lockChildEnv    = "OCTOPUS_LIBRARY_LOCK_CHILD"
+	commitChildEnv  = "OCTOPUS_LIBRARY_COMMIT_CHILD"
+	migrateChildEnv = "OCTOPUS_LIBRARY_MIGRATE_CHILD"
 )
 
 // childPath returns the database path a parent test passed through marker, or "" in the parent. A
@@ -161,7 +162,7 @@ func TestEveryAcknowledgedCommitSurvivesAKilledProcess(t *testing.T) {
 // commitForever is the commit child: it commits one row at a time and acknowledges each only after
 // Write returned.
 func commitForever(t *testing.T, path string) {
-	s, err := Open(context.Background(), path)
+	s, err := openRows(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}

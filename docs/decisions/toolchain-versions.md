@@ -57,6 +57,8 @@ Since task 004, `go tool devtool check deps` (part of the full `go tool devtool 
 
 The release build is `go tool wails build -clean -trimpath`; `-trimpath` removes the developer's absolute paths from the binary (without it there are 142 of them).
 
+A Wails update re-checks the `bindings` and `dev` build tags that keep builds and `wails dev` out of the owner's data folder ([library-schema-and-data-folder](library-schema-and-data-folder.md#consequences)).
+
 ## Alternatives considered
 
 | Option | Advantages | Disadvantages | Why not chosen |

@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -139,31 +138,49 @@ func TestAFileThatIsNotADatabaseIsCorruptAndKept(t *testing.T) {
 	}
 }
 
+func TestANewStoreIsStampedAndReopensUnchanged(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "piece-completion.sqlite")
+	if err := openMarks(t, path).Close(); err != nil {
+		t.Fatal(err)
+	}
+	st := stateOf(t, path)
+	if st.applicationID != 0x4F545043 || st.version != 1 {
+		t.Fatalf("application_id %#x, user_version %d; want OTPC, 1", st.applicationID, st.version)
+	}
+	// STRICT, like every library table: SQLite refuses a value of another type instead of storing it.
+	if strict := scalar[int](t, path, "SELECT strict FROM pragma_table_list WHERE schema = 'main' AND name = 'piece_completion'"); strict != 1 {
+		t.Fatalf("piece_completion strict = %d, want 1", strict)
+	}
+	before := identify(t, path)
+	if err := openMarks(t, path).Close(); err != nil {
+		t.Fatal(err)
+	}
+	if identify(t, path) != before {
+		t.Fatal("reopening a current store changed it")
+	}
+}
+
+// 009's piece_completion table, written before the migration policy: no application_id.
+const unstamped009 = "CREATE TABLE piece_completion(infohash BLOB NOT NULL, piece INTEGER NOT NULL, complete INTEGER NOT NULL, PRIMARY KEY(infohash, piece)) WITHOUT ROWID"
+
 func TestAStoreOfAnotherVersionOrPurposeIsNeverCorruptAndNeverChanged(t *testing.T) {
-	for name, setup := range map[string]func(*Store){
-		"a newer version": func(s *Store) {
-			must(t, s, "CREATE TABLE piece_completion(infohash BLOB NOT NULL, piece INTEGER NOT NULL, complete INTEGER NOT NULL, PRIMARY KEY(infohash, piece)) WITHOUT ROWID")
-			must(t, s, "PRAGMA user_version = 2")
-		},
-		"tables of another purpose": func(s *Store) {
-			must(t, s, "CREATE TABLE torrents(id INTEGER PRIMARY KEY)")
-		},
-		"another table at the same version": func(s *Store) {
-			must(t, s, "CREATE TABLE torrents(id INTEGER PRIMARY KEY)")
-			must(t, s, "PRAGMA user_version = 1")
-		},
+	stamp := "PRAGMA application_id = 1330925635"
+	for name, c := range map[string]struct {
+		statements []string
+		want       error
+	}{
+		"a newer version":                   {[]string{stamp, unstamped009, "PRAGMA user_version = 2"}, ErrUnsupportedVersion},
+		"an unstamped store of 009":         {[]string{unstamped009, "PRAGMA user_version = 1"}, ErrUnknownSchema},
+		"tables of another purpose":         {[]string{"CREATE TABLE torrents(id INTEGER PRIMARY KEY)"}, ErrUnknownSchema},
+		"another table at the same version": {[]string{stamp, "CREATE TABLE torrents(id INTEGER PRIMARY KEY)", "PRAGMA user_version = 1"}, ErrUnknownSchema},
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "piece-completion.sqlite")
-			s := openStore(t, path)
-			setup(s)
-			if err := s.Close(); err != nil {
-				t.Fatal(err)
-			}
+			foreignDB(t, path, c.statements...)
 			before := identify(t, path)
 			_, err := OpenCompletion(deadline(t, 5*time.Second), path)
-			if !errors.Is(err, ErrUnsupportedVersion) || errors.Is(err, ErrCorrupt) {
-				t.Fatalf("OpenCompletion = %v, want ErrUnsupportedVersion and not ErrCorrupt", err)
+			if !errors.Is(err, c.want) || errors.Is(err, ErrCorrupt) {
+				t.Fatalf("OpenCompletion = %v, want %v and not ErrCorrupt", err, c.want)
 			}
 			if identify(t, path) != before {
 				t.Fatal("the store was changed")
@@ -176,7 +193,13 @@ func TestAFullDiskFailsTheBatchWholeAndKeepsEarlierMarks(t *testing.T) {
 	mount := smallVolume(t)
 	path := filepath.Join(mount, "piece-completion.sqlite")
 	c := openMarks(t, path)
-	save(t, c, Mark{hashA, 0, true}, Mark{hashA, 1, true})
+	// Enough earlier marks that the WAL holds pages past the end of the database file, which the
+	// closing checkpoint must append.
+	earlier := make([]Mark, 2000)
+	for i := range earlier {
+		earlier[i] = Mark{hashA, i, true}
+	}
+	save(t, c, earlier...)
 	filler := volume.Fill(t, mount)
 	// Twenty thousand rows need new pages that the full volume cannot give.
 	batch := make([]Mark, 20000)
@@ -190,8 +213,8 @@ func TestAFullDiskFailsTheBatchWholeAndKeepsEarlierMarks(t *testing.T) {
 	if got := load(t, c, hashB); len(got) != 0 {
 		t.Fatalf("%d marks of the failed batch are visible, want none", len(got))
 	}
-	if got := load(t, c, hashA); len(got) != 2 {
-		t.Fatalf("earlier marks = %v", got)
+	if got := load(t, c, hashA); len(got) != len(earlier) {
+		t.Fatalf("%d earlier marks, want %d", len(got), len(earlier))
 	}
 	if err := c.Close(); !errors.Is(err, ErrFull) {
 		t.Fatalf("Close on a full disk = %v, want ErrFull", err)
@@ -200,15 +223,16 @@ func TestAFullDiskFailsTheBatchWholeAndKeepsEarlierMarks(t *testing.T) {
 		t.Fatal(err)
 	}
 	again := openMarks(t, path)
-	if got := load(t, again, hashA); len(got) != 2 {
-		t.Fatalf("after the disk had space again = %v", got)
+	if got := load(t, again, hashA); len(got) != len(earlier) {
+		t.Fatalf("after the disk had space again: %d marks, want %d", len(got), len(earlier))
 	}
 }
 
 func TestAStoreWhoseSchemaCannotBeCommittedOnAFullDiskIsAnError(t *testing.T) {
 	mount := smallVolume(t)
 	path := filepath.Join(mount, "piece-completion.sqlite")
-	empty, err := Open(deadline(t, 5*time.Second), path)
+	// An empty database in WAL: a schema without migrations creates nothing.
+	empty, err := open(deadline(t, 5*time.Second), path, defaults, schema{name: "empty", applicationID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +259,9 @@ func TestATableChangedBehindTheStoresBackIsReportedNotHidden(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "piece-completion.sqlite")
 	c := openMarks(t, path)
 	save(t, c, Mark{hashA, 0, true})
-	other := openStore(t, path)
+	// Another program changes the table behind the store's back, through the driver alone.
+	other := &Store{path: path, file: c.store.file, write: rawDB(t, path), read: rawDB(t, path)}
+	t.Cleanup(func() { _ = other.write.Close(); _ = other.read.Close() })
 
 	must(t, other, "DROP TABLE piece_completion")
 	if err := c.SaveMarks(deadline(t, 5*time.Second), []Mark{{hashA, 1, true}}); err == nil {
@@ -249,20 +275,5 @@ func TestATableChangedBehindTheStoresBackIsReportedNotHidden(t *testing.T) {
 	must(t, other, "INSERT INTO piece_completion VALUES (?, 'not a number', 1)", hashA[:])
 	if _, err := c.LoadMarks(deadline(t, 5*time.Second), hashA); err == nil {
 		t.Fatal("LoadMarks of a row with a text piece succeeded")
-	}
-}
-
-func TestSchemaSetupOnAnEndedTransactionIsAnError(t *testing.T) {
-	s := openStore(t, filepath.Join(t.TempDir(), "piece-completion.sqlite"))
-	ctx := deadline(t, 5*time.Second)
-	tx, err := s.write.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Rollback(); err != nil {
-		t.Fatal(err)
-	}
-	if err := ensureCompletionSchema(Tx{ctx, tx}); !errors.Is(err, sql.ErrTxDone) {
-		t.Fatalf("ensureCompletionSchema on an ended transaction = %v, want sql.ErrTxDone", err)
 	}
 }

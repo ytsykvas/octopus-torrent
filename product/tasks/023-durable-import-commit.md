@@ -4,7 +4,7 @@
 **Phase:** P3 — Import, transfer and data safety  
 **Priority:** critical path of the main scenario or completion  
 **Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
-**Hard dependencies:** [022](022-pending-import-coordinator.md), [015](015-transactional-repositories.md), [013](013-transfer-policy-state-machine.md), [009](009-storage-and-completion-spike.md)  
+**Hard dependencies:** [022](022-pending-import-coordinator.md), [015](015-transactional-repositories.md), [016](016-migration-backup-corruption-recovery.md), [013](013-transfer-policy-state-machine.md), [009](009-storage-and-completion-spike.md)  
 **Requirements:** `ADD-04`, `ADD-07`, `SET-02`, `STACK-04`
 
 ## Outcome
@@ -64,6 +64,8 @@ Creating the entry, the storage and the engine object passes through several sep
 **From 011** ([magnet-pending-storage](../../docs/decisions/magnet-pending-storage.md), [feature](../../docs/app/magnet-metadata.md)): persist the record from `Pending.InfoBytes()` before `Confirm` allows download; `Confirm` with `Download=false` keeps the torrent attached but idle until the record is durable. The attach already creates the zero-length files and their folders in the chosen folder: a failed record write must drop the torrent and remove exactly those files (DEL rules: an explicit list). Start the download afterwards through `transferswitch.ResumeDownload`, like every resume (finding 25 cannot apply to a torrent that never requested, but one rule is simpler). Existing library records were `not_run` in 011 (no store): prove here that a cancelled import changes none.
 
 **From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): after the durable commit, run the new torrent's first step with `order.Run(ctx, {commandorder.Torrent(newID)}, …)`: `registry.Add` (with the stored `manualPaused` and `PhaseReady`: the zero phase is refused), then `Reconcile`. The reconcile reads the current global value itself, so a global change during the import cannot be missed. A failed import never reaches the registry.
+
+**From 014** ([library-schema-and-data-folder](../../docs/decisions/library-schema-and-data-folder.md)): commit `torrents` (with `source_metainfo` or `source_magnet`) and `torrent_files` in the import's one transaction; `info` is the verified info bytes, and both infohashes are `UNIQUE` — of two concurrent imports of one hash exactly one commits and the other is `ErrConstraint` (proven in 014), which the service maps to "already in the library". This is the first task that puts the owner's records into the library, so 016 is a hard dependency (owner decision, 2026-11-04): a branch build launched by hand without `OCTOPUS_DATA_DIR` that carries a new migration upgrades the owner's library past what `main`'s build reads, and only 016's backup before a migration undoes that ([data folder](../../docs/app/data-folder.md#usage-and-recovery)).
 
 ## Mandatory TDD cycle and architecture review
 

@@ -21,6 +21,21 @@ var (
 	ErrReplaced   = errors.New("the library database file was deleted, moved or replaced while open")
 )
 
+// The refusals and the failure of a database's schema (task 014). None of them is ErrCorrupt, so a
+// caller that rebuilds a damaged database cannot destroy a file written by a newer build or by
+// another application. A refused file is never changed.
+var (
+	// ErrUnsupportedVersion: the file is ours, at a version a newer build wrote.
+	ErrUnsupportedVersion = errors.New("the database was written by a newer version of the application")
+	// ErrUnknownSchema: the file is not a database of this purpose: another application's, an
+	// unstamped file with tables, or ours with another structure than its migrations build.
+	ErrUnknownSchema = errors.New("the database is not one this application made for this purpose")
+	// ErrMigrationFailed: the migration to the current version failed and kept nothing; the file is
+	// at its old version with every row. It is joined with the cause's own kind (ErrFull, ErrBusy,
+	// ErrReadOnly, ErrCanceled, ErrConstraint, ...).
+	ErrMigrationFailed = errors.New("the database could not be migrated to the current version")
+)
+
 // kindError is a classified error: the kind, and what caused it.
 type kindError struct{ kind, cause error }
 

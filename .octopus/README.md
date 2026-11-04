@@ -12,8 +12,10 @@ repository work with nothing configured by hand.
 | `carry` | gitignored files copied into every new worktree |
 | `project.json` | the base branch and the name, for a fresh install |
 
-There is no `archive.sh`: a workspace creates nothing outside its worktree (no databases, no shared
-storage), so deleting the worktree is the whole cleanup.
+There is no `archive.sh`: a workspace creates nothing outside its worktree (its library is
+`build/workspace-data`, which `workspace run` passes as `OCTOPUS_DATA_DIR`; no shared storage), so
+deleting the worktree is the whole cleanup. After switching a workspace to an older branch, delete
+`build/workspace-data`: its library may be of a newer version.
 
 **The scripts are two-command hand-overs:** build `cmd/devtool` into `build/bin/devtool`, then `exec`
 it. The logic lives in Go (`cmd/devtool`, `internal/devtool`) so it is tested and counted in the 100%

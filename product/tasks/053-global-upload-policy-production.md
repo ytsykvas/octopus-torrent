@@ -58,6 +58,8 @@ If 010 is blocked, this task is also blocked. A full pause of all torrents is no
 
 **From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): the global revision: the settings operation (key `commandorder.Settings`) persists, calls `registry.SetGlobalUploadDisabled`, then reconciles every returned torrent with `order.Run(ctx, {commandorder.Torrent(id)}, …)`, in parallel with a bound you set. Bound each nested `Run`. The returned list also holds the torrents out of step (a failed or unfinished apply), so saving the same value again retries them. Report pending / confirmed / not confirmed per torrent from `View.Pending()` and `View.Problem`; an asynchronous confirmation records with `registry.Record(id, revision, problem)` against the revision its step read. `ErrNotConfirmed` is an outcome, never `PayloadFault`. Not cancellable once running.
 
+**From 014** ([library-schema-and-data-folder](../../docs/decisions/library-schema-and-data-folder.md)): the global upload stop is stored in `settings.global_upload_disabled`; no settings row means upload allowed.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

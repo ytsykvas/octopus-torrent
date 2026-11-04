@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"octopustorrent/internal/datadir"
 )
 
 const (
@@ -28,12 +30,14 @@ type wailsApp struct {
 	BundleID string // CFBundleIdentifier in Dir/build/darwin/Info.plist
 	Main     string // the file with func main, as the coverage profile names it
 	Bindings string // the generated bindings directory, relative to the repository root
+	// OpensLibrary: the app opens the library in its data folder at start and closes it at quit.
+	OpensLibrary bool
 }
 
 // wailsApps lists every Wails project; the product comes first.
 var wailsApps = []wailsApp{
 	{Name: "OctopusTorrent", Dir: ".", Bundle: "build/bin/OctopusTorrent.app", BundleID: "dev.tsykvas.octopustorrent",
-		Main: "main.go", Bindings: "frontend/wailsjs/"},
+		Main: "main.go", Bindings: "frontend/wailsjs/", OpensLibrary: true},
 	// The engine spike of task 007; task 034 deletes it.
 	{Name: "EngineSpike", Dir: "cmd/engine-spike", Bundle: "build/bin/EngineSpike.app", BundleID: "dev.tsykvas.octopustorrent.enginespike",
 		Main: "cmd/engine-spike/main.go", Bindings: "frontend/spike/wailsjs/"},
@@ -58,9 +62,11 @@ func (a wailsApp) alreadyRunning() stepResult {
 
 // appCoverageRun covers what only the real applications execute (func main): for every Wails app
 // in turn it builds the .app with coverage instrumentation of the whole module, launches it with
-// GOCOVERDIR=dir, quits it with an Apple Event — a normal exit, so Go writes the counters — and
-// checks that this process wrote counters. SIGTERM is not used to quit: it would end the process
-// without writing them.
+// GOCOVERDIR=dir and its own data folder (OCTOPUS_DATA_DIR, under build/coverage/app-data), quits it
+// with an Apple Event — a normal exit, so Go writes the counters — and checks that this process
+// wrote counters and, for an app that opens the library, that the library is in the folder it was
+// given and was closed (no WAL left). SIGTERM is not used to quit: it would end the process without
+// writing them.
 func appCoverageRun(sys System, root, dir, module string) stepResult {
 	if err := sys.MkdirAll(dir); err != nil {
 		return fail("create "+dir+": "+err.Error(), "")
@@ -82,7 +88,7 @@ func (a wailsApp) coverageRun(sys System, root, dir, module string) stepResult {
 		return a.alreadyRunning()
 	}
 	coverFlags := "GOFLAGS=-cover -covermode=atomic -coverpkg=" + module + "/..."
-	if out, err := sys.Capture("env", "-C", a.Dir, coverFlags, "go", "tool", "wails", "build", "-s", "-trimpath"); err != nil {
+	if out, err := sys.Capture("env", "-C", a.Dir, dataEnv(root, toolData), coverFlags, "go", "tool", "wails", "build", "-s", "-trimpath"); err != nil {
 		return fail(a.Name+": instrumented build failed: "+err.Error(), out)
 	}
 	app := filepath.Join(root, a.Dir, a.Bundle)
@@ -90,7 +96,8 @@ func (a wailsApp) coverageRun(sys System, root, dir, module string) stepResult {
 	if a.running(sys) {
 		return a.alreadyRunning()
 	}
-	if out, err := sys.Capture("open", "-n", "--env", "GOCOVERDIR="+dir, app); err != nil {
+	data := filepath.Join(root, appDataRoot, a.Name)
+	if out, err := sys.Capture("open", "-n", "--env", "GOCOVERDIR="+dir, "--env", datadir.Override+"="+data, app); err != nil {
 		return fail(a.Name+": cannot open "+app+": "+err.Error(), out)
 	}
 	pid := a.waitForPid(sys, app)
@@ -110,11 +117,29 @@ func (a wailsApp) coverageRun(sys System, root, dir, module string) stepResult {
 			if !slices.ContainsFunc(names, func(n string) bool { return strings.HasPrefix(n, "covcounters.") && strings.Contains(n, "."+pid+".") }) {
 				return fail(a.Name+": the .app wrote no coverage counters to "+dir, "")
 			}
+			if a.OpensLibrary {
+				if r := a.libraryClosed(sys, data); r.status != statusPass {
+					return r
+				}
+			}
 			return pass(fmt.Sprintf("%s (pid %s)", a.Name, pid))
 		}
 		sys.Sleep(appPoll)
 	}
 	return fail(fmt.Sprintf("%s: the .app did not quit within %d s; %s", a.Name, int(appWait.Seconds()), kill(sys, pid)), "")
+}
+
+// libraryClosed requires the library in the data folder the app was given (the override was
+// honoured) and no WAL beside it (the app closed the library before it exited).
+func (a wailsApp) libraryClosed(sys System, data string) stepResult {
+	names, _ := sys.ReadDir(data)
+	if !slices.Contains(names, datadir.LibraryFile) {
+		return fail(a.Name+": the .app left no "+datadir.LibraryFile+" in "+data+": it did not open the library in the data folder it was given", "")
+	}
+	if open := slices.DeleteFunc(slices.Clone(names), func(n string) bool { return n == datadir.LibraryFile }); len(open) > 0 {
+		return fail(a.Name+": the library was not closed at quit: "+strings.Join(open, ", "), "")
+	}
+	return pass("")
 }
 
 // waitForPid waits up to appWait for the process of the opened bundle and returns its pid, or "".

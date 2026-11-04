@@ -51,6 +51,8 @@ Build settings with explicit saving and a truthful result.
 
 Stay within the boundaries of our own DTOs, repository and engine adapter. An error has an explicit result; accepting a command does not mean the operation is complete. Do not add new product capabilities covertly. Record contract changes and undefined parameters in an ADR together with the implementation.
 
+**From 014** ([library-schema-and-data-folder](../../docs/decisions/library-schema-and-data-folder.md)): the `settings` table has no row until the first save (SET-06 takes the first language from macOS, so no default row is written); write the whole row (`id = 1`) at once; speed limits are null for unlimited and never 0, stored as int64 bit patterns of their uint64 values.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

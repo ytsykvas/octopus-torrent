@@ -1,6 +1,6 @@
 # 014 — Create the SQLite schema and safe migrations
 
-**Status:** `planned`  
+**Status:** `done`  
 **Phase:** P2 — Types, data and service boundaries  
 **Priority:** critical path of the main scenario or completion  
 **Size:** One complete behavior or module; if needed, split an independently verifiable part into a separate task  
@@ -37,10 +37,10 @@ Create the base schema of the local library and migrations that do not destroy e
 
 ## Acceptance criteria
 
-- [ ] An empty DB and all supported previous schemas migrate to the current version.
-- [ ] A migration error does not cause loss of existing records or files.
-- [ ] Identity uniqueness constraints and foreign keys are actually enforced by SQLite.
-- [ ] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed.
+- [x] An empty DB and all supported previous schemas migrate to the current version.
+- [x] A migration error does not cause loss of existing records or files.
+- [x] Identity uniqueness constraints and foreign keys are actually enforced by SQLite.
+- [x] All checks listed below are performed at the appropriate level; checks that were not run or failed are not marked as passed.
 
 ## Checks
 
@@ -80,3 +80,74 @@ At the start of every session, follow the [agent rules](../../AGENTS.md): read t
 - Record a short outcome: what changed, exact checks with statuses `pass`, `fail` or `not_run`, ADR, actual change locations in the code and known limitations.
 - For `blocked`, name the specific reason, the missing evidence/decision, the way to unblock and the independent tasks that can continue.
 - Update the documentation, contract and README if the API, structure or build commands changed; do not leave required context only in the chat.
+
+## Execution result
+
+**Date:** 2026-11-04. **Status:** `done`.
+
+- **Changes:**
+  - **Schemas.** `internal/library` opens every database only through its schema: an
+    `application_id` ("OTLB" library, "OTPC" marks), embedded numbered migrations and a structural
+    check from pragmas against a replay of the migrations. `prepare` runs on its own connection with
+    foreign keys off:
+    1. a read-only examination before anything is written (another application's file →
+       `ErrUnknownSchema`, ours newer → `ErrUnsupportedVersion`, both unchanged);
+    2. the WAL switch;
+    3. one `BEGIN IMMEDIATE` transaction that examines again, migrates and runs `foreign_key_check`.
+       A failure is `ErrMigrationFailed` with the cause's kind, and the old version and rows are
+       kept.
+  - **Library schema 1** (`migrations/library/0001_initial.sql`, seven STRICT tables): closed lists
+    are `CHECK`s; the operation kind is checked in Go, so a later kind needs no migration (owner
+    decision). A frozen `testdata/schemas/library-v1.sql`: its text must equal what migration 1
+    builds, and its rows must open at the current version. The marks store is under the same
+    policy. The exported raw `Open` is gone. A path that is not a regular file is refused.
+  - **Data folder.** New `internal/datadir`: the default folder or a validated `OCTOPUS_DATA_DIR`,
+    created `0700`, symlinks resolved, the user's own, with no permission bit for group or others.
+  - **Start and quit.** `main.run`: SQLite version → data folder → `OpenLibrary` → window → `Close`
+    last. The build-mode files keep the bindings generator out of every folder and make `wails dev`
+    require the variable.
+  - **Tooling.** devtool: `workspace run` sets `build/workspace-data`; the gate gives Wails commands
+    `build/tool-data`, which must stay empty, and each `.app` run its own folder, and its last step
+    fails if the owner's folder changed. The `macos-qa` agent always passes its own folder.
+  - **Documents.** ADR
+    [library-schema-and-data-folder](../../docs/decisions/library-schema-and-data-folder.md) (closes
+    014's part of O4); feature docs [data folder](../../docs/app/data-folder.md) and
+    [library store](../../docs/app/library-store.md); report
+    [014](../../docs/verification/014-sqlite-schema-migrations.md); "From 014" notes in 015, 016, 017,
+    020, 023, 024, 028, 029, 031, 050 and 053.
+- **Checks:**
+  - `go tool devtool check` → `GATE PASSED` three times: before the review, after its fixes, and
+    after the owner's decisions. The handoff edits after run 3 are docs only, checked with
+    `check-docs` and `check-plan`. Every own Go file and
+    the native source are at 100%. `not_run`: engine integration (018) and test-bridge UI tests
+    (035).
+  - Real SQLite throughout: test schemas for every row of the decision table, a full HFS+ image
+    during a migration, another process's lock, a cancel and a SIGKILL mid-migration, two stores
+    migrating one file, a concurrent duplicate infohash (exactly one commit), and about 50
+    constraint cases. 8 mutation checks, each caught.
+  - `/qa` on the real `.app`: 14 runs `pass`, the last four on the final build (isolated start and clean quit, restart unchanged,
+    newer and foreign files refused unchanged, group-writable, readable, read-only and relative folders
+    refused, a symlinked library refused with its target unchanged, `wails dev` refusing without the
+    variable). The owner's folder was never created.
+  - `not_run`: power loss; a full disk at the application start (028's form); an automated run of the
+    `dev` build (it does not link outside the Wails CLI).
+- **Review:** three agents found no critical defect. Fixed test-first:
+  - a symlink at the database path was followed;
+  - a readable data folder was accepted;
+  - the gate ignored a read error of its tool folder;
+  - the marks table was not STRICT.
+
+  The other findings were fixed in the docs or answered in the report. Owner decisions afterwards:
+  the operation kind is checked in Go only; 016 is a hard dependency of 023. While making the first
+  of them, a mutation showed the frozen fixture did not guard `CHECK` text; a text test now does.
+- **Limitations:**
+  - No repositories yet (015), no backup before a migration (016), and the start failure is shown on
+    stderr only (028).
+  - A branch build launched by hand without `OCTOPUS_DATA_DIR` is the application build and opens the
+    owner's folder (documented; 016's backup makes such an upgrade reversible).
+  - CHECK contents are outside the structural comparison (the frozen fixture guards the released
+    schema).
+  - The branch is based on PR #19 (on #18), which merge first.
+- **Next:** [015](015-transactional-repositories.md) (unblocked by this task), and
+  [017](017-local-diagnostics-privacy.md), [018](018-torrent-engine-adapter.md) and
+  [035](035-react-bridge-state-resync.md), as before.

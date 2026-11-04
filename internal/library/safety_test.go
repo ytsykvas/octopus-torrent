@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -50,6 +51,23 @@ func TestAReplacedDatabaseIsNotWrittenTo(t *testing.T) {
 	}
 }
 
+// The path must keep naming the file itself, as open requires: a symlink in its place is a
+// replacement even when it points at the opened file.
+func TestADatabaseReplacedByASymlinkToItselfIsNotWrittenTo(t *testing.T) {
+	s, path := withTable(t)
+	moved := filepath.Join(filepath.Dir(path), "moved.sqlite")
+	if err := os.Rename(path, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(moved, path); err != nil {
+		t.Fatal(err)
+	}
+	err := s.Write(deadline(t, 5*time.Second), func(Tx) error { return nil })
+	if !errors.Is(err, ErrReplaced) {
+		t.Fatalf("Write after the file was replaced by a symlink to it = %v, want ErrReplaced", err)
+	}
+}
+
 func TestAReaderCannotWriteEvenWhenItAsks(t *testing.T) {
 	s, _ := withTable(t)
 	err := s.Read(deadline(t, 5*time.Second), func(tx Tx) error {
@@ -92,7 +110,7 @@ func TestAnEmptyFileBesideACommittedWALIsRefusedAndKept(t *testing.T) {
 			}
 			before := identify(t, copied+"-wal")
 			// SQLite itself would delete a WAL that sits next to an empty database.
-			_, err := Open(deadline(t, 5*time.Second), copied)
+			_, err := openRows(deadline(t, 5*time.Second), copied)
 			if !errors.Is(err, ErrCorrupt) {
 				t.Fatalf("Open = %v, want ErrCorrupt", err)
 			}
@@ -114,8 +132,8 @@ func TestAPathThatIsNotCleanIsRefused(t *testing.T) {
 		dir + "/x/../library.sqlite",
 		dir + "//library.sqlite",
 	} {
-		if _, err := Open(deadline(t, 5*time.Second), path); err == nil {
-			t.Errorf("Open(%q) succeeded", path)
+		if _, err := openRows(deadline(t, 5*time.Second), path); err == nil {
+			t.Errorf("openRows(%q) succeeded", path)
 		}
 	}
 	if got := names(t, dir); len(got) != 0 {
@@ -130,7 +148,7 @@ func TestADanglingSymlinkIsRefusedAndItsTargetNotCreated(t *testing.T) {
 	if err := os.Symlink(target, path); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Open(deadline(t, 5*time.Second), path)
+	_, err := openRows(deadline(t, 5*time.Second), path)
 	if !errors.Is(err, ErrCannotOpen) {
 		t.Fatalf("Open through a dangling symlink = %v, want ErrCannotOpen", err)
 	}
@@ -139,8 +157,51 @@ func TestADanglingSymlinkIsRefusedAndItsTargetNotCreated(t *testing.T) {
 	}
 }
 
+// A symlink to an existing empty file would make that file, wherever it is, a new database: SQLite
+// reads an empty file as one. Only a regular file at the path itself is opened.
+func TestASymlinkToAnEmptyFileIsRefusedAndItsTargetKept(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "important.db")
+	if err := os.WriteFile(target, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "library.sqlite")
+	if err := os.Symlink(target, path); err != nil {
+		t.Fatal(err)
+	}
+	before := identify(t, target)
+	if _, err := openRows(deadline(t, 5*time.Second), path); !errors.Is(err, ErrCannotOpen) {
+		t.Fatalf("Open through a symlink = %v, want ErrCannotOpen", err)
+	}
+	if identify(t, target) != before {
+		t.Fatal("the symlink's target changed")
+	}
+	if got := names(t, dir); !slices.Equal(got, []string{"important.db", "library.sqlite"}) {
+		t.Fatalf("the folder now holds %v", got)
+	}
+}
+
+func TestAFolderAtTheDatabasePathIsRefusedAndKeptEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "library.sqlite")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openRows(deadline(t, 5*time.Second), path); !errors.Is(err, ErrCannotOpen) {
+		t.Fatalf("Open of a folder = %v, want ErrCannotOpen", err)
+	}
+	if got := names(t, path); len(got) != 0 {
+		t.Fatalf("the folder at the path now holds %v", got)
+	}
+	if got := names(t, dir); !slices.Equal(got, []string{"library.sqlite"}) {
+		t.Fatalf("the parent now holds %v", got)
+	}
+}
+
 func TestANewDatabaseIsPrivateToItsOwner(t *testing.T) {
-	_, path := withTable(t)
+	s, path := withTable(t)
+	// The WAL files appear with the first write.
+	must(t, s, "INSERT INTO rows(n) VALUES (1)")
 	for _, name := range []string{path, path + "-wal", path + "-shm"} {
 		info, err := os.Stat(name)
 		if err != nil {

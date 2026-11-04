@@ -2,9 +2,11 @@ package devtool
 
 import (
 	"errors"
+	"io/fs"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -14,8 +16,12 @@ const (
 	appTextfmt   = "go tool covdata textfmt -i=/work/repo/build/coverage/go-app -o build/coverage/go-app.txt"
 	goTestRace   = "go test -race -count=1 -covermode=atomic -coverpkg=./... ./... -args -test.gocoverdir=/work/repo/build/coverage/go-unit"
 	typecheck    = "npm --prefix frontend run typecheck"
-	releaseBuild = "go tool wails build -clean -trimpath"
-	generate     = "env -C . go tool wails generate module"
+	releaseBuild = "env " + toolEnv + " go tool wails build -clean -trimpath"
+	generate     = "env -C . " + toolEnv + " go tool wails generate module"
+	vetDev       = "go vet -tags dev ./..."
+	vetBindings  = "go vet -tags bindings ./..."
+	ownerFolder  = "/Users/owner/Library/Application Support/dev.tsykvas.octopustorrent"
+	toolDataDir  = "/work/repo/build/tool-data"
 	goListDeps   = "go list -tags desktop,wv2runtime.download,production -deps -f {{.ImportPath}} ."
 	goEnv        = "go env -json GOFLAGS GOINSECURE GONOPROXY GONOSUMDB GOPRIVATE GOPROXY GOSUMDB"
 	goEnvDefault = `{"GOFLAGS":"","GOINSECURE":"","GONOPROXY":"","GONOSUMDB":"","GOPRIVATE":"","GOPROXY":"https://proxy.golang.org,direct","GOSUMDB":"sum.golang.org"}`
@@ -57,6 +63,15 @@ func healthyRepo() *fakeSystem {
 	sys.results[npmConfig] = []fakeResult{{out: "min-release-age=14\nbefore=null\nmin-release-age-exclude=\n"}}
 	sys.results[goEnv] = []fakeResult{{out: goEnvDefault}}
 	sys.results[goListDeps] = []fakeResult{{out: "fmt\noctopustorrent/internal/app\ngithub.com/wailsapp/wails/v2/pkg/options\noctopustorrent\n"}}
+	// The owner has a library, which the check never touches.
+	sys.home = "/Users/owner"
+	sys.stats = map[string][]fakeStat{
+		ownerFolder:                     {{info: fakeInfo{modTime: time.Unix(100, 0)}}},
+		ownerFolder + "/library.sqlite": {{info: fakeInfo{size: 4096, modTime: time.Unix(90, 0)}}},
+	}
+	sys.dirs[ownerFolder] = []string{".DS_Store", "library.sqlite"}
+	// The tool folder is removed at the start, and no build creates it.
+	sys.dirErrs = map[string]error{toolDataDir: fs.ErrNotExist}
 	return withDependencies(sys)
 }
 
@@ -83,7 +98,7 @@ func TestCheckPassesTheGateWhenEveryStepPasses(t *testing.T) {
 	}
 	for _, step := range []string{"npm ci", "npm cooldown", "go env", "typecheck", "lint", "frontend tests", "frontend build", "gofmt",
 		"go vet", "bindings", "go tests", ".app coverage run", "go coverage", "escape hatches", "scripts", "product isolation", "release build", "docs", "plan",
-		"release age", "npm audit", "govulncheck", "updates", "single code version"} {
+		"release age", "npm audit", "govulncheck", "updates", "single code version", "data folders"} {
 		if l := line(report, step); !strings.HasPrefix(l, statusPass) {
 			t.Errorf("step %q: %q, want pass", step, l)
 		}
@@ -94,8 +109,10 @@ func TestCheckPassesTheGateWhenEveryStepPasses(t *testing.T) {
 		}
 	}
 	calls := strings.Join(sys.calls, "\n")
-	order := []string{"capture npm --prefix frontend ci", "remove frontend/coverage", "capture " + generate,
-		"remove build/coverage", "capture " + goTestRace, "capture " + appBuild, "capture " + unitTextfmt, "capture " + releaseBuild}
+	order := []string{"remove " + toolDataDir, "lstat " + ownerFolder, "capture npm --prefix frontend ci", "remove frontend/coverage",
+		"capture go vet ./...", "capture " + vetDev, "capture " + vetBindings, "capture " + generate,
+		"remove build/coverage", "capture " + goTestRace, "capture " + appBuild, "capture " + unitTextfmt, "capture " + releaseBuild,
+		"readdir " + toolDataDir}
 	last := -1
 	for _, want := range order {
 		i := strings.Index(calls, want)
@@ -183,6 +200,33 @@ func TestCheckStepsReportTheirOwnFailures(t *testing.T) {
 		}, "bindings", "frontend/wailsjs/go/app/New.js"},
 		"generation fails": {func(s *fakeSystem) { s.results[generate] = []fakeResult{{out: "boom", err: exitStatus1}} }, "bindings", "exit status 1"},
 		"go tests fail":    {func(s *fakeSystem) { s.results[goTestRace] = []fakeResult{{out: "--- FAIL", err: exitStatus1}} }, "go tests", "--- FAIL"},
+		"vet of the dev build fails": {func(s *fakeSystem) {
+			s.results[vetDev] = []fakeResult{{out: "buildmode_dev.go:9: undefined", err: exitStatus1}}
+		},
+			"go vet", "go vet -tags dev ./...: exit status 1"},
+		"vet of the bindings build fails": {func(s *fakeSystem) {
+			s.results[vetBindings] = []fakeResult{{out: "buildmode_bindings.go:9: undefined", err: exitStatus1}}
+		}, "go vet", "buildmode_bindings.go:9: undefined"},
+		"the owner's library rewritten": {func(s *fakeSystem) {
+			s.stats[ownerFolder+"/library.sqlite"] = []fakeStat{{info: fakeInfo{size: 4096, modTime: time.Unix(90, 0)}}, {info: fakeInfo{size: 8192, modTime: time.Unix(95, 0)}}}
+		}, "data folders", ownerFolder + "/library.sqlite"},
+		"a file added to the owner's folder": {func(s *fakeSystem) {
+			s.stats[ownerFolder] = []fakeStat{{info: fakeInfo{modTime: time.Unix(100, 0)}}, {info: fakeInfo{modTime: time.Unix(101, 0)}}}
+			s.stats[ownerFolder+"/library.sqlite-wal"] = []fakeStat{{info: fakeInfo{size: 32, modTime: time.Unix(101, 0)}}}
+			s.dirQueue = map[string][][]string{ownerFolder: {{"library.sqlite"}, {"library.sqlite", "library.sqlite-wal"}}}
+		}, "data folders", "the owner's OctopusTorrent ran meanwhile"},
+		"the owner's folder created": {func(s *fakeSystem) {
+			s.stats[ownerFolder] = []fakeStat{{err: fs.ErrNotExist}, {info: fakeInfo{modTime: time.Unix(100, 0)}}}
+		}, "data folders", ownerFolder},
+		"the owner's folder unreadable": {func(s *fakeSystem) {
+			s.stats[ownerFolder] = []fakeStat{{err: errors.New("operation not permitted")}}
+		}, "data folders", "could not be read at the start: operation not permitted"},
+		"a build opened a library": {func(s *fakeSystem) {
+			delete(s.dirErrs, toolDataDir)
+			s.dirs[toolDataDir] = []string{"library.sqlite"}
+		}, "data folders", "a build opened a library in build/tool-data: library.sqlite"},
+		"the tool folder unreadable": {func(s *fakeSystem) { s.dirErrs[toolDataDir] = errors.New("permission denied") }, "data folders",
+			"build/tool-data could not be read: permission denied"},
 		"stale frontend report": {func(s *fakeSystem) { s.removeErr = map[string]error{"frontend/coverage": errors.New("busy")} },
 			"frontend tests", "remove the previous coverage report"},
 		"stale go profiles": {func(s *fakeSystem) { s.removeErr = map[string]error{"build/coverage": errors.New("busy")} },
@@ -240,6 +284,9 @@ func TestCheckRefusesToRunOutsideTheRepositoryRoot(t *testing.T) {
 		"not git":      func(s *fakeSystem) { s.results["git rev-parse --show-prefix"] = []fakeResult{{err: exitStatus1}} },
 		"no toplevel":  func(s *fakeSystem) { s.results["git rev-parse --show-toplevel"] = []fakeResult{{err: exitStatus1}} },
 		"no listing":   func(s *fakeSystem) { s.outputErr = errors.New("not a git repository") },
+		"tool data stuck": func(s *fakeSystem) {
+			s.removeErr = map[string]error{toolDataDir: errors.New("operation not permitted")}
+		},
 	} {
 		sys := healthyRepo()
 		change(sys)
@@ -322,12 +369,12 @@ func TestBindingsRegenerateEveryWailsApp(t *testing.T) {
 		output: "frontend/wailsjs/a.js\x00frontend/spike/wailsjs/s.js\x00frontend/spike/wailsjs/new.js\x00",
 		files:  fakeFiles{"frontend/wailsjs/a.js": "a", "frontend/spike/wailsjs/s.js": "s", "frontend/spike/wailsjs/new.js": "n"},
 	}
-	c := &checker{sys: sys, files: []string{"frontend/wailsjs/a.js", "frontend/spike/wailsjs/s.js"}}
+	c := &checker{sys: sys, root: "/work/repo", files: []string{"frontend/wailsjs/a.js", "frontend/spike/wailsjs/s.js"}}
 	if got := c.bindings(); got.status != statusFail || got.output != "frontend/spike/wailsjs/new.js" {
 		t.Errorf("a new spike binding: %+v, want FAIL naming it", got)
 	}
 	calls := strings.Join(sys.calls, "\n")
-	for _, want := range []string{"capture " + generate, "capture env -C cmd/spike go tool wails generate module"} {
+	for _, want := range []string{"capture " + generate, "capture env -C cmd/spike " + toolEnv + " go tool wails generate module"} {
 		if !strings.Contains(calls, want) {
 			t.Errorf("calls missing %q:\n%s", want, calls)
 		}

@@ -9,6 +9,6 @@ import (
 
 func TestMain(m *testing.M) {
 	// The child processes of process_test.go run this binary too; only the parent checks the images.
-	parent := os.Getenv(lockChildEnv) == "" && os.Getenv(commitChildEnv) == ""
+	parent := os.Getenv(lockChildEnv) == "" && os.Getenv(commitChildEnv) == "" && os.Getenv(migrateChildEnv) == ""
 	os.Exit(volume.Main(m, parent))
 }

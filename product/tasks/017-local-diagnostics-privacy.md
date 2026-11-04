@@ -53,6 +53,8 @@ Diagnostics stay local and do not become a channel for automatically sending dat
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): set an own `options.App.Logger` that drops or redacts Wails' `process message error` lines, which contain whole call arguments (paths, magnet links).
 
+**From 014** ([data folder](../../docs/app/data-folder.md)): the data folder is what `datadir.FromEnvironment` returns (`main.run` resolves it before the library; the `dev` build requires `OCTOPUS_DATA_DIR`); logs placed there inherit its `0700` and its isolation: workspaces, the gate, `/qa` and tests each have their own folder. The start errors (`find the data folder`, `open the library`) carry full local paths and go only to stderr today; redact them like every other path before they reach a log or an export.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

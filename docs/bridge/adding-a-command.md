@@ -1,6 +1,6 @@
 # Adding a UI → Go command
 
-> Last updated: 2026-10-15
+> Last updated: 2026-11-04
 
 A step-by-step recipe for a new mutation that goes from a button to a Go service. Every step
 starts with a failing test (RED → GREEN → REFACTOR). The worked example is a hypothetical
@@ -28,6 +28,12 @@ starts with a failing test (RED → GREEN → REFACTOR). The worked example is a
 - A new enumeration value or error code goes into the Go list, `testdata/vocabulary.json` and the
   TypeScript side in the same change: `frontend/src/bridge/contract/enums.ts` for enumerations, the
   `fallbacks` map in `errorMessages.ts` for codes. Both suites compare them.
+- The library stores some enumerations as `CHECK` lists: import sources, operation states, themes
+  and languages (`internal/library/migrations/library/`). A new value of one of them also needs a
+  library migration in the same change; `TestEveryEnumerationIsTheContractsVocabulary` fails until it
+  lands ([library schema](../decisions/library-schema-and-data-folder.md#library-schema-1-migrationslibrary0001_initialsql)).
+  A new operation kind needs none: SQLite checks only that the kind is non-empty, and the repository
+  checks it against the vocabulary in Go.
 
 ## 2. Shared examples — `internal/app/contracts/testdata`
 

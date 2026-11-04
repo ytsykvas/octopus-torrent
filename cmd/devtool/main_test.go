@@ -74,16 +74,21 @@ func writeScript(t *testing.T, path, body string) {
 func TestWorkspaceRunReplacesTheProcessWithWails(t *testing.T) {
 	binary, env := buildDevtool(t)
 	bin, record := t.TempDir(), filepath.Join(t.TempDir(), "wails.args")
-	writeScript(t, filepath.Join(bin, "wails"), `echo "$$ $*" > "`+record+`"`+"\n")
+	writeScript(t, filepath.Join(bin, "wails"), `echo "$$ $* $OCTOPUS_DATA_DIR" > "`+record+`"`+"\n")
 	writeScript(t, filepath.Join(bin, "go"), `echo "`+filepath.Join(bin, "wails")+`"`+"\n")
+	root, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	cmd := exec.Command(binary, "workspace", "run")
-	cmd.Env = append(env, "PATH="+bin+":"+os.Getenv("PATH"), "OCTOPUS_PORT=41000")
+	// An inherited data folder (the owner's, say) is replaced by the worktree's own.
+	cmd.Env = append(env, "PATH="+bin+":"+os.Getenv("PATH"), "OCTOPUS_PORT=41000", "OCTOPUS_DATA_DIR=/Users/me/real")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("workspace run: %v\n%s", err, out)
 	}
 	got, err := os.ReadFile(record)
-	want := strconv.Itoa(cmd.Process.Pid) + " dev -devserver localhost:41000\n"
+	want := strconv.Itoa(cmd.Process.Pid) + " dev -devserver localhost:41000 " + filepath.Join(strings.TrimSpace(string(root)), "build", "workspace-data") + "\n"
 	if err != nil || string(got) != want {
 		t.Errorf("wails recorded %q (%v), want %q: same pid proves the process was replaced", got, err, want)
 	}

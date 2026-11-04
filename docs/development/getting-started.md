@@ -33,7 +33,7 @@ go tool wails doctor                  # environment check
 ## Daily loop
 
 ```sh
-go tool wails dev                     # window + Vite hot reload; browser at http://localhost:34115
+OCTOPUS_DATA_DIR="$PWD/build/workspace-data" go tool wails dev   # window + Vite hot reload; browser at http://localhost:34115
 go tool devtool check fast            # TDD loop: no .app run, no network → GATE INCOMPLETE at best
 go tool devtool check                 # the gate: only GATE PASSED accepts a change
 ```
@@ -49,13 +49,24 @@ npm --prefix frontend run lint -- src/bridge/contract/ordering.ts
 For a single TypeScript file use `test`, not `test:coverage`: the per-file threshold fails on files
 that run did not execute.
 
+`wails dev` refuses to start without `OCTOPUS_DATA_DIR` (the development build never opens the
+owner's library); `go tool devtool workspace run` sets it for you. After switching to an older
+branch, delete `build/workspace-data`: its library may be of a newer schema, which the older build
+refuses.
+
 ## Build and open the app
 
 ```sh
 go tool wails build -clean -trimpath  # → build/bin/OctopusTorrent.app (arm64, ad-hoc signed)
-open build/bin/OctopusTorrent.app
+open -n --env OCTOPUS_DATA_DIR="$PWD/build/qa-data" build/bin/OctopusTorrent.app
 osascript -e 'tell application id "dev.tsykvas.octopustorrent" to quit'   # returns -128; the app quits
 ```
+
+**Give a branch build its own data folder** (`--env OCTOPUS_DATA_DIR=…`, as above). A build opened
+without it is the application build and opens the owner's library in
+`~/Library/Application Support/dev.tsykvas.octopustorrent`; a branch with a new migration would
+upgrade that library, and `main`'s build would then refuse it as newer
+([data folder](../app/data-folder.md)).
 
 The linker warning about macOS 13.0 versus 11.0 is harmless
 ([toolchain-versions](../decisions/toolchain-versions.md#consequences)).
@@ -63,7 +74,8 @@ The linker warning about macOS 13.0 versus 11.0 is harmless
 ## Several workspaces
 
 octopus and Conductor run `sh .octopus/scripts/run.sh`. It runs `wails dev` on `OCTOPUS_PORT` or
-`CONDUCTOR_PORT`, so each workspace gets its own port. The gate's `.app` step refuses
+`CONDUCTOR_PORT`, so each workspace gets its own port, and with its own data folder,
+`<worktree>/build/workspace-data`. The gate's `.app` step refuses
 (`not_run: already running`) while any app with bundle ID `dev.tsykvas.octopustorrent` runs —
 another gate run or, very likely, a `wails dev` window, which uses the same ID. Quit them first. See
 [agent tooling](../tooling/agent-tooling.md).
@@ -77,6 +89,9 @@ another gate run or, very likely, a `wails dev` window, which uses the same ID. 
 | Gate: `.app coverage run` `not_run` naming Automation | Allow your terminal in System Settings → Privacy & Security → Automation → OctopusTorrent |
 | Gate: `.app coverage run` `not_run: already running` | Quit the other OctopusTorrent (another workspace) and rerun |
 | Gate: `single code version` `FAIL` | Something edited files during the run; rerun |
+| Gate: `data folders` `FAIL` | The owner's data folder changed during the run (the owner's app ran, Finder, or a bug that opened it), or a build opened a library in `build/tool-data`; the report names it ([quality gate](../tooling/quality-gate.md#usage-and-recovery)) |
+| `OctopusTorrent: find the data folder: … OCTOPUS_DATA_DIR is not set` from `wails dev` | Run it with `OCTOPUS_DATA_DIR="$PWD/build/workspace-data"`, or use `go tool devtool workspace run` |
+| `OctopusTorrent: open the library: … written by a newer version` | The folder's library is of a newer schema (another branch); use another `OCTOPUS_DATA_DIR`, or delete `build/workspace-data` / `build/qa-data` |
 | Gate hangs | A tool waits: an unanswered Automation prompt or a stalled `npm ci`. Answer it, or interrupt and rerun ([quality gate](../tooling/quality-gate.md#usage-and-recovery)) |
 | `npm ci` refuses a version | It is younger than 14 days. Do not lower `min-release-age`; pick an older version ([dependencies.md](../../.claude/docs/dependencies.md)) |
 | A call from the dev browser never settles | Wails could not parse its arguments; the dev server drops that error ([facade](../app/facade.md#errors)) |

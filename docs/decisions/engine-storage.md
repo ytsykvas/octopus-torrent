@@ -70,8 +70,8 @@ the ones marked "source" were read and not executed.
 
 ### Piece completion
 
-- **Our own store**, `<dataDir>/piece-completion.sqlite`, opened by `library.Open` (WAL, `synchronous=FULL`,
-  `fullfsync`, identity checks). The engine's bolt and crawshaw stores are not used, and with the product
+- **Our own store**, `<dataDir>/piece-completion.sqlite`, opened by `library.OpenCompletion` (WAL,
+  `synchronous=FULL`, `fullfsync`, identity checks; under 014's migration policy, `application_id` "OTPC"). The engine's bolt and crawshaw stores are not used, and with the product
   build tags **`nosqlite,noboltdb`** neither is linked (checked on `filestore` and its tests). `disable_libutp`
   removes the last cgo package of the engine; whether uTP stays is 018/026's decision.
 - **Why not the engine's stores:**
@@ -97,10 +97,11 @@ the ones marked "source" were read and not executed.
     synced once at a clean quit, and a crash is verified anyway.
   - An unreadable marks store disallows the engine's download (test, finding 23): the failure is explicit
     and the transfer does not start.
-- A store of another version, or with other tables, is `ErrUnsupportedVersion` and never `ErrCorrupt`, so
-  a "rebuild" of a damaged store (029) cannot destroy a newer library. `Open` converts a foreign database
-  that is in the rollback journal to WAL before it looks at the schema (008's behaviour); the refusal
-  leaves a WAL database unchanged, and a foreign non-WAL database with its journal mode changed.
+- A store of another version, or with other tables, is never `ErrCorrupt`, so a "rebuild" of a damaged
+  store (029) cannot destroy a newer library. Since 014 a newer store is `ErrUnsupportedVersion` and a
+  file of another purpose (a library, 009's unstamped store) `ErrUnknownSchema`, and whose file it is, is
+  read before anything is written: a refused file keeps its bytes and its journal mode (this ADR first
+  recorded 008's conversion of a foreign rollback-journal file to WAL before the check; 014 removed it).
 - `internal/torrentengine/filestore` imports `internal/library` for this store. No SQL is written there.
 
 ### The guard
@@ -270,6 +271,8 @@ anacrolix/torrent v1.61.0, classic IO, closed loopback swarm, `-race`.
 - **010** found the cause of finding 22 (a lost writer wake-up) and its remedy: every client sets
   `KeepAliveTimeout = transferswitch.WakeInterval` (1 s); the helper `keepMoving` is gone and the harness peers
   use the interval ([global-upload-stop](global-upload-stop.md)).
-- **014** inherits `piece_completion` (`user_version` 1) as a schema that precedes its migration policy.
+- **014** put `piece_completion` under its migration policy: migration 1 of the "OTPC" schema
+  ([library-schema-and-data-folder](library-schema-and-data-folder.md)); unstamped stores of 009 are not
+  adopted (no shipped build wrote one).
 - An engine update re-runs `internal/torrentengine/...`; every finding test that turns red is decided again,
   and this ADR is updated.
