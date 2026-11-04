@@ -43,6 +43,10 @@ finish with the full `go tool devtool check`.
   check.
 - **`single code version` fails.** Something edited the listed files during the run (an editor,
   another agent); run the gate again when nothing else is writing.
+- **`data folders` fails.** Naming the owner's folder: a step of this run opened the owner's library
+  (a code problem — fix it first), or the owner's OctopusTorrent or Finder wrote there meanwhile (ask
+  the owner, then rerun). Naming `build/tool-data`: a build opened a library — check the
+  `buildmode_*.go` tags against the pinned Wails ([quality gate](../../../docs/tooling/quality-gate.md)).
 - **A fix would weaken the 14-day cooldown or checksum verification** (a lower `min-release-age`,
   `@latest`, `npx` download, `GOSUMDB=off`, …). It is never the fix: use the exact-version and
   `--prefix frontend` forms of [dependencies.md](../dependencies.md), and ask the owner before any

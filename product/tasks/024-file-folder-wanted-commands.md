@@ -55,6 +55,10 @@ The file pause button means stopping its further targeted download. A shared tor
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): the first command adds the single acceptance path `accept(kind, request, mutation)` (validate, operation ID from the request, fingerprint, start); facade methods never repeat those steps.
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): the single `accept` takes the ordering keys from the request (like the operation ID): `setFilesWanted` → `commandorder.Torrent(torrentID)`. `wanted` is never an input of `transfer.Decide`; it feeds `Progress.WantedFiles` of `DisplayStatus` (`noFilesSelected`). Not cancellable once running.
+
+**From 014** ([library-schema-and-data-folder](../../docs/decisions/library-schema-and-data-folder.md)): `torrent_files.wanted` is the stored selection. Schema 1 has no priority column; if this task needs the "previous priority" of architecture §6, add it as migration 2 with its frozen fixture.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

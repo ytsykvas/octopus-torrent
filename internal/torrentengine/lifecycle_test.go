@@ -269,8 +269,16 @@ func TestPinnedEngineAcceptsInfoBytesThatDoNotMatchTheInfohash(t *testing.T) {
 		if empty.Length != 0 {
 			t.Fatalf("fixture %s changed: file %v is not the empty one", other.Name, empty.Path)
 		}
-		if _, err := os.Stat(other.FilePath(leecher.Dir, empty)); err != nil {
-			t.Errorf("the peer's zero-length file was not created on metadata arrival: %v", err)
+		// The engine creates the file when the info arrives; its first check of the missing data,
+		// started right after GotInfo, may already have renamed it to the part-file name (a failed
+		// check renames a file to <name>.part, finding of 007). Either name proves it was created
+		// before any download; the name is looked up first, because only a complete download
+		// renames the part file back.
+		path := other.FilePath(leecher.Dir, empty)
+		if _, err := os.Stat(path); err != nil {
+			if _, partErr := os.Stat(path + ".part"); partErr != nil {
+				t.Errorf("the peer's zero-length file was not created on metadata arrival: %v; %v", err, partErr)
+			}
 		}
 	})
 }

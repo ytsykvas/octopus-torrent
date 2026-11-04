@@ -51,6 +51,8 @@ Add local search by name and status filters without actions on a hidden selectio
 
 NEXT-01/02 are implemented after the core scenario but remain in the final scope. Clarify the statuses "active/downloading/completed/seeding" with a table of selection rules.
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): the filter sections and their intersection (R7) are yours; build them on `contracts.TorrentStatus` as `transfer.DisplayStatus` assigns it (a complete torrent under the global stop is `completed`, otherwise `seeding`), never on a second status rule.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.

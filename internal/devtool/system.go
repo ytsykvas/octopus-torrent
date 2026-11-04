@@ -3,9 +3,11 @@ package devtool
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -28,9 +30,30 @@ func (OSSystem) Output(name string, args ...string) (string, error) {
 	return string(out), err
 }
 
-func (OSSystem) Exec(path string, argv []string) error {
-	return syscall.Exec(path, argv, os.Environ())
+func (OSSystem) Exec(path string, argv []string, env ...string) error {
+	return syscall.Exec(path, argv, mergeEnv(os.Environ(), env))
 }
+
+// mergeEnv is base with every NAME=value of extra set over it. An inherited NAME is removed, not
+// left beside the new value: a process environment keeps the first of two equal names.
+func mergeEnv(base, extra []string) []string {
+	names := map[string]bool{}
+	for _, kv := range extra {
+		name, _, _ := strings.Cut(kv, "=")
+		names[name] = true
+	}
+	var merged []string
+	for _, kv := range base {
+		if name, _, _ := strings.Cut(kv, "="); !names[name] {
+			merged = append(merged, kv)
+		}
+	}
+	return append(merged, extra...)
+}
+
+func (OSSystem) Lstat(path string) (fs.FileInfo, error) { return os.Lstat(path) }
+
+func (OSSystem) UserHomeDir() (string, error) { return os.UserHomeDir() }
 
 func (OSSystem) Capture(name string, args ...string) (string, error) {
 	out, err := exec.Command(name, args...).CombinedOutput()

@@ -65,6 +65,8 @@ Verifying the destination folder does not invoke the Trash. Spike 012 may be use
 
 **From 011** ([magnet-pending-storage](../../docs/decisions/magnet-pending-storage.md), [feature](../../docs/app/magnet-metadata.md)): `Pending.Confirm` attaches the chosen folder's storage to a torrent whose pieces the engine already cached as not complete, so the folder must hold none of the torrent's paths before the confirmation (the same check findings 8 and 13 need). `Confirm` enforces it as the last line (`TorrentStorage.CheckNew`, `filestore.ErrPathExists`); 020 offers only such folders and explains a collision before the user confirms. A refused folder returns its error (`ErrPathExists`, `filestore.ErrUnsafePath`, `ErrRootChanged`) and leaves the import waiting: offer another folder. `filestore.Layout` now keeps a folder torrent's files strictly inside its own folder, so a collision check over `Layout`'s paths covers every file the engine can write.
 
+**From 014** ([data folder](../../docs/app/data-folder.md)): refuse a save folder that is, contains or lies inside the data folder, comparing resolved paths (`datadir` returns the folder with its symlinks resolved); `datadir` cannot check this itself, because the save folders are in the library it holds.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

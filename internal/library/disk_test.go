@@ -14,8 +14,10 @@ func TestAFullDiskFailsTheWriteAndKeepsWhatWasCommitted(t *testing.T) {
 	mount := smallVolume(t)
 	path := filepath.Join(mount, "library.sqlite")
 	s := tableAt(t, path, defaults)
+	// Rows of 4 KiB: the WAL holds pages past the end of the database file, which the closing
+	// checkpoint must append.
 	for i := range 20 {
-		must(t, s, "INSERT INTO rows(n) VALUES (?)", i)
+		must(t, s, "INSERT INTO rows(n, data) VALUES (?, zeroblob(4096))", i)
 	}
 	before := identify(t, path)
 	filler := volume.Fill(t, mount)

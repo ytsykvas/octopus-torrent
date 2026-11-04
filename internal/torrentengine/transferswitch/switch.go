@@ -125,7 +125,9 @@ func StopUpload(ctx context.Context, t Uploader, lim Limits) (Confirmation, erro
 // requests can leave the torrent asking for nothing, also after the chunks already in flight have
 // arrived. So it does not stop at the first byte: until nothing is missing or the context ends, it
 // calls nudge whenever no payload arrived for the current wait, which starts at Nudge, doubles with
-// each nudge up to MaxNudge and resets when payload arrives. It returns the number of nudges, nil
+// each nudge up to MaxNudge and resets when payload arrives. The wait is counted from the last
+// payload or from the moment the last nudge returned, so a nudge that waited for the torrent's turn
+// does not use up the next wait. It returns the number of nudges, nil
 // when nothing is missing, or the context's error (canceled before the allow, download stays
 // disallowed; after it, allowed).
 //
@@ -154,7 +156,7 @@ func ResumeDownload(ctx context.Context, t Downloader, nudge func(), lim Limits)
 			} else if now.Sub(lastMove) >= wait {
 				nudge()
 				nudges++
-				lastMove, wait = now, min(2*wait, lim.MaxNudge)
+				lastMove, wait = time.Now(), min(2*wait, lim.MaxNudge)
 			}
 		}
 	}

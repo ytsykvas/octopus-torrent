@@ -32,16 +32,60 @@ type fakeSystem struct {
 	calls     []string
 	// results answers Output and Capture per joined command line, in order; the last answer repeats.
 	// Output falls back to output/outputErr, Capture to an empty success.
-	results   map[string][]fakeResult
-	dirs      map[string][]string
-	dirErr    error
+	results map[string][]fakeResult
+	dirs    map[string][]string
+	// dirQueue answers ReadDir per path in order before dirs (the last answer repeats).
+	dirQueue map[string][][]string
+	dirErr   error
+	// dirErrs answers ReadDir of one path with an error (after dirErr).
+	dirErrs   map[string]error
 	mkdirErr  error
 	removeErr map[string]error
 	// gets answers Get per URL; Get runs concurrently, so it records calls under mu.
 	gets map[string]fakeResult
 	now  time.Time
 	mu   sync.Mutex
+	// stats answers Lstat per path, in order (the last answer repeats); a path without one does not
+	// exist.
+	stats   map[string][]fakeStat
+	home    string
+	homeErr error
 }
+
+type fakeStat struct {
+	info fakeInfo
+	err  error
+}
+
+// fakeInfo is the part of a file's description that devtool reads: size and modification time.
+type fakeInfo struct {
+	size    int64
+	modTime time.Time
+}
+
+func (i fakeInfo) Name() string       { return "" }
+func (i fakeInfo) Size() int64        { return i.size }
+func (i fakeInfo) Mode() fs.FileMode  { return 0 }
+func (i fakeInfo) ModTime() time.Time { return i.modTime }
+func (i fakeInfo) IsDir() bool        { return false }
+func (i fakeInfo) Sys() any           { return nil }
+
+func (s *fakeSystem) Lstat(path string) (fs.FileInfo, error) {
+	s.calls = append(s.calls, "lstat "+path)
+	queue := s.stats[path]
+	if len(queue) == 0 {
+		return nil, fs.ErrNotExist
+	}
+	if len(queue) > 1 {
+		s.stats[path] = queue[1:]
+	}
+	if queue[0].err != nil {
+		return nil, queue[0].err
+	}
+	return queue[0].info, nil
+}
+
+func (s *fakeSystem) UserHomeDir() (string, error) { return s.home, s.homeErr }
 
 type fakeResult struct {
 	out string
@@ -109,6 +153,15 @@ func (s *fakeSystem) ReadDir(path string) ([]string, error) {
 	if s.dirErr != nil {
 		return nil, s.dirErr
 	}
+	if err := s.dirErrs[path]; err != nil {
+		return nil, err
+	}
+	if queue := s.dirQueue[path]; len(queue) > 0 {
+		if len(queue) > 1 {
+			s.dirQueue[path] = queue[1:]
+		}
+		return queue[0], nil
+	}
 	return s.dirs[path], nil
 }
 
@@ -127,8 +180,8 @@ func (s *fakeSystem) Get(url string) ([]byte, error) {
 
 func (s *fakeSystem) Now() time.Time { return s.now }
 
-func (s *fakeSystem) Exec(path string, argv []string) error {
-	s.calls = append(s.calls, "exec "+path+" "+strings.Join(argv, " "))
+func (s *fakeSystem) Exec(path string, argv []string, env ...string) error {
+	s.calls = append(s.calls, "exec "+path+" "+strings.Join(argv, " ")+" with "+strings.Join(env, " "))
 	return s.execErr
 }
 
@@ -167,14 +220,23 @@ func TestWorkspaceSetupStopsAtTheFirstFailure(t *testing.T) {
 	}
 }
 
-func TestWorkspaceRunReplacesItselfWithWailsDevOnTheGivenPort(t *testing.T) {
+// workspace is a worktree at /work/tree whose go tool resolves wails to /cache/wails.
+func workspace() *fakeSystem {
+	return &fakeSystem{results: map[string][]fakeResult{
+		"git rev-parse --show-toplevel": {{out: "/work/tree\n"}},
+		"go tool -n wails":              {{out: "/cache/wails\n"}},
+	}}
+}
+
+func TestWorkspaceRunReplacesItselfWithWailsDevOnTheGivenPortAndItsOwnDataFolder(t *testing.T) {
 	for name, vars := range map[string]map[string]string{
 		"octopus":   {"OCTOPUS_PORT": "41000", "CONDUCTOR_PORT": "42000"},
 		"conductor": {"CONDUCTOR_PORT": "41000"},
 	} {
-		sys := &fakeSystem{output: "/cache/wails\n"}
+		sys := workspace()
 		code, stderr := runMain(t, sys, env(vars), "workspace", "run")
-		want := []string{"output go tool -n wails", "exec /cache/wails /cache/wails dev -devserver localhost:41000"}
+		want := []string{"output git rev-parse --show-toplevel", "output go tool -n wails",
+			"exec /cache/wails /cache/wails dev -devserver localhost:41000 with OCTOPUS_DATA_DIR=/work/tree/build/workspace-data"}
 		if code != 0 || stderr != "" || strings.Join(sys.calls, "\n") != strings.Join(want, "\n") {
 			t.Errorf("%s: got code %d stderr %q calls %q, want %q", name, code, stderr, sys.calls, want)
 		}
@@ -193,13 +255,22 @@ func TestWorkspaceRunRejectsAMissingOrInvalidPort(t *testing.T) {
 
 func TestWorkspaceRunReportsWhyWailsCouldNotStart(t *testing.T) {
 	ports := env(map[string]string{"OCTOPUS_PORT": "41000"})
-	sys := &fakeSystem{outputErr: errors.New("no tool")}
-	if code, stderr := runMain(t, sys, ports, "workspace", "run"); code != 1 || !strings.Contains(stderr, "no tool") {
-		t.Errorf("tool lookup failure: got code %d stderr %q", code, stderr)
-	}
-	sys = &fakeSystem{output: "/cache/wails", execErr: errors.New("exec format error")}
-	if code, stderr := runMain(t, sys, ports, "workspace", "run"); code != 1 || !strings.Contains(stderr, "exec format error") {
-		t.Errorf("exec failure: got code %d stderr %q", code, stderr)
+	for name, c := range map[string]struct {
+		change func(*fakeSystem)
+		want   string
+	}{
+		"no repository": {func(s *fakeSystem) {
+			s.results["git rev-parse --show-toplevel"] = []fakeResult{{err: errors.New("not a git repository")}}
+		},
+			"find the repository root: not a git repository"},
+		"no tool": {func(s *fakeSystem) { s.results["go tool -n wails"] = []fakeResult{{err: errors.New("no tool")}} }, "locate wails: no tool"},
+		"no exec": {func(s *fakeSystem) { s.execErr = errors.New("exec format error") }, "exec format error"},
+	} {
+		sys := workspace()
+		c.change(sys)
+		if code, stderr := runMain(t, sys, ports, "workspace", "run"); code != 1 || !strings.Contains(stderr, c.want) {
+			t.Errorf("%s: got code %d stderr %q, want 1 and %q", name, code, stderr, c.want)
+		}
 	}
 }
 

@@ -29,6 +29,12 @@ node_modules/
 *.sqlite-journal
 *.sqlite3
 
+# Data folders of workspaces (workspace run), QA runs and the gate's builds (task 014): a library
+# and its WAL, never committed
+/build/workspace-data/
+/build/qa-data/
+/build/tool-data/
+
 # Coverage profiles and reports (kept as evidence only in docs/verification/ when needed)
 coverage.out
 *.coverprofile

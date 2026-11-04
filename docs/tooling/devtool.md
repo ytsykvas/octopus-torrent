@@ -1,6 +1,6 @@
 # devtool command reference
 
-> Last updated: 2026-10-15
+> Last updated: 2026-11-04
 
 `go tool devtool` is the project's own developer CLI: `cmd/devtool` is the composition root and
 `internal/devtool` holds the logic. It runs through the `tool` directive in `go.mod`, so nothing is
@@ -18,7 +18,7 @@ product code (100%). All commands run from the repository root.
 | `plan-nav` | regenerates the navigation block of `product/tasks/README.md` from the task files | `plan-nav: navigation regenerated` or `… already up to date` → 0; `PLAN <problem>` lines → 1 |
 | `codex-agents` | writes `.codex/agents/<name>.toml` from `.claude/agents/<name>.md` | 0; the Go tests fail if a mirror is stale |
 | `workspace setup` | `npm --prefix frontend ci`, `npm --prefix frontend run build`, `go mod download` (stops at the first failure) | 0 or 1 naming the step |
-| `workspace run` | replaces itself with `wails dev -devserver localhost:$PORT`; the port is `OCTOPUS_PORT`, else `CONDUCTOR_PORT` (1–65535) | 1 without a valid port |
+| `workspace run` | replaces itself with `wails dev -devserver localhost:$PORT` and `OCTOPUS_DATA_DIR=<worktree>/build/workspace-data` (replacing an inherited value), so a workspace never opens the owner's library ([data folder](../app/data-folder.md)); the port is `OCTOPUS_PORT`, else `CONDUCTOR_PORT` (1–65535) | 1 without a valid port or outside a Git worktree |
 | anything else | prints usage | 64 |
 
 A command that fails prints `devtool: <reason>` on stderr and exits 1.
@@ -40,9 +40,12 @@ A command that fails prints `devtool: <reason>` on stderr and exits 1.
     tree, and both `bindings` and `single code version` fail — commit them with the Go change;
   - `cmd/engine-spike/assets` (the spike's page) and the instrumented
     `cmd/engine-spike/build/bin/EngineSpike.app`;
-  - `build/coverage/{go-unit,go-app}` and their profiles;
+  - `build/coverage/{go-unit,go-app}` and their profiles, and `build/coverage/app-data/<app>` (each
+    `.app`'s data folder);
+  - `build/tool-data`, the data folder of its Wails commands (emptied at the start; stays empty);
   - `build/bin/OctopusTorrent.app`, rebuilt as a normal release build at the end.
-- The runner scripts build `build/bin/devtool`.
+- The runner scripts build `build/bin/devtool`; `workspace run` leaves the dev app's library in
+  `build/workspace-data` (delete it after switching to an older branch: its schema may be newer).
 
 Everything except the two `wailsjs/` directories is gitignored.
 
@@ -52,6 +55,7 @@ Everything except the two `wailsjs/` directories is gitignored.
 |---|---|
 | `devtool.go` | `Main` dispatch, the `System` interface, the repository listing (`repositoryFiles`, `listedPath`), `sortedKeys` |
 | `workspace.go` | the `workspace-setup` and `workspace-run` commands |
+| `datafolders.go` | the tooling's data folders (`build/workspace-data`, `build/tool-data`, `build/coverage/app-data`) and the gate's `data folders` step |
 | `check.go` | gate modes, the step runner, the report, tool steps |
 | `toolchain.go` | the npm cooldown and go env checks |
 | `frontendcov.go`, `gocov.go`, `appcov.go` | coverage inventories, profiles, the `wailsApps` table and the instrumented run of every app |

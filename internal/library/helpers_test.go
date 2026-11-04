@@ -20,24 +20,35 @@ func deadline(t *testing.T, limit time.Duration) context.Context {
 	return ctx
 }
 
-// openStore opens a store in path with the default settings and closes it after the test.
-func openStore(t *testing.T, path string) *Store {
-	t.Helper()
-	return openWith(t, path, defaults)
+// rowsSchema is the test schema of the store's own tests: one table rows(id, n, data).
+var rowsSchema = schema{name: "test rows", applicationID: 0x54524f57, migrations: []string{
+	"CREATE TABLE rows(id INTEGER PRIMARY KEY, n INTEGER, data BLOB)",
+}}
+
+// openRows opens a store of rowsSchema in path with the default settings.
+func openRows(ctx context.Context, path string) (*Store, error) {
+	return open(ctx, path, defaults, rowsSchema)
 }
 
-// openWith opens a store in path with set and closes it after the test.
-func openWith(t *testing.T, path string, set settings) *Store {
+// openStore opens a store of rowsSchema in path with the default settings and closes it after the
+// test.
+func openStore(t *testing.T, path string) *Store {
 	t.Helper()
-	s, err := open(deadline(t, 10*time.Second), path, set)
+	return openWith(t, path, defaults, rowsSchema)
+}
+
+// openWith opens a store of sch in path with set and closes it after the test.
+func openWith(t *testing.T, path string, set settings, sch schema) *Store {
+	t.Helper()
+	s, err := open(deadline(t, 10*time.Second), path, set, sch)
 	if err != nil {
-		t.Fatalf("Open(%s): %v", path, err)
+		t.Fatalf("open(%s): %v", path, err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
-// withTable opens a fresh store with a table rows(id, n, data).
+// withTable opens a fresh store of rowsSchema.
 func withTable(t *testing.T) (*Store, string) {
 	t.Helper()
 	return withTableUsing(t, defaults)
@@ -50,13 +61,10 @@ func withTableUsing(t *testing.T, set settings) (*Store, string) {
 	return tableAt(t, path, set), path
 }
 
-// tableAt opens a store in path with set, closes it after the test, and creates the table
-// rows(id, n, data).
+// tableAt opens a store of rowsSchema in path with set and closes it after the test.
 func tableAt(t *testing.T, path string, set settings) *Store {
 	t.Helper()
-	s := openWith(t, path, set)
-	must(t, s, "CREATE TABLE rows(id INTEGER PRIMARY KEY, n INTEGER, data BLOB)")
-	return s
+	return openWith(t, path, set, rowsSchema)
 }
 
 // smallVolume attaches an 8 MiB HFS+ volume for the test and returns where it is mounted: small

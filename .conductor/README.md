@@ -15,9 +15,10 @@ workspace the same way, and the logic behind the scripts is tested Go (`cmd/devt
 
 - **Port** — `wails dev` serves on the workspace's `$CONDUCTOR_PORT`; Vite picks its own free port.
 - **Window** — each running workspace opens its own dev copy of the app.
-- **Data** — the app has no database or shared storage yet, so there is nothing to isolate or to
-  clean up on archive; deleting the worktree removes everything. When the SQLite library arrives
-  (tasks 008, 014), its location must be per workspace — revisit this file then.
+- **Data** — `workspace run` sets `OCTOPUS_DATA_DIR=<worktree>/build/workspace-data`, so each
+  workspace has its own library and nothing is shared; deleting the worktree removes it. After
+  switching a workspace to an older branch, delete `build/workspace-data`: its library may be of a
+  newer version.
 - **Secrets** — none. Only `.claude/settings.local.json` is copied, for the permission allowlist.
 
 ## Requirements on the host

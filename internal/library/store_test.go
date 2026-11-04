@@ -53,10 +53,13 @@ func TestEveryConnectionHasTheDurabilitySettings(t *testing.T) {
 	}
 }
 
+// deferredKey is rowsSchema with a foreign key that only COMMIT checks.
+var deferredKey = with(rowsSchema, `CREATE TABLE parent(id INTEGER PRIMARY KEY);
+	CREATE TABLE child(id INTEGER PRIMARY KEY, parent INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)`)
+
 func TestAFailedCommitIsAnErrorAndKeepsNothing(t *testing.T) {
-	s, path := withTable(t)
-	must(t, s, "CREATE TABLE parent(id INTEGER PRIMARY KEY)")
-	must(t, s, "CREATE TABLE child(id INTEGER PRIMARY KEY, parent INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)")
+	path := filepath.Join(t.TempDir(), "library.sqlite")
+	s := openWith(t, path, defaults, deferredKey)
 	// The deferred key is only checked by COMMIT: every statement succeeds, the commit fails.
 	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
 		if _, err := tx.Exec("INSERT INTO rows(n) VALUES (1)"); err != nil {
@@ -77,7 +80,7 @@ func TestAFailedCommitIsAnErrorAndKeepsNothing(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, openStore(t, path)); n != 0 {
+	if n := count(t, openWith(t, path, defaults, deferredKey)); n != 0 {
 		t.Fatalf("after a failed commit and a reopen, %d rows exist, want 0", n)
 	}
 }
@@ -236,7 +239,7 @@ func TestWritesDuringCheckpointsKeepEveryCommit(t *testing.T) {
 	const commits = 300
 	ctx := deadline(t, 60*time.Second)
 	// A second connection checkpoints all the time: the access pattern of the WAL-reset race.
-	other := sql.OpenDB(connector{dsn(path, defaults.busyTimeout)})
+	other := sql.OpenDB(connector{dsn(path, defaults.busyTimeout, foreignKeysOn)})
 	defer other.Close()
 	stop, stopped := make(chan struct{}), make(chan int)
 	go func() {
@@ -283,7 +286,7 @@ func TestWritesDuringCheckpointsKeepEveryCommit(t *testing.T) {
 func TestANewDatabaseInAReadOnlyFolderIsRefusedAndCreatesNothing(t *testing.T) {
 	dir := t.TempDir()
 	readOnly(t, dir)
-	_, err := Open(deadline(t, 5*time.Second), filepath.Join(dir, "library.sqlite"))
+	_, err := openRows(deadline(t, 5*time.Second), filepath.Join(dir, "library.sqlite"))
 	if !errors.Is(err, ErrCannotOpen) {
 		t.Fatalf("Open in a read-only folder = %v, want ErrCannotOpen", err)
 	}
@@ -302,7 +305,7 @@ func TestAnExistingDatabaseInAReadOnlyFolderIsNotReset(t *testing.T) {
 	readOnly(t, filepath.Dir(path))
 	// WAL needs the -wal and -shm files next to the database; SQLite refuses the folder up front
 	// (SQLITE_READONLY_DIRECTORY) instead of failing a later write.
-	_, err := Open(deadline(t, 5*time.Second), path)
+	_, err := openRows(deadline(t, 5*time.Second), path)
 	if !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("Open = %v, want ErrReadOnly", err)
 	}
@@ -334,9 +337,11 @@ func TestAReadOnlyWALFileOpensAndRefusesTheWrite(t *testing.T) {
 	if !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("Write to a read-only file = %v, want ErrReadOnly", err)
 	}
-	// Nothing was written, so the closing checkpoint has nothing to copy.
-	if err := again.Close(); err != nil {
-		t.Fatalf("Close of a read-only file = %v", err)
+	// Nothing was written, so the closing checkpoint has nothing to copy, but it cannot run: the
+	// connection that opened the file created the WAL index with the file's mode, so the writer may
+	// only read it.
+	if err := again.Close(); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("Close of a read-only file = %v, want ErrReadOnly", err)
 	}
 	if identify(t, path) != before {
 		t.Fatal("the database file changed")
@@ -345,20 +350,16 @@ func TestAReadOnlyWALFileOpensAndRefusesTheWrite(t *testing.T) {
 
 func TestAReadOnlyFileThatIsNotWALIsRefused(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.sqlite")
-	db := sql.OpenDB(connector{dsn(path, defaults.busyTimeout)})
-	if _, err := db.Exec("CREATE TABLE rows(n)"); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	// Our own database at its current version, in the rollback journal it would have been left in by
+	// a copy or a restore.
+	foreignDB(t, path, fmt.Sprintf("PRAGMA application_id = %d", rowsSchema.applicationID), "PRAGMA user_version = 1", rowsSchema.migrations[0])
 	before := identify(t, path)
 	if err := os.Chmod(path, 0o444); err != nil {
 		t.Fatal(err)
 	}
 	// Switching a read-only file to WAL cannot be written; Open must say so instead of running in
 	// another journal mode with other guarantees.
-	_, err := Open(deadline(t, 5*time.Second), path)
+	_, err := openRows(deadline(t, 5*time.Second), path)
 	if !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("Open = %v, want ErrReadOnly", err)
 	}
@@ -374,7 +375,7 @@ func TestAFileThatIsNotADatabaseIsRefusedAndKept(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := identify(t, path)
-	_, err := Open(deadline(t, 5*time.Second), path)
+	_, err := openRows(deadline(t, 5*time.Second), path)
 	if !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("Open = %v, want ErrCorrupt", err)
 	}
@@ -422,7 +423,6 @@ func TestAPathWithSpecialCharactersIsTheFileOpened(t *testing.T) {
 	}
 	path := filepath.Join(dir, "library.sqlite")
 	s := openStore(t, path)
-	must(t, s, "CREATE TABLE rows(id INTEGER PRIMARY KEY)")
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -432,8 +432,8 @@ func TestAPathWithSpecialCharactersIsTheFileOpened(t *testing.T) {
 }
 
 func TestARelativePathIsRefused(t *testing.T) {
-	if _, err := Open(context.Background(), "library.sqlite"); err == nil || !strings.Contains(err.Error(), "absolute") {
-		t.Fatalf("Open(relative) = %v, want an error naming an absolute path", err)
+	if _, err := openRows(context.Background(), "library.sqlite"); err == nil || !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("openRows(relative) = %v, want an error naming an absolute path", err)
 	}
 }
 
@@ -510,7 +510,7 @@ func TestAJournalModeOtherThanWALIsRefused(t *testing.T) {
 	// Only reads the mode: a new database answers "delete", as SQLite does when it keeps a mode.
 	set := defaults
 	set.walPragma = "PRAGMA journal_mode"
-	_, err := open(deadline(t, 5*time.Second), filepath.Join(t.TempDir(), "library.sqlite"), set)
+	_, err := open(deadline(t, 5*time.Second), filepath.Join(t.TempDir(), "library.sqlite"), set, rowsSchema)
 	if err == nil || !strings.Contains(err.Error(), `kept journal_mode "delete"`) {
 		t.Fatalf("Open = %v, want the kept mode named", err)
 	}

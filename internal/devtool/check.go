@@ -79,6 +79,10 @@ type checker struct {
 	npmDocs map[string]npmDocument
 	// ageExceptions are the versions the release-age step lets through younger than the minimum.
 	ageExceptions map[string]string
+	// ownerBefore describes the owner's data folder at the start (ownerData); ownerErr is why it
+	// could not be read.
+	ownerBefore map[string]string
+	ownerErr    error
 }
 
 func newChecker(sys System, mode checkMode) *checker {
@@ -96,7 +100,11 @@ func runCheck(mode checkMode, stdout io.Writer, sys System) int {
 		return 1
 	}
 	var failed, missing []string
-	for _, s := range append(c.steps(), checkStep{"single code version", func() stepResult { return c.sameSources(before) }}) {
+	last := []checkStep{
+		{"single code version", func() stepResult { return c.sameSources(before) }},
+		{"data folders", c.dataFolders},
+	}
+	for _, s := range append(c.steps(), last...) {
 		r := s.run()
 		report(stdout, s.name, r)
 		switch {
@@ -135,8 +143,8 @@ func report(stdout io.Writer, name string, r stepResult) {
 	}
 }
 
-// start requires the repository root as the working directory (every path below is relative to it)
-// and records the source hash.
+// start requires the repository root as the working directory (every path below is relative to it),
+// records the source hash, empties the tool data folder and describes the owner's data folder.
 func (c *checker) start() (map[string]string, error) {
 	prefix, err := c.sys.Output("git", "rev-parse", "--show-prefix")
 	if err != nil {
@@ -153,6 +161,10 @@ func (c *checker) start() (map[string]string, error) {
 	if c.files, err = repositoryFiles(c.sys); err != nil {
 		return nil, err
 	}
+	if err := c.sys.RemoveAll(filepath.Join(c.root, toolData)); err != nil {
+		return nil, fmt.Errorf("empty %s: %w", toolData, err)
+	}
+	c.ownerBefore, c.ownerErr = ownerData(c.sys)
 	return c.fingerprints(c.files), nil
 }
 
@@ -179,7 +191,7 @@ func (c *checker) steps() []checkStep {
 		{"frontend tests", c.frontendTests},
 		{"frontend build", c.tool(npm("run", "build")...)},
 		{"gofmt", c.gofmt},
-		{"go vet", c.tool("go", "vet", "./...")},
+		{"go vet", c.goVet},
 		{"bindings", c.bindings},
 		{"go tests", c.goTests},
 		{".app coverage run", c.appRun},
@@ -188,7 +200,7 @@ func (c *checker) steps() []checkStep {
 		{"escape hatches", c.escapeHatches},
 		{"scripts", c.scripts},
 		{"product isolation", c.isolation},
-		{"release build", c.tool("go", "tool", "wails", "build", "-clean", "-trimpath")},
+		{"release build", c.wails("go", "tool", "wails", "build", "-clean", "-trimpath")},
 		{"docs", c.own(docsCheck)},
 		{"plan", c.own(planCheck)},
 	}
@@ -223,6 +235,23 @@ func (c *checker) tool(command ...string) func() stepResult {
 		}
 		return pass(strings.Join(command, " "))
 	}
+}
+
+// wails runs a Wails command with the tool data folder: Wails runs func main to generate the
+// bindings, and no build may open a library (dataFolders checks the folder stays empty).
+func (c *checker) wails(command ...string) func() stepResult {
+	return c.tool(append([]string{"env", dataEnv(c.root, toolData)}, command...)...)
+}
+
+// goVet vets every build mode of func main's package: the application, the development build (wails
+// dev) and the bindings generator each compile their own buildmode_*.go file.
+func (c *checker) goVet() stepResult {
+	for _, tags := range [][]string{nil, {"-tags", "dev"}, {"-tags", "bindings"}} {
+		if r := c.tool(slices.Concat([]string{"go", "vet"}, tags, []string{"./..."})...)(); r.status != statusPass {
+			return r
+		}
+	}
+	return pass("go vet ./... with no build tags, -tags dev and -tags bindings")
 }
 
 // own runs one of devtool's own checks, which returns its summary or its problems.
@@ -275,7 +304,7 @@ func (c *checker) bindings() stepResult {
 		before[a.Name] = c.contents(c.files, a.Bindings)
 	}
 	for _, a := range wailsApps {
-		if out, err := c.sys.Capture("env", "-C", a.Dir, "go", "tool", "wails", "generate", "module"); err != nil {
+		if out, err := c.sys.Capture("env", "-C", a.Dir, dataEnv(c.root, toolData), "go", "tool", "wails", "generate", "module"); err != nil {
 			return fail(a.Name+": go tool wails generate module: "+err.Error(), out)
 		}
 	}

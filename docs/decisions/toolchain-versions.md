@@ -33,29 +33,31 @@
 
 | Component | Version | Release date | Where pinned |
 |---|---|---|---|
-| Go | 1.27.2 | 2026-10-02 (patch of the 1.27 line from 2026-08-18) | `go.mod`: `go 1.27.2` (an older local Go will download it via `GOTOOLCHAIN=auto`) |
+| Go | 1.27.3 | 2026-10-19 (patch of the 1.27 line from 2026-08-18; fixes GO-2026-6809 in `crypto/x509`, reachable through the engine storage's `io.Copy`) | `go.mod`: `go 1.27.3` (an older local Go will download it via `GOTOOLCHAIN=auto`) |
 | Wails v2 — library and CLI | v2.16.0 | 2026-09-14 | `go.mod` / `go.sum`; CLI as `tool github.com/wailsapp/wails/v2/cmd/wails`, invoked as `go tool wails …` |
-| govulncheck (`golang.org/x/vuln`, task 004) | v1.8.0 | 2026-09-08 | `go.mod`: `tool golang.org/x/vuln/cmd/govulncheck`, invoked as `go tool govulncheck ./...`; MVS raised the transitive `golang.org/x/{crypto,mod,net,sync,sys,telemetry,term,text,tools}` to versions from 2026-08-24 to 2026-09-08 |
+| govulncheck (`golang.org/x/vuln`, task 004) | v1.9.0 | 2026-10-11 | `go.mod`: `tool golang.org/x/vuln/cmd/govulncheck`, invoked as `go tool govulncheck ./...`; MVS raised the transitive `golang.org/x/{crypto,mod,net,sync,sys,telemetry,term,text,tools}` to versions from 2026-09-23 to 2026-10-10 (2026-11-03) |
 | anacrolix/torrent (tasks 006, 007) | v1.61.0 | 2025-12-17 | `go.mod` / `go.sum`; the newest tag, confirmed by 007 (O2) — [engine-lifecycle](engine-lifecycle.md). Linked into test binaries and the temporary `EngineSpike.app`; the gate's product isolation step keeps it out of the product until 018 |
 | anacrolix/chansync (task 007) | v0.7.0 | 2025-08-05 | `go.mod` / `go.sum`; already required by anacrolix/torrent, direct since 007 because the engine contract tests import its `events` package; same version, `go.sum` unchanged |
 | modernc.org/sqlite (task 008) | v1.60.1 | 2026-09-29 | `go.mod` / `go.sum`; the newest tag, bundles SQLite 3.53.4; chosen over mattn/go-sqlite3 and ncruces/go-sqlite3 by measurement — [sqlite-driver](sqlite-driver.md). Linked into the product. MVS raised the indirect `modernc.org/libc` v1.77.1 (2026-09-21), `memory` v1.12.1 (2026-08-19), `mathutil` v1.7.1 (2024-12-26), `mattn/go-isatty` v0.0.24 (2026-07-23), `dustin/go-humanize` v1.0.1 (2023-01-10) and added `ncruces/go-strftime` v1.0.0 (2025-10-08) |
 | golang.org/x/time (task 006) | v0.16.0 | 2026-08-19 | `go.mod`: `rate.Limiter` for the swarm's rate limits (was a transitive v0.8.0) |
 | github.com/pion/dtls/v3, github.com/pion/stun/v3 (transitive, task 006) | v3.1.10 / v3.1.7 | 2026-09-26 / 2026-08-18 | `go.mod` (indirect): force-upgraded from v3.0.3 / v3.0.0 for GO-2026-6165 / GO-2026-6163, reachable through the engine; MVS raised `pion/logging` v0.2.4, `wlynxg/anet` v0.0.5 and added `pion/transport` v4.1.0 and v5.0.0 |
-| golang.org/x/net (transitive, task 006) | v0.60.0 | 2026-10-08 | `go.mod` (indirect): **owner's exception of 2026-10-16**, taken at 8 days old. It fixes GO-2026-6603, -6610, -6611, -6612 and -6617 in v0.59.0, which became reachable once the engine was linked. It is in `releaseAgeExceptions` until it turns 14 days old on 2026-10-22. |
+| golang.org/x/net (transitive, task 006) | v0.61.0 | 2026-10-09 | `go.mod` (indirect): raised by MVS with govulncheck v1.9.0. v0.60.0 had been the **owner's exception of 2026-10-16** (taken at 8 days old for GO-2026-6603, -6610, -6611, -6612 and -6617, reachable once the engine was linked); the gate asked for the exception to go once it was 14 days old, and `releaseAgeExceptions` is empty again (2026-11-03). |
 | go.opentelemetry.io/otel (transitive, task 006) | v1.47.0 | 2026-10-02 | `go.mod` (indirect): force-upgraded from v1.38.0 for GO-2026-5506 (imported by the engine, not called); `otel/metric`, `otel/trace`, `otel/log` follow at v1.47.0, `go-logr/logr` v1.4.4 |
 | Node.js / npm | 26.11.1 / 11.20.0 | 2026-10-07 (patch of line 26) | the version verified here; `frontend/package.json` → `engines.node >=22.12.0` (Vite 8 requirement) |
-| react, react-dom | 19.3.0 | 2026-09-09 | `frontend/package.json` + `package-lock.json` |
+| react, react-dom | 19.3.1 | 2026-10-14 | `frontend/package.json` + `package-lock.json` |
 | typescript | 7.0.2 | 2026-07-08 | same |
-| vite / @vitejs/plugin-react | 8.3.2 / 6.1.1 | 2026-10-01 / 2026-08-28 | same |
-| vitest / @vitest/coverage-v8 | 5.0.3 / 5.0.3 | 2026-09-30 | same; pinned for the quality gate (O3, task 004) |
-| jsdom | 30.1.2 | 2026-10-04 | same |
-| @testing-library/react, user-event, jest-dom | 16.3.3, 14.6.7, 7.0.1 | 2026-08-27, 2026-09-02, 2026-08-09 | same |
+| vite / @vitejs/plugin-react | 8.3.4 / 6.1.2 | 2026-10-08 / 2026-10-05 | same; 8.3.4 fixes the advisories of vite 8.3.0–8.3.2 (GHSA-9jrq-w75r-8gcw, -rq7h-c2jc-7f22, -vfpm-58rq-9qcg and its `launch-editor` ones); 8.3.5 (2026-10-21) is still in quarantine |
+| vitest / @vitest/coverage-v8 | 5.0.5 / 5.0.5 | 2026-10-15 | same; pinned for the quality gate (O3, task 004) |
+| jsdom | 30.1.3 | 2026-10-15 | same; requires `undici ^8.12.1`, so the lock moves the transitive undici from 8.11.2 (eight advisories in `npm audit`) to 8.12.3 (2026-10-19) |
+| @testing-library/react, user-event, jest-dom | 16.3.3, 14.6.8, 7.0.1 | 2026-08-27, 2026-10-13, 2026-08-09 | same |
 | @types/react, @types/react-dom | 19.3.0 | 2026-09-09 | same |
-| oxlint / oxlint-tsgolint (task 004) | 1.86.0 / 7.0.2003 | 2026-09-28 / 2026-09-24 | same; native binaries come as optional dependencies, no install scripts. ESLint is not used: every typescript-eslint release (8.71.2 included) requires `typescript <6.1.0` |
+| oxlint / oxlint-tsgolint (task 004) | 1.89.0 / 7.0.2004 | 2026-10-19 / 2026-10-10 | same; native binaries come as optional dependencies, no install scripts. ESLint is not used: every typescript-eslint release (8.71.2 included) requires `typescript <6.1.0` |
 
-Since task 004, `go tool devtool check deps` (part of the full `go tool devtool check`) verifies the release age of every locked npm version and every Go module in the build list, and its `updates` step lists newer versions of direct dependencies and tools that have been out of quarantine for 14 days; they are taken in the next task that changes dependencies. On 2026-10-15 it listed vite 8.3.2 and vitest / @vitest/coverage-v8 5.0.3, which were adopted in 004. **Deferred (owner, 2026-10-18):** `github.com/anacrolix/chansync` v0.8.0 (2026-06-22) is not taken while anacrolix/torrent v1.61.0 requires v0.7.0: the engine was not released or tested against it, the new `BroadcastCond` stores a channel's internal pointer through `unsafe` in the engine's hottest path, and it fixes nothing for us (a `Broadcast` with no waiter is still a no-op, so finding 26 and the 1 s keep-alive stay). Revisit with the next anacrolix/torrent release or in 018.
+Since task 004, `go tool devtool check deps` (part of the full `go tool devtool check`) verifies the release age of every locked npm version and every Go module in the build list, and its `updates` step lists newer versions of direct dependencies and tools that have been out of quarantine for 14 days; they are taken in the next task that changes dependencies. On 2026-10-15 it listed vite 8.3.2 and vitest / @vitest/coverage-v8 5.0.3, which were adopted in 004. On 2026-11-03 the gate failed on govulncheck (Go 1.27.2), `npm audit` (vite 8.3.2, undici 8.11.2) and the x/net exception; the dependency update of that day took Go 1.27.3 and every version then out of quarantine except chansync (deferred below). **Deferred (owner, 2026-10-18):** `github.com/anacrolix/chansync` v0.8.0 (2026-06-22) is not taken while anacrolix/torrent v1.61.0 requires v0.7.0: the engine was not released or tested against it, the new `BroadcastCond` stores a channel's internal pointer through `unsafe` in the engine's hottest path, and it fixes nothing for us (a `Broadcast` with no waiter is still a no-op, so finding 26 and the 1 s keep-alive stay). Revisit with the next anacrolix/torrent release or in 018.
 
 The release build is `go tool wails build -clean -trimpath`; `-trimpath` removes the developer's absolute paths from the binary (without it there are 142 of them).
+
+A Wails update re-checks the `bindings` and `dev` build tags that keep builds and `wails dev` out of the owner's data folder ([library-schema-and-data-folder](library-schema-and-data-folder.md#consequences)).
 
 ## Alternatives considered
 
