@@ -55,6 +55,8 @@ Respect the boundaries of own DTO, repository and engine adapter. An error has a
 
 **From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): whether uTP stays is yours: the build tags `nosqlite,noboltdb` already remove the engine's C SQLite and bbolt, and `disable_libutp` would remove the last cgo package of the engine. A transfer on the closed loopback swarm sometimes stands still for good (finding 22, 4.3% of fresh transfers with classic IO and 1.7% with mmap under `-race`); expect it when you measure seeding and network recovery.
 
+**From 015** ([library-repositories](../../docs/decisions/library-repositories.md), [feature](../../docs/app/library-repositories.md)): the limits are part of `contracts.Settings`: save the whole settings with `lib.SaveSettings` (one upsert after `Settings.Validate`) under the `commandorder.Settings` key, so two saves never interleave. A `uint64` limit is stored as its int64 bit pattern and reads back equal (`MaxUint64` is tested).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.

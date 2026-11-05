@@ -23,13 +23,17 @@ func (s *Settings) UnmarshalJSON(data []byte) (err error) {
 	return err
 }
 
+// Validate checks settings that Go built, such as the ones the library stores, by the rules of a
+// request; fields are named without a prefix.
+func (s *Settings) Validate() *AppError { return s.validate("") }
+
 // validate checks the settings as part of a request; fields are reported under prefix.
 func (s *Settings) validate(prefix string) *AppError {
 	if p := s.shape.problem(prefix); p != nil {
 		return p
 	}
 	if s.DefaultSavePath != nil {
-		if p := checkFolderPath(prefix+"defaultSavePath", *s.DefaultSavePath); p != nil {
+		if p := CheckFolderPath(prefix+"defaultSavePath", *s.DefaultSavePath); p != nil {
 			return p
 		}
 	}

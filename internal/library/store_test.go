@@ -61,7 +61,7 @@ func TestAFailedCommitIsAnErrorAndKeepsNothing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.sqlite")
 	s := openWith(t, path, defaults, deferredKey)
 	// The deferred key is only checked by COMMIT: every statement succeeds, the commit fails.
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		if _, err := tx.Exec("INSERT INTO rows(n) VALUES (1)"); err != nil {
 			return err
 		}
@@ -90,7 +90,7 @@ func TestACancelledReadEndsPromptlyAndTheConnectionStaysUsable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	err := s.Read(ctx, func(tx Tx) error {
+	err := s.Read(ctx, func(tx txn) error {
 		var n int
 		return tx.QueryRow("WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c) SELECT COUNT(*) FROM c").Scan(&n)
 	})
@@ -108,7 +108,7 @@ func TestACancelledReadEndsPromptlyAndTheConnectionStaysUsable(t *testing.T) {
 func TestACancelledWriteCommitsNothing(t *testing.T) {
 	s, _ := withTable(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	err := s.Write(ctx, func(tx Tx) error {
+	err := s.Write(ctx, func(tx txn) error {
 		if _, err := tx.Exec("INSERT INTO rows(n) VALUES (1)"); err != nil {
 			return err
 		}
@@ -132,7 +132,7 @@ func TestACancelledContextIsRefusedBeforeTheTransaction(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	called := false
-	err := s.Write(ctx, func(Tx) error { called = true; return nil })
+	err := s.Write(ctx, func(txn) error { called = true; return nil })
 	if !errors.Is(err, ErrCanceled) || called {
 		t.Fatalf("Write(cancelled) = %v, fn called %v; want ErrCanceled without a call", err, called)
 	}
@@ -145,7 +145,7 @@ func TestALockedDatabaseIsBusyAfterTheTimeout(t *testing.T) {
 	held, release := make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- other.Write(context.Background(), func(tx Tx) error {
+		done <- other.Write(context.Background(), func(tx txn) error {
 			close(held)
 			<-release
 			_, err := tx.Exec("INSERT INTO rows(n) VALUES (1)")
@@ -154,7 +154,7 @@ func TestALockedDatabaseIsBusyAfterTheTimeout(t *testing.T) {
 	}()
 	<-held
 	start := time.Now()
-	err := s.Write(deadline(t, 5*time.Second), func(Tx) error { return nil })
+	err := s.Write(deadline(t, 5*time.Second), func(txn) error { return nil })
 	took := time.Since(start)
 	close(release)
 	if !errors.Is(err, ErrBusy) {
@@ -192,7 +192,7 @@ func TestReadersNeverWaitForTheWriterNorSeeAHalfTransaction(t *testing.T) {
 				default:
 				}
 				var n int
-				err := s.Read(ctx, func(tx Tx) error {
+				err := s.Read(ctx, func(tx txn) error {
 					return tx.QueryRow("SELECT COUNT(*) FROM rows").Scan(&n)
 				})
 				switch {
@@ -213,7 +213,7 @@ func TestReadersNeverWaitForTheWriterNorSeeAHalfTransaction(t *testing.T) {
 	}
 	start := time.Now()
 	for i := range commits {
-		err := s.Write(ctx, func(tx Tx) error {
+		err := s.Write(ctx, func(tx txn) error {
 			_, err := tx.Exec("INSERT INTO rows(n) VALUES (?), (?)", i, i)
 			return err
 		})
@@ -257,7 +257,7 @@ func TestWritesDuringCheckpointsKeepEveryCommit(t *testing.T) {
 		}
 	}()
 	for i := range commits {
-		err := s.Write(ctx, func(tx Tx) error {
+		err := s.Write(ctx, func(tx txn) error {
 			_, err := tx.Exec("INSERT INTO rows(n) VALUES (?)", i)
 			return err
 		})
@@ -330,7 +330,7 @@ func TestAReadOnlyWALFileOpensAndRefusesTheWrite(t *testing.T) {
 	if n := count(t, again); n != 1 {
 		t.Fatalf("%d rows, want 1", n)
 	}
-	err := again.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := again.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		_, err := tx.Exec("INSERT INTO rows(n) VALUES (2)")
 		return err
 	})
@@ -407,7 +407,7 @@ func TestADamagedPageIsReportedAsCorrupt(t *testing.T) {
 		t.Fatal(err)
 	}
 	again := openStore(t, path)
-	err = again.Read(deadline(t, 5*time.Second), func(tx Tx) error {
+	err = again.Read(deadline(t, 5*time.Second), func(tx txn) error {
 		var sum int
 		return tx.QueryRow("SELECT SUM(LENGTH(data)) FROM rows").Scan(&sum)
 	})
@@ -440,7 +440,7 @@ func TestARelativePathIsRefused(t *testing.T) {
 func TestAFunctionsOwnErrorRollsBackAndIsReturnedUnchanged(t *testing.T) {
 	s, _ := withTable(t)
 	own := errors.New("the caller's own reason")
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		if _, err := tx.Exec("INSERT INTO rows(n) VALUES (1)"); err != nil {
 			return err
 		}
@@ -454,6 +454,32 @@ func TestAFunctionsOwnErrorRollsBackAndIsReturnedUnchanged(t *testing.T) {
 	}
 }
 
+// A function that panics rolls its transaction back before the panic goes on: a caller that
+// recovers it (the ledger, task 028) is not left with a writer held until the context ends.
+func TestAPanickingFunctionRollsBackAndFreesTheWriter(t *testing.T) {
+	s, _ := withTable(t)
+	// Ends only when the test does: until then nothing but the rollback frees the writer.
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	func() {
+		defer func() {
+			if p := recover(); p != "the caller's bug" {
+				t.Fatalf("recovered %v, want the function's own panic", p)
+			}
+		}()
+		_ = s.Write(ctx, func(tx txn) error {
+			if _, err := tx.Exec("INSERT INTO rows(n) VALUES (1)"); err != nil {
+				return err
+			}
+			panic("the caller's bug")
+		})
+	}()
+	must(t, s, "INSERT INTO rows(n) VALUES (2)")
+	if n := count(t, s); n != 1 {
+		t.Fatalf("%d rows stored, want 1 (the panicking change rolled back)", n)
+	}
+}
+
 func TestClosingTwiceAndUsingAClosedStore(t *testing.T) {
 	s, _ := withTable(t)
 	if err := s.Close(); err != nil {
@@ -462,10 +488,10 @@ func TestClosingTwiceAndUsingAClosedStore(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatalf("a second Close = %v", err)
 	}
-	if err := s.Write(context.Background(), func(Tx) error { return nil }); err == nil {
+	if err := s.Write(context.Background(), func(txn) error { return nil }); err == nil {
 		t.Error("Write after Close succeeded")
 	}
-	if err := s.Read(context.Background(), func(Tx) error { return nil }); err == nil {
+	if err := s.Read(context.Background(), func(txn) error { return nil }); err == nil {
 		t.Error("Read after Close succeeded")
 	}
 }
@@ -477,7 +503,7 @@ func TestCloseReportsACheckpointBlockedByAnotherReader(t *testing.T) {
 	held, release := make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- other.Read(context.Background(), func(tx Tx) error {
+		done <- other.Read(context.Background(), func(tx txn) error {
 			var n int
 			if err := tx.QueryRow("SELECT COUNT(*) FROM rows").Scan(&n); err != nil {
 				return err
@@ -520,7 +546,7 @@ func TestQueryReadsEveryRowUnderTheOperationsContext(t *testing.T) {
 	s, _ := withTable(t)
 	must(t, s, "INSERT INTO rows(n) VALUES (1), (2), (3)")
 	var got []int
-	err := s.Read(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Read(deadline(t, 5*time.Second), func(tx txn) error {
 		rows, err := tx.Query("SELECT n FROM rows ORDER BY n")
 		if err != nil {
 			return err

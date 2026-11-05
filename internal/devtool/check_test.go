@@ -23,6 +23,9 @@ const (
 	ownerFolder  = "/Users/owner/Library/Application Support/dev.tsykvas.octopustorrent"
 	toolDataDir  = "/work/repo/build/tool-data"
 	goListDeps   = "go list -tags desktop,wv2runtime.download,production -deps -f {{.ImportPath}} ."
+	goListSQL    = "go list -tags= -f " + sqlImportsFormat + " ./..."
+	goListSQLDev = "go list -tags=dev -f " + sqlImportsFormat + " ./..."
+	goListSQLRel = "go list -tags=" + releaseTags + " -f " + sqlImportsFormat + " ./..."
 	goEnv        = "go env -json GOFLAGS GOINSECURE GONOPROXY GONOSUMDB GOPRIVATE GOPROXY GOSUMDB"
 	goEnvDefault = `{"GOFLAGS":"","GOINSECURE":"","GONOPROXY":"","GONOSUMDB":"","GOPRIVATE":"","GOPROXY":"https://proxy.golang.org,direct","GOSUMDB":"sum.golang.org"}`
 )
@@ -63,6 +66,7 @@ func healthyRepo() *fakeSystem {
 	sys.results[npmConfig] = []fakeResult{{out: "min-release-age=14\nbefore=null\nmin-release-age-exclude=\n"}}
 	sys.results[goEnv] = []fakeResult{{out: goEnvDefault}}
 	sys.results[goListDeps] = []fakeResult{{out: "fmt\noctopustorrent/internal/app\ngithub.com/wailsapp/wails/v2/pkg/options\noctopustorrent\n"}}
+	sys.results[goListSQL] = []fakeResult{{out: "octopustorrent/internal/library context database/sql modernc.org/sqlite\noctopustorrent/internal/app fmt\n"}}
 	// The owner has a library, which the check never touches.
 	sys.home = "/Users/owner"
 	sys.stats = map[string][]fakeStat{
@@ -256,6 +260,22 @@ func TestCheckStepsReportTheirOwnFailures(t *testing.T) {
 		}, "product isolation", "octopustorrent/internal/torrentengine/testutil/swarm"},
 		"go list fails": {func(s *fakeSystem) { s.results[goListDeps] = []fakeResult{{out: "no Go files", err: exitStatus1}} },
 			"product isolation", "exit status 1"},
+		"SQL outside the library": {func(s *fakeSystem) {
+			s.results[goListSQLDev] = []fakeResult{{out: "octopustorrent/internal/app database/sql\n"}}
+		}, "product isolation", "octopustorrent/internal/app imports database/sql"},
+		"SQL in a file only the release build compiles": {func(s *fakeSystem) {
+			s.results[goListSQLRel] = []fakeResult{{out: "octopustorrent fmt database/sql\n"}}
+		}, "product isolation", "octopustorrent imports database/sql"},
+		"SQL in the frontend": {func(s *fakeSystem) {
+			s.files["frontend/package-lock.json"] = `{"packages":{"node_modules/sql.js":{"version":"1.13.0"}}}`
+		}, "product isolation", "frontend/package-lock.json: sql.js"},
+		"the imports cannot be listed": {func(s *fakeSystem) {
+			s.results[goListSQL] = []fakeResult{{out: "build constraints exclude all Go files", err: exitStatus1}}
+		}, "product isolation", "go list -tags= ./...: exit status 1"},
+		"the lockfile cannot be read": {func(s *fakeSystem) { delete(s.files, "frontend/package-lock.json") },
+			"product isolation", "frontend/package-lock.json"},
+		"the lockfile is not JSON": {func(s *fakeSystem) { s.files["frontend/package-lock.json"] = "{" },
+			"product isolation", "unexpected end of JSON input"},
 		"dead link": {func(s *fakeSystem) { s.files["README.md"] = "[x](gone.md)\n" }, "docs", "DEAD README.md: gone.md"},
 		"stale plan": {func(s *fakeSystem) {
 			s.files["product/tasks/003-check.md"] = strings.Replace(s.files["product/tasks/003-check.md"], "`planned`", "`blocked`", 1)

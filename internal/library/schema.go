@@ -65,7 +65,7 @@ const structureQuery = `WITH t AS (
 	SELECT COALESCE(string_agg(s, char(10) ORDER BY s), '') FROM line`
 
 // inspect reads the file's state in one query.
-func inspect(tx Tx) (fileState, error) {
+func inspect(tx txn) (fileState, error) {
 	var st fileState
 	err := tx.QueryRow(`SELECT (SELECT application_id FROM pragma_application_id),
 		(SELECT user_version FROM pragma_user_version),
@@ -80,7 +80,7 @@ func reference(ctx context.Context, sch schema, v int) (string, error) {
 	db := sql.OpenDB(connector{"file::memory:?_pragma=" + foreignKeysOff})
 	defer db.Close()
 	var st fileState
-	err := run(ctx, db, nil, func(tx Tx) error {
+	err := run(ctx, db, nil, func(tx txn) error {
 		_, err := tx.Exec(strings.Join(sch.migrations[:v], ";\n"))
 		if err == nil {
 			st, err = inspect(tx)
@@ -97,7 +97,7 @@ func reference(ctx context.Context, sch schema, v int) (string, error) {
 //   - ours at a newer version is ErrUnsupportedVersion: a newer build wrote it;
 //   - anything else is ErrUnknownSchema: another application's file, an unstamped file with tables,
 //     or ours with another structure.
-func examine(tx Tx, sch schema) (int, error) {
+func examine(tx txn, sch schema) (int, error) {
 	st, err := inspect(tx)
 	if err != nil {
 		return 0, err
@@ -134,7 +134,7 @@ func examine(tx Tx, sch schema) (int, error) {
 // transaction, and with them on, rebuilding a table (new table, copy, drop, rename) would delete the
 // rows that refer to it through ON DELETE CASCADE. The check before COMMIT refuses a migration that
 // leaves a reference broken.
-func migrate(tx Tx, sch schema) error {
+func migrate(tx txn, sch schema) error {
 	from, err := examine(tx, sch)
 	if err != nil {
 		return err

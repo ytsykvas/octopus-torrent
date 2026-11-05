@@ -69,6 +69,8 @@ Stay within the boundaries of our own DTOs, repository and engine adapter. An er
 
 **From 014** ([library-schema-and-data-folder](../../docs/decisions/library-schema-and-data-folder.md)): `operation_torrents.torrent_id` has no foreign key: deleting a `torrents` row cascades to its files and payload rows and keeps the operation journal (tested in 014 on a real transaction).
 
+**From 015** ([library-repositories](../../docs/decisions/library-repositories.md), [feature](../../docs/app/library-repositories.md)): add the removal as `Library` methods of their own, each one transaction over prepared values: the removal's operation in the journal (an `OperationIntent` naming its torrents), the deletion of the `torrents` row (it cascades to the files and payload rows; the journal outlives it), then `FinishOperation`. A torrent already gone is `ErrNotFound`. Each stored `TorrentFile.Path` is relative to the record's `SavePath`, `/`-separated and clean, never absolute or escaping (the library refuses others), so a deletion list is `SavePath` joined with these paths, still confined with `os.Root` at removal time (012).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

@@ -59,6 +59,8 @@ The file pause button means stopping its further targeted download. A shared tor
 
 **From 014** ([library-schema-and-data-folder](../../docs/decisions/library-schema-and-data-folder.md)): `torrent_files.wanted` is the stored selection. Schema 1 has no priority column; if this task needs the "previous priority" of architecture §6, add it as migration 2 with its frozen fixture.
 
+**From 015** ([library-repositories](../../docs/decisions/library-repositories.md), [feature](../../docs/app/library-repositories.md)): `lib.SetFilesWanted(ctx, id, indexes, wanted)` changes any number of files in one transaction (`json_each`, so SQLite's 32766-parameter limit does not apply; a repeated index counts once). Check the indexes against the torrent first: an index it lacks is `ErrInvalid` (→ `internal.unexpected`) and changes no file; an unknown torrent is `ErrNotFound` (→ `torrent.notFound`). Under the torrent's key: `CheckIntentChange` → `SetFilesWanted` → registry change → `Reconcile`; a repository error ends the step before the registry changes. A file priority, if this task needs one, is a migration plus a method.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

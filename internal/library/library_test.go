@@ -62,12 +62,12 @@ func withBase(t *testing.T) (*Library, string) {
 }
 
 // rowCounts is the number of rows of every library table.
-func rowCounts(t *testing.T, s *Store) map[string]int {
+func rowCounts(t *testing.T, s *store) map[string]int {
 	t.Helper()
 	counts := map[string]int{}
 	for _, table := range libraryTables {
 		var n int
-		if err := s.Read(deadline(t, 5*time.Second), func(tx Tx) error {
+		if err := s.Read(deadline(t, 5*time.Second), func(tx txn) error {
 			return tx.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&n)
 		}); err != nil {
 			t.Fatal(err)
@@ -172,7 +172,7 @@ func TestTheLibraryEnforcesItsConstraints(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			lib, _ := withBase(t)
 			before := rowCounts(t, lib.store)
-			err := lib.store.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+			err := lib.store.Write(deadline(t, 5*time.Second), func(tx txn) error {
 				_, err := tx.Exec(statement)
 				return err
 			})
@@ -214,7 +214,7 @@ func TestTwoWritersOfTheSameHashCommitExactlyOnce(t *testing.T) {
 	errs := make(chan error, 2)
 	for i, id := range []string{idA, idB} {
 		go func() {
-			errs <- stores[i].store.Write(deadline(t, 10*time.Second), func(tx Tx) error {
+			errs <- stores[i].store.Write(deadline(t, 10*time.Second), func(tx txn) error {
 				_, err := tx.Exec(`INSERT INTO torrents(id, infohash_v1, name, info, source, save_path, manual_paused, added_at)
 					VALUES (?, zeroblob(20), 'same', x'64', 'file', '/x', 0, 1)`, id)
 				return err
@@ -271,7 +271,7 @@ func TestEveryValueIsKeptExactly(t *testing.T) {
 		gotLimit                        int64
 		gotPaused, gotWanted, gotGlobal bool
 	)
-	err := lib.store.Read(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := lib.store.Read(deadline(t, 5*time.Second), func(tx txn) error {
 		return tx.QueryRow(`SELECT t.info, t.name, t.save_path, t.added_at, t.manual_paused, f.path, f.size, f.wanted, r.device,
 			p.mtime, p.ctime, p.inode, s.download_limit, s.global_upload_disabled
 			FROM torrents t JOIN torrent_files f ON f.torrent_id = t.id JOIN payload_records r ON r.torrent_id = t.id
@@ -334,7 +334,7 @@ func TestEveryEnumerationIsTheContractsVocabulary(t *testing.T) {
 
 func TestAnOperationKindOfALaterTaskNeedsNoMigration(t *testing.T) {
 	lib, _ := withBase(t)
-	err := lib.store.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := lib.store.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		_, err := tx.Exec(`INSERT INTO operations(operation_id, runtime_id, kind, fingerprint, request, state, error, accepted_at, finished_at)
 			VALUES ('d0ffee00-1234-4abc-9def-0123456789ab', '` + runA + `', 'relocateData', 'fp', '{}', 'running', NULL, 1, NULL)`)
 		return err

@@ -60,7 +60,11 @@ opening the library at start.
      `user_version` and requires `foreign_key_check` to return no row before `COMMIT`. Any error —
      `COMMIT` included — rolls everything back: the old version, the old `application_id`, every row.
      It is `ErrMigrationFailed` "the <schema> database from version k to n", joined with the cause's
-     own kind (`ErrFull`, `ErrBusy`, `ErrReadOnly`, `ErrCanceled`, `ErrConstraint`, …).
+     own kind (`ErrFull`, `ErrBusy`, `ErrReadOnly`, `ErrCanceled`, `ErrConstraint`, `ErrIO`, …).
+     An I/O error at the migration's `COMMIT` (015) is also of unknown outcome, but it heals
+     itself: the next open examines the version again and migrates only if the file is still old
+     (`TestAMigrationWhoseCommitCannotWriteFailsAndTheNextOpenMigrates`). So it stays
+     `ErrMigrationFailed`, never `ErrOutcomeUnknown`.
 - **Foreign keys are off on the opening connection** and on in every connection of a Store. SQLite
   ignores the setting inside a transaction, and with it on, rebuilding a table (create, copy, drop,
   rename — SQLite's documented procedure for any change `ALTER TABLE` cannot make) would delete every
@@ -199,8 +203,9 @@ results in [the 014 report](../verification/014-sqlite-schema-migrations.md).
 
 ## Consequences
 
-- **015** builds the repositories on `Library` (014 exposes only `OpenLibrary` and `Close`), maps
-  `ErrUnknownSchema`, `ErrUnsupportedVersion` and `ErrMigrationFailed` to `AppError`, validates
+- **015** (done, [library-repositories](library-repositories.md)) built the repositories on
+  `Library`, mapped `ErrUnknownSchema`, `ErrUnsupportedVersion` and `ErrMigrationFailed` to
+  `AppError` (`library.notALibrary`, `library.newerVersion`, `library.migrationFailed`), validates
   UUIDs and paths before they reach the `CHECK`s, and refuses an operation kind outside the
   vocabulary before it writes (SQLite checks only that it is non-empty).
 - **016** backs the library up before a migration (`VACUUM INTO`, 008) — the way back from a branch

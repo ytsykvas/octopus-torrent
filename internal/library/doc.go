@@ -11,6 +11,15 @@
 // Each store is opened the way task 008 decided: modernc.org/sqlite, WAL, a full sync of every commit
 // (F_FULLFSYNC on macOS), one writer taking its lock at BEGIN, a small read-only pool, never a reset or
 // deleted file; its errors are classified into the package's kinds (ErrBusy, ErrFull, ...).
-// SQLiteVersion reports the bundled SQLite. Decisions: docs/decisions/sqlite-driver.md,
-// docs/decisions/engine-storage.md, docs/decisions/library-schema-and-data-folder.md.
+// SQLiteVersion reports the bundled SQLite.
+//
+// The runner (store, txn) is unexported, so no SQL runs outside this package; the gate's product
+// isolation step also fails on any other package that imports SQL (task 015). The library's
+// repositories are its methods: one transaction each, over values validated in Go before a CHECK
+// sees them, with no callback, so nothing waits for the engine or the network inside a transaction.
+// A write returns nil only after a durable commit into the file at its path; a COMMIT that may have
+// written and failed, or a file lost meanwhile, is ErrOutcomeUnknown. Problem is the one mapping of
+// the package's errors to AppError codes. Decisions: docs/decisions/sqlite-driver.md,
+// docs/decisions/engine-storage.md, docs/decisions/library-schema-and-data-folder.md,
+// docs/decisions/library-repositories.md.
 package library

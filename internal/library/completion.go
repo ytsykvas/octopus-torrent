@@ -24,7 +24,7 @@ type Mark struct {
 // from the library. Marks are advisory: they never decide on their own that data is correct (task
 // 009). Its schema follows the migration policy of task 014.
 type CompletionStore struct {
-	store *Store
+	store *store
 }
 
 // OpenCompletion opens, creates or migrates the store at an absolute, clean path. A file that is not
@@ -49,7 +49,7 @@ func (c *CompletionStore) SaveMarks(ctx context.Context, marks []Mark) error {
 	if len(marks) == 0 {
 		return classify(ctx.Err())
 	}
-	return c.store.Write(ctx, func(tx Tx) error {
+	return c.store.Write(ctx, func(tx txn) error {
 		for _, m := range marks {
 			if _, err := tx.Exec(`INSERT INTO piece_completion(infohash, piece, complete) VALUES (?, ?, ?)
 				ON CONFLICT(infohash, piece) DO UPDATE SET complete = excluded.complete`,
@@ -64,7 +64,7 @@ func (c *CompletionStore) SaveMarks(ctx context.Context, marks []Mark) error {
 // LoadMarks returns every saved mark of the torrent. A piece with no mark is absent from the map.
 func (c *CompletionStore) LoadMarks(ctx context.Context, infoHash [20]byte) (map[int]bool, error) {
 	marks := map[int]bool{}
-	err := c.store.Read(ctx, func(tx Tx) error {
+	err := c.store.Read(ctx, func(tx txn) error {
 		rows, err := tx.Query("SELECT piece, complete FROM piece_completion WHERE infohash = ?", infoHash[:])
 		if err != nil {
 			return err
@@ -86,7 +86,7 @@ func (c *CompletionStore) LoadMarks(ctx context.Context, infoHash [20]byte) (map
 	return marks, nil
 }
 
-// Close checkpoints and closes the store; its error is the Store's.
+// Close checkpoints and closes the store; its error is the store's.
 func (c *CompletionStore) Close() error {
 	return c.store.Close()
 }

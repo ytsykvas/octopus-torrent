@@ -55,16 +55,23 @@ Two constraints shape the answer:
     `wal_checkpoint(TRUNCATE)` at `Close`, and (since 014) the connection that opened and migrated the
     file, when it closes as the file's last one. This is a structural guard against the WAL-reset race,
     in addition to the fixed version.
-  - **No network or engine wait inside a transaction.** 015 enforces this for repositories.
+  - **No network or engine wait inside a transaction.** Since 015 this is structural: each
+    repository method is one transaction over prepared values and takes no callback
+    ([library-repositories](library-repositories.md)).
 - **API** (014/015 build on it, and add schema and repositories):
-  - `Write(ctx, fn func(Tx) error)` and `Read(ctx, fn)`.
-  - `library.Tx` runs every statement under the operation's context, so a cancel interrupts the
+  - `Write(ctx, fn func(Tx) error)` and `Read(ctx, fn)`. Since 015 the runner is unexported
+    (`store`, `txn`), so no code outside `internal/library` can run a statement, and the gate's
+    `product isolation` step fails on any other own package that imports SQL.
+  - `library.Tx` (`txn` since 015) runs every statement under the operation's context, so a cancel interrupts the
     running statement. database/sql's context-free methods would let it run to the end; the spike
     hung on exactly that.
   - `Write` returns nil only when the commit succeeded. An error before `COMMIT`, or a busy, full or
-    constraint error at `COMMIT`, keeps nothing. An I/O error from `COMMIT` (`SQLITE_IOERR`, not
-    classified yet; 015 maps it) has an unknown outcome: the next open may recover that transaction,
-    so the caller reads the state again. An error of
+    constraint error at `COMMIT`, keeps nothing. Any other error from `COMMIT` (since 015: `ErrIO`
+    for `SQLITE_IOERR`) is also `ErrOutcomeUnknown`: the next open may recover that transaction, so
+    the state is known again only after it, not by reading again now. A cancel plus a failed
+    `COMMIT` was `ErrCanceled` in 008; since 015 `Write` reports `ErrCanceled` only when database/sql
+    did not run `COMMIT`, and a `COMMIT` that ran by its own result
+    ([the rule](library-repositories.md#what-a-failed-commit-means-storewrite)). An error of
     `fn`'s own comes back unchanged; one that SQLite or the context caused comes back with its kind,
     wrapping the original.
   - A `Tx` is valid only inside `fn`. Opening a connection runs its PRAGMAs without a context,
@@ -73,7 +80,9 @@ Two constraints shape the answer:
   `ErrBusy`, `ErrFull`, `ErrCannotOpen`, `ErrReadOnly`, `ErrCanceled`, `ErrConstraint`,
   `ErrCorrupt` (not a database, or a damaged page), and `ErrReplaced`, which is not SQLite's: the path no
   longer names the file `Open` opened. Each wraps the driver's error, so SQLite's own
-  message is kept for diagnostics. Mapping to `AppError` belongs to 015.
+  message is kept for diagnostics. Since 015 also `ErrIO` (`SQLITE_IOERR`) and
+  `ErrOutcomeUnknown`; the one mapping to `AppError` is `library.Problem`
+  ([library-repositories](library-repositories.md#one-mapping-of-errors-to-apperror)).
 - **Never reset a database.**
   - `Open` takes only an absolute, clean path (no `.`/`..`, no doubled separator, no NUL byte).
   - It creates the file itself, `0600` and with `O_EXCL`, only where nothing exists, so an existing file
@@ -83,7 +92,9 @@ Two constraints shape the answer:
     would delete that WAL, and with it the commits.
   - `Write` and `Read` first check that the path still names the file `Open` opened (device and
     inode). Otherwise the writer would commit into a deleted inode and report success, and a new
-    reader would find another file; both get `ErrReplaced`.
+    reader would find another file; both get `ErrReplaced`. Since 015 `Write` checks again after a
+    successful `COMMIT`: a file deleted, moved or replaced while the transaction ran is
+    `ErrOutcomeUnknown` + `ErrReplaced`, never nil.
   - Every refusal leaves the file's bytes and inode unchanged: a file that is not a database, a
     read-only folder or file, a full disk, an empty file beside a WAL. Tests prove each case.
 - **The data directory contract.** It is recorded here and in

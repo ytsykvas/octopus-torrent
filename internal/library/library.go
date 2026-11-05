@@ -13,10 +13,12 @@ var libraryV1 string
 var librarySchema = schema{name: "library", applicationID: 0x4F544C42, migrations: []string{libraryV1}}
 
 // Library is the owner's library: torrent records, their files, what the last run left for the
-// payload, the settings and the operation journal (task 014). The repositories that read and write
-// it are task 015's.
+// payload, the settings and the operation journal (task 014). Its methods are the repositories
+// (task 015): each is one transaction over values prepared in memory (AddTorrent, SetManualPaused,
+// SetFilesWanted, SaveSettings, FinishOperation; Torrents, Settings, Operation), and Problem maps
+// their errors to AppError codes.
 type Library struct {
-	store *Store
+	store *store
 }
 
 // OpenLibrary opens, creates or migrates the library at an absolute, clean path. A file that is not
@@ -30,7 +32,7 @@ func OpenLibrary(ctx context.Context, path string) (*Library, error) {
 	return &Library{s}, nil
 }
 
-// Close checkpoints and closes the library; its error is the Store's.
+// Close checkpoints and closes the library; its error is the store's.
 func (l *Library) Close() error {
 	return l.store.Close()
 }

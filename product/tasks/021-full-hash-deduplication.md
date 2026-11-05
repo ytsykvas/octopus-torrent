@@ -55,6 +55,8 @@ The full hash and the library UUID play different roles. A short name, size or a
 
 **From 011** ([magnet-pending-storage](../../docs/decisions/magnet-pending-storage.md), [feature](../../docs/app/magnet-metadata.md)): a magnet's v1 identity is the requested infohash, which `Fetch` verified against the received bytes; a hybrid's v2 identity comes from `Pending.InfoBytes()` (the engine registers it on the same torrent). `ErrDuplicate` from `Fetch` means the infohash is already in the client.
 
+**From 015** ([library-repositories](../../docs/decisions/library-repositories.md), [feature](../../docs/app/library-repositories.md)): `AddTorrent` looks up both infohashes inside its write transaction and returns `*library.DuplicateError{Existing}` (`ErrDuplicate`): the record with the same v1 hash, otherwise the one with the same v2, so a hybrid whose hashes match two records names the v1 one. `library.Problem` maps it to `torrent.duplicate` with `torrentID` = the existing record; refine the code or its params here if the UI needs more (which hash matched). Reserving an identity before the metadata exists (a magnet) is not in 015: add it as a method of its own.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.

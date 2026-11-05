@@ -152,6 +152,17 @@ UI validated (STACK-01). The TypeScript encoders write exactly the keys of each 
 | `operation.notFound` | Go | `runtimeID` |
 | `operation.cancelled` | Go | — |
 | `internal.unexpected` | Go (any error without a code) | — |
+| `torrent.notFound` | Go, `library.Problem` (015): the library has no such torrent | — (`torrentID` set) |
+| `torrent.duplicate` | Go, `library.Problem` (015): the library already has a torrent with this infohash; 021 may refine it | — (`torrentID` = the existing record) |
+| `library.busy` | Go, `library.Problem` (015): another connection holds the library's lock | — |
+| `library.diskFull` | Go, `library.Problem` (015) | — |
+| `library.readOnly` | Go, `library.Problem` (015) | — |
+| `library.unavailable` | Go, `library.Problem` (015): the library cannot be opened, was deleted, moved or replaced, or a disk I/O error | — |
+| `library.damaged` | Go, `library.Problem` (015) | — |
+| `library.outcomeUnknown` | Go, `library.Problem` (015): a commit failed after it may have written; the next start decides | — |
+| `library.newerVersion` | Go, `library.Problem` (015): written by a newer version of the application | — |
+| `library.notALibrary` | Go, `library.Problem` (015): another application's file, or another purpose | — |
+| `library.migrationFailed` | Go, `library.Problem` (015): the old version and every row were kept | — |
 | `bridge.callFailed` | TypeScript (the call failed before Go answered) | `detail` (diagnostics only) |
 | `contract.invalidDto` | TypeScript (a Go answer broke the contract) | `path`, `reason` |
 
@@ -159,7 +170,9 @@ Transport: the Wails v2.16 JavaScript runtime rejects a failed call with `new Er
 (`internal/frontend/runtime/desktop/calls.js:181`), so an object would arrive as
 `"[object Object]"`. `options.App.ErrorFormatter` (`app.ErrorFormatter(stderr)`) therefore returns
 the **JSON text** of the `AppError`, and writes the cause of any error without a code to stderr
-(local diagnostics take over in 017), never to the UI; the bridge parses `Error.message`, and any other rejection becomes
+(local diagnostics take over in 017), never to the UI. The cause attached to a coded error (since
+015, `AppError.WithCause`) is never encoded and never written to stderr: it can carry full local
+paths, which only 017's redacting log may write (DATA-03); the bridge parses `Error.message`, and any other rejection becomes
 `bridge.callFailed`. `describeError` maps a known code to the message key `error.<code>` with its
 params and an English fallback; an unknown code gets `error.unknown` with the code (texts move to
 the dictionaries in 041). Each task that adds a code adds it to this table, to `contracts/errors.go`,

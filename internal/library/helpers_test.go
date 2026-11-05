@@ -26,19 +26,19 @@ var rowsSchema = schema{name: "test rows", applicationID: 0x54524f57, migrations
 }}
 
 // openRows opens a store of rowsSchema in path with the default settings.
-func openRows(ctx context.Context, path string) (*Store, error) {
+func openRows(ctx context.Context, path string) (*store, error) {
 	return open(ctx, path, defaults, rowsSchema)
 }
 
 // openStore opens a store of rowsSchema in path with the default settings and closes it after the
 // test.
-func openStore(t *testing.T, path string) *Store {
+func openStore(t *testing.T, path string) *store {
 	t.Helper()
 	return openWith(t, path, defaults, rowsSchema)
 }
 
 // openWith opens a store of sch in path with set and closes it after the test.
-func openWith(t *testing.T, path string, set settings, sch schema) *Store {
+func openWith(t *testing.T, path string, set settings, sch schema) *store {
 	t.Helper()
 	s, err := open(deadline(t, 10*time.Second), path, set, sch)
 	if err != nil {
@@ -49,20 +49,20 @@ func openWith(t *testing.T, path string, set settings, sch schema) *Store {
 }
 
 // withTable opens a fresh store of rowsSchema.
-func withTable(t *testing.T) (*Store, string) {
+func withTable(t *testing.T) (*store, string) {
 	t.Helper()
 	return withTableUsing(t, defaults)
 }
 
 // withTableUsing is withTable with other settings.
-func withTableUsing(t *testing.T, set settings) (*Store, string) {
+func withTableUsing(t *testing.T, set settings) (*store, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "library.sqlite")
 	return tableAt(t, path, set), path
 }
 
 // tableAt opens a store of rowsSchema in path with set and closes it after the test.
-func tableAt(t *testing.T, path string, set settings) *Store {
+func tableAt(t *testing.T, path string, set settings) *store {
 	t.Helper()
 	return openWith(t, path, set, rowsSchema)
 }
@@ -75,9 +75,9 @@ func smallVolume(t *testing.T) string {
 }
 
 // must runs one statement in its own write transaction.
-func must(t *testing.T, s *Store, query string, args ...any) {
+func must(t *testing.T, s *store, query string, args ...any) {
 	t.Helper()
-	err := s.Write(deadline(t, 10*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 10*time.Second), func(tx txn) error {
 		_, err := tx.Exec(query, args...)
 		return err
 	})
@@ -87,10 +87,10 @@ func must(t *testing.T, s *Store, query string, args ...any) {
 }
 
 // count reads the number of rows through the read pool.
-func count(t *testing.T, s *Store) int {
+func count(t *testing.T, s *store) int {
 	t.Helper()
 	var n int
-	err := s.Read(deadline(t, 10*time.Second), func(tx Tx) error {
+	err := s.Read(deadline(t, 10*time.Second), func(tx txn) error {
 		return tx.QueryRow("SELECT COUNT(*) FROM rows").Scan(&n)
 	})
 	if err != nil {
@@ -100,10 +100,10 @@ func count(t *testing.T, s *Store) int {
 }
 
 // integrity runs the full integrity check.
-func integrity(t *testing.T, s *Store) {
+func integrity(t *testing.T, s *store) {
 	t.Helper()
 	var result string
-	err := s.Read(deadline(t, 30*time.Second), func(tx Tx) error {
+	err := s.Read(deadline(t, 30*time.Second), func(tx txn) error {
 		return tx.QueryRow("PRAGMA integrity_check").Scan(&result)
 	})
 	if err != nil || result != "ok" {
@@ -157,4 +157,14 @@ func readOnly(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+}
+
+// behind is another program's connection to the file of s, through the driver alone (no schema
+// check): it changes tables behind the store's back, so a test reaches the error branches a valid
+// file never takes.
+func behind(t *testing.T, s *store) *store {
+	t.Helper()
+	other := &store{path: s.path, file: s.file, write: rawDB(t, s.path), read: rawDB(t, s.path), beforeCommit: func() {}}
+	t.Cleanup(func() { _ = other.write.Close(); _ = other.read.Close() })
+	return other
 }

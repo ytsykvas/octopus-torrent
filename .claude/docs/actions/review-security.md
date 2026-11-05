@@ -27,6 +27,8 @@ sequence that triggers it.
   agent, a test, a Wails command) passes its own `OCTOPUS_DATA_DIR`, and a database opens only
   through `library.OpenLibrary`/`OpenCompletion` (the schema check before any write). The gate's
   `data folders` step notices a change only after the fact.
+- A coded error's cause (`AppError.Unwrap`) written to stderr, a log or the UI: it can carry full
+  local paths, and only 017's redacting log may write it (DATA-03).
 
 ### The Wails boundary
 

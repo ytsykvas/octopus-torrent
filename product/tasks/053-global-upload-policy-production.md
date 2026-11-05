@@ -60,6 +60,8 @@ If 010 is blocked, this task is also blocked. A full pause of all torrents is no
 
 **From 014** ([library-schema-and-data-folder](../../docs/decisions/library-schema-and-data-folder.md)): the global upload stop is stored in `settings.global_upload_disabled`; no settings row means upload allowed.
 
+**From 015** ([library-repositories](../../docs/decisions/library-repositories.md), [feature](../../docs/app/library-repositories.md)): the global upload stop is `Settings.GlobalUploadDisabled`: save it with `lib.SaveSettings` (the whole settings, under `commandorder.Settings`) before `registry.SetGlobalUploadDisabled`. A failed save is the operation's `AppError` (`library.Problem`) and leaves the registry unchanged.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the plan of the change and the required refactoring. This also applies when continuing this task.

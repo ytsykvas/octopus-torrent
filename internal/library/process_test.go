@@ -82,7 +82,7 @@ func TestAnotherProcessHoldingTheLockMakesAWriteBusy(t *testing.T) {
 	cmd, stdin, lines := child(t, "TestAnotherProcessHoldingTheLockMakesAWriteBusy", lockChildEnv, path)
 	await(t, lines, "locked")
 	start := time.Now()
-	err := s.Write(deadline(t, 5*time.Second), func(Tx) error { return nil })
+	err := s.Write(deadline(t, 5*time.Second), func(txn) error { return nil })
 	took := time.Since(start)
 	if !errors.Is(err, ErrBusy) {
 		t.Fatalf("Write while another process holds the lock = %v, want ErrBusy", err)
@@ -107,7 +107,7 @@ func TestAnotherProcessHoldingTheLockMakesAWriteBusy(t *testing.T) {
 // is closed.
 func holdLock(t *testing.T, path string) {
 	s := openStore(t, path)
-	err := s.Write(context.Background(), func(tx Tx) error {
+	err := s.Write(context.Background(), func(tx txn) error {
 		fmt.Println("locked")
 		_, _ = io.Copy(io.Discard, os.Stdin)
 		_, err := tx.Exec("INSERT INTO rows(n) VALUES (1)")
@@ -146,7 +146,7 @@ func TestEveryAcknowledgedCommitSurvivesAKilledProcess(t *testing.T) {
 	}
 	again := openStore(t, path)
 	var missing int
-	err := again.Read(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := again.Read(deadline(t, 5*time.Second), func(tx txn) error {
 		return tx.QueryRow("SELECT ? - COUNT(*) FROM rows WHERE n BETWEEN 1 AND ?", acknowledged, acknowledged).Scan(&missing)
 	})
 	if err != nil {
@@ -167,7 +167,7 @@ func commitForever(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 	for n := 1; ; n++ {
-		err := s.Write(context.Background(), func(tx Tx) error {
+		err := s.Write(context.Background(), func(tx txn) error {
 			_, err := tx.Exec("INSERT INTO rows(n) VALUES (?)", n)
 			return err
 		})

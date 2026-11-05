@@ -260,8 +260,7 @@ func TestATableChangedBehindTheStoresBackIsReportedNotHidden(t *testing.T) {
 	c := openMarks(t, path)
 	save(t, c, Mark{hashA, 0, true})
 	// Another program changes the table behind the store's back, through the driver alone.
-	other := &Store{path: path, file: c.store.file, write: rawDB(t, path), read: rawDB(t, path)}
-	t.Cleanup(func() { _ = other.write.Close(); _ = other.read.Close() })
+	other := behind(t, c.store)
 
 	must(t, other, "DROP TABLE piece_completion")
 	if err := c.SaveMarks(deadline(t, 5*time.Second), []Mark{{hashA, 1, true}}); err == nil {

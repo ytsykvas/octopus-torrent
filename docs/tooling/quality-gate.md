@@ -75,7 +75,11 @@ Since 007 the repository has more than one Wails app. Each one is a row of `wail
 - **go coverage:** requires every app's main file in the `.app` profile.
 - **product isolation:** `go list -deps` of the product, with the release build's tags
   (`desktop,wv2runtime.download,production`), must not contain the spike, a `testutil` package or
-  anacrolix. The anacrolix clause stays until 018. The RED cases
+  anacrolix. The anacrolix clause stays until 018. The same step keeps SQL in the repository
+  (STACK-04, 015): `go list -tags=<mode> ./...` under each build mode (none, `dev`, `bindings`, and the release tags) lists
+  every own package with its imports, test imports included, and only `internal/library` may import
+  `database/sql…` or a path containing `sqlite`; a package in `frontend/package-lock.json` whose
+  name contains `sql` fails it too (`CheckSQLIsolation`). The RED cases
 for each are listed in [report 004](../verification/004-reproducible-check-commands.md).
 
 ## Implementation and reuse
@@ -90,7 +94,7 @@ for each are listed in [report 004](../verification/004-reproducible-check-comma
 | `internal/devtool/scripts.go` | the `scripts` step: a `*.sh` file may only build `devtool` and `exec` it |
 | `internal/devtool/appcov.go` | the `wailsApps` table; instrumented build, launch, Apple Event quit and counters of every app; the library check after the quit |
 | `internal/devtool/datafolders.go` | the tooling's data folders, the owner-folder description and the `data folders` step |
-| `internal/devtool/isolation.go` | the `product isolation` step: what the product binary must not link |
+| `internal/devtool/isolation.go` | the `product isolation` step: what the product binary must not link, and SQL only in `internal/library` |
 | `internal/devtool/deps.go` | lockfile and build-list parsing, registry dates and integrity, audits, the updates report |
 | `internal/devtool/plan.go` | the task plan check used by the `plan` step, and the `check-plan` and `plan-nav` commands |
 | `internal/devtool/docs.go` | the link and pointer checks used by the `docs` step, and the `check-docs` command |

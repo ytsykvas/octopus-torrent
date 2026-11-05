@@ -34,6 +34,8 @@ updates this list.
   shell commands on request from the UI, or skipping DTO re-validation.
 - A Go service writing SQL or importing anacrolix directly; SQL outside `internal/library`; anacrolix
   types outside `internal/torrentengine`.
+- A repository method that takes a callback or waits for the engine, a file or the network inside a
+  transaction; a library error turned into an `AppError` anywhere but `library.Problem`.
 - A command that changes a torrent or the settings is started without its `commandorder` keys, a
   transfer-registry mutation runs outside the torrent's step, or a permission is decided outside
   `transfer.Decide` ([transfer-status-model](../../../docs/decisions/transfer-status-model.md)).

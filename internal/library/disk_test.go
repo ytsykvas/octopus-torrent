@@ -21,7 +21,7 @@ func TestAFullDiskFailsTheWriteAndKeepsWhatWasCommitted(t *testing.T) {
 	}
 	before := identify(t, path)
 	filler := volume.Fill(t, mount)
-	err := s.Write(deadline(t, 10*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 10*time.Second), func(tx txn) error {
 		_, err := tx.Exec("INSERT INTO rows(n, data) VALUES (-1, zeroblob(1048576))")
 		return err
 	})
@@ -53,7 +53,7 @@ func TestAFullDiskFailsTheWriteAndKeepsWhatWasCommitted(t *testing.T) {
 func TestAPageLimitFailsTheWriteLikeAFullDisk(t *testing.T) {
 	s, _ := withTable(t)
 	must(t, s, "INSERT INTO rows(n) VALUES (1)")
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		if _, err := tx.Exec("PRAGMA max_page_count = 8"); err != nil {
 			return err
 		}

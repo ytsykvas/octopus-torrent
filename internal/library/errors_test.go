@@ -9,11 +9,11 @@ import (
 )
 
 // kinds lists every exported error.
-var kinds = []error{ErrBusy, ErrFull, ErrCannotOpen, ErrReadOnly, ErrCanceled, ErrConstraint, ErrCorrupt, ErrReplaced, ErrUnsupportedVersion, ErrUnknownSchema, ErrMigrationFailed}
+var kinds = []error{ErrBusy, ErrFull, ErrCannotOpen, ErrReadOnly, ErrCanceled, ErrConstraint, ErrCorrupt, ErrReplaced, ErrUnsupportedVersion, ErrUnknownSchema, ErrMigrationFailed, ErrIO, ErrOutcomeUnknown}
 
 func TestAnUnclassifiedSQLiteErrorPassesThrough(t *testing.T) {
 	s, _ := withTable(t)
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		_, err := tx.Exec("NOT SQL")
 		return err
 	})

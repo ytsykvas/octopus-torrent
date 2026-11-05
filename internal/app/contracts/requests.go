@@ -147,7 +147,7 @@ func (r *ConfirmImportRequest) Validate() *AppError {
 		CheckUUID("pendingImportID", string(r.PendingImportID)),
 		checkPositive("previewVersion", r.PreviewVersion),
 		checkFileIndexes("selectedFileIndexes", r.SelectedFileIndexes),
-		checkFolderPath("destination", r.Destination),
+		CheckFolderPath("destination", r.Destination),
 	)
 }
 
@@ -276,10 +276,10 @@ func checkPositive(field string, value int) *AppError {
 // maxPathBytes bounds a folder path from the frontend; macOS paths are at most 1024 bytes.
 const maxPathBytes = 1024
 
-// checkFolderPath accepts only a clean absolute path below the root, without control characters
+// CheckFolderPath accepts only a clean absolute path below the root, without control characters
 // (a NUL would truncate it in C APIs) and at most maxPathBytes long. This is the lexical check of
 // the contract; the file service still resolves symlinks and checks the folder before any write.
-func checkFolderPath(field, path string) *AppError {
+func CheckFolderPath(field, path string) *AppError {
 	if len(path) > maxPathBytes || path == "/" || !filepath.IsAbs(path) || filepath.Clean(path) != path ||
 		strings.ContainsFunc(path, unicode.IsControl) {
 		return InvalidRequest(field, ReasonFormat)

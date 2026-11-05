@@ -1,6 +1,6 @@
 # Wails facade
 
-> Last updated: 2026-10-15
+> Last updated: 2026-11-04
 
 `internal/app.App` is the only Go type the window can call. Wails binds **every exported method**
 of it to JavaScript (`window.go.app.App.<Method>`), generates `frontend/wailsjs/go/app/App.{js,d.ts}`
@@ -42,6 +42,10 @@ DTO fields, units and error codes: [bridge contract](../bridge/contract.md) and 
 - Any error without a code becomes `internal.unexpected`. Its cause is written to stderr as
   `OctopusTorrent: unexpected error: "<quoted text>"` and never reaches the UI. A typed-nil
   `*AppError` is treated the same way.
+- A coded error may carry a cause (`AppError.WithCause`, as `library.Problem` attaches the library's
+  error, 015). That cause is written nowhere: it is never encoded into the JSON and never written to
+  stderr, because it can carry full local paths (DATA-03). Only 017's redacting log may write it
+  (`TestErrorFormatterWritesNoCauseOfACodedError`).
 - Wails' own failures happen before the method runs: arguments it cannot parse, or an unknown
   method. They reject with plain text, and the bridge maps that to `bridge.callFailed`. In
   `wails dev` such a call never settles (a Wails v2.16 dev-server quirk), so the TypeScript encoders

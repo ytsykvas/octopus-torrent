@@ -20,14 +20,14 @@ func TestADeletedDatabaseIsNotRecreatedAndNotWrittenTo(t *testing.T) {
 	}
 	// A write would land in the deleted inode the writer still holds, and a new reader would create
 	// an empty file at the path; both are refused.
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		_, err := tx.Exec("INSERT INTO rows(n) VALUES (2)")
 		return err
 	})
 	if !errors.Is(err, ErrReplaced) {
 		t.Fatalf("Write after the file was deleted = %v, want ErrReplaced", err)
 	}
-	err = s.Read(deadline(t, 5*time.Second), func(Tx) error { return nil })
+	err = s.Read(deadline(t, 5*time.Second), func(txn) error { return nil })
 	if !errors.Is(err, ErrReplaced) || !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("Read after the file was deleted = %v, want ErrReplaced naming the missing file", err)
 	}
@@ -45,7 +45,7 @@ func TestAReplacedDatabaseIsNotWrittenTo(t *testing.T) {
 	if err := os.Rename(other, path); err != nil {
 		t.Fatal(err)
 	}
-	err := s.Write(deadline(t, 5*time.Second), func(Tx) error { return nil })
+	err := s.Write(deadline(t, 5*time.Second), func(txn) error { return nil })
 	if !errors.Is(err, ErrReplaced) {
 		t.Fatalf("Write after the file was replaced = %v, want ErrReplaced", err)
 	}
@@ -62,7 +62,7 @@ func TestADatabaseReplacedByASymlinkToItselfIsNotWrittenTo(t *testing.T) {
 	if err := os.Symlink(moved, path); err != nil {
 		t.Fatal(err)
 	}
-	err := s.Write(deadline(t, 5*time.Second), func(Tx) error { return nil })
+	err := s.Write(deadline(t, 5*time.Second), func(txn) error { return nil })
 	if !errors.Is(err, ErrReplaced) {
 		t.Fatalf("Write after the file was replaced by a symlink to it = %v, want ErrReplaced", err)
 	}
@@ -70,7 +70,7 @@ func TestADatabaseReplacedByASymlinkToItselfIsNotWrittenTo(t *testing.T) {
 
 func TestAReaderCannotWriteEvenWhenItAsks(t *testing.T) {
 	s, _ := withTable(t)
-	err := s.Read(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Read(deadline(t, 5*time.Second), func(tx txn) error {
 		if _, err := tx.Exec("PRAGMA query_only = 0"); err != nil {
 			return err
 		}

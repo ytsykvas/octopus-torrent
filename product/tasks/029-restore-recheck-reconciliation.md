@@ -63,6 +63,8 @@ Checking the disk after a crash does not mean downloading again from the network
 
 **From 014** ([library-schema-and-data-folder](../../docs/decisions/library-schema-and-data-folder.md)): `payload_records` and `payload_files` hold `files.Record`: `clean = 0` is the "not clean" marker written before the first payload write; files are keyed by `file_index` and foreign-keyed to `torrent_files`, so a record never names a file the torrent lacks. Refuse a restored save path that is, contains or lies inside the data folder. The schema checks `save_path` and `torrent_files.path` only for being non-empty: treat every restored path as untrusted and validate it in Go again.
 
+**From 015** ([library-repositories](../../docs/decisions/library-repositories.md), [feature](../../docs/app/library-repositories.md)): read the records with `lib.Torrents` (one snapshot, files in index order), the settings with `lib.Settings` (`found` false → the defaults) and an operation with `lib.Operation`; a query for the operations left `running` by an earlier runtime is yours to add. A write that returned `library.outcomeUnknown` is decided by this start: SQLite's WAL replay kept it or not, and what the library holds now is the truth. Payload records (`payload_records`, `payload_files`) get methods of their own here. A stored path is lexically safe (relative to the save path, clean), but the disk may have changed since: resolve and confine it (`os.Root`, 020) before any write.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of each session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan of the change and the required refactoring. This also applies to continuing this task.

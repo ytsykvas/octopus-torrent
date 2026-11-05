@@ -78,7 +78,7 @@ func stateOf(t *testing.T, path string) fileState {
 	db := rawDB(t, path)
 	defer db.Close()
 	var st fileState
-	err := run(deadline(t, 10*time.Second), db, &sql.TxOptions{ReadOnly: true}, func(tx Tx) (err error) {
+	err := run(deadline(t, 10*time.Second), db, &sql.TxOptions{ReadOnly: true}, func(tx txn) (err error) {
 		st, err = inspect(tx)
 		return err
 	})
@@ -281,7 +281,7 @@ func TestATableRebuildKeepsTheRowsThatReferToIt(t *testing.T) {
 	}
 	// Every connection after the migration has foreign keys on again.
 	s := openWith(t, path, defaults, parentChild)
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		_, err := tx.Exec("INSERT INTO child(parent) VALUES (99)")
 		return err
 	})
@@ -333,7 +333,7 @@ func TestExaminingOnAnEndedTransactionIsAnError(t *testing.T) {
 	if err := tx.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := examine(Tx{ctx, tx}, rowsSchema); !errors.Is(err, sql.ErrTxDone) {
+	if _, err := examine(txn{ctx, tx}, rowsSchema); !errors.Is(err, sql.ErrTxDone) {
 		t.Fatalf("examine on an ended transaction = %v, want sql.ErrTxDone", err)
 	}
 }
@@ -424,7 +424,7 @@ func TestTwoStoresMigratingOneFileAtOnceRunTheMigrationOnce(t *testing.T) {
 	// under the write lock, so the second one finds nothing left to do.
 	// The stores close after both opened: two closing checkpoints at once may be ErrBusy, which is
 	// Close's to report and not this test's subject.
-	stores, errs := make(chan *Store, 2), make(chan error, 2)
+	stores, errs := make(chan *store, 2), make(chan error, 2)
 	for range 2 {
 		go func() {
 			s, err := open(deadline(t, 20*time.Second), path, defaults, threeSteps)

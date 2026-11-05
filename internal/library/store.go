@@ -29,11 +29,19 @@ type settings struct {
 	// afterCheck runs between the read-only check and the migration's write lock, where another
 	// store may change the file; a test changes it there.
 	afterCheck func()
+	// beforeCommit runs in Write after fn succeeded, right before COMMIT: a test makes a real failure
+	// (a cancel, a full disk, a file that cannot grow) happen exactly there.
+	beforeCommit func()
 }
 
-var defaults = settings{busyTimeout: 5 * time.Second, walPragma: "PRAGMA journal_mode=WAL", afterCheck: func() {}}
+var defaults = settings{
+	busyTimeout:  5 * time.Second,
+	walPragma:    "PRAGMA journal_mode=WAL",
+	afterCheck:   func() {},
+	beforeCommit: func() {},
+}
 
-// Store is one SQLite database opened the way task 008 decided:
+// store is one SQLite database opened the way task 008 decided:
 //
 //   - WAL, so readers never wait for the writer and the writer never waits for readers;
 //   - synchronous=FULL with fullfsync on every connection: a commit returns only after the WAL is
@@ -45,12 +53,14 @@ var defaults = settings{busyTimeout: 5 * time.Second, walPragma: "PRAGMA journal
 //   - only a connection that writes checkpoints: the writer, automatically and fully when the store
 //     closes, and the connection that opened the file (prepare) when it closes as the file's last.
 //
-// A Store never creates a database in place of an existing file and never deletes one.
-type Store struct {
+// A store never creates a database in place of an existing file and never deletes one.
+type store struct {
 	path  string
 	file  os.FileInfo // the file open opened; a write or read checks the path still names it
 	write *sql.DB
 	read  *sql.DB
+	// beforeCommit is settings.beforeCommit.
+	beforeCommit func()
 
 	closeOnce sync.Once
 	closeErr  error
@@ -63,7 +73,7 @@ type connector struct{ dsn string }
 func (c connector) Connect(context.Context) (driver.Conn, error) { return c.Driver().Open(c.dsn) }
 func (c connector) Driver() driver.Driver                        { return &sqlite.Driver{} }
 
-// Whether a connection enforces foreign keys: every connection of a Store does; only the connection
+// Whether a connection enforces foreign keys: every connection of a store does; only the connection
 // that opens and migrates a file does not (see migrate).
 const (
 	foreignKeysOn  = "foreign_keys(1)"
@@ -95,7 +105,7 @@ func dsn(path string, busyTimeout time.Duration, foreignKeys string, params ...s
 // that WAL. prepare then brings the file to the current version of sch
 // before the store's own connections open. The exported openers (OpenLibrary, OpenCompletion) each
 // pass their own schema; there is no way to open a file without one.
-func open(ctx context.Context, path string, set settings, sch schema) (*Store, error) {
+func open(ctx context.Context, path string, set settings, sch schema) (*store, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsRune(path, 0) {
 		return nil, fmt.Errorf("the library database path %q is not absolute and clean", path)
 	}
@@ -130,7 +140,7 @@ func open(ctx context.Context, path string, set settings, sch schema) (*Store, e
 	read := sql.OpenDB(connector{dsn(path, set.busyTimeout, foreignKeysOn, "mode", "ro", "_pragma", "query_only(1)")})
 	read.SetMaxOpenConns(readers)
 	read.SetMaxIdleConns(readers)
-	return &Store{path: path, file: file, write: write, read: read}, nil
+	return &store{path: path, file: file, write: write, read: read, beforeCommit: set.beforeCommit}, nil
 }
 
 // prepare runs on a connection of its own, closed before the store's connections open:
@@ -149,7 +159,7 @@ func prepare(ctx context.Context, path string, set settings, sch schema) (err er
 	db.SetMaxOpenConns(1)
 	defer func() { err = errors.Join(err, db.Close()) }()
 	var from int
-	if err := run(ctx, db, &sql.TxOptions{ReadOnly: true}, func(tx Tx) (err error) {
+	if err := run(ctx, db, &sql.TxOptions{ReadOnly: true}, func(tx txn) (err error) {
 		from, err = examine(tx, sch)
 		return err
 	}); err != nil {
@@ -166,7 +176,7 @@ func prepare(ctx context.Context, path string, set settings, sch schema) (err er
 	}
 	if from < sch.current() {
 		set.afterCheck()
-		if err := run(ctx, db, nil, func(tx Tx) error { return migrate(tx, sch) }); err != nil {
+		if err := run(ctx, db, nil, func(tx txn) error { return migrate(tx, sch) }); err != nil {
 			return &kindError{ErrMigrationFailed, fmt.Errorf("the %s database from version %d to %d: %w", sch.name, from, sch.current(), err)}
 		}
 	}
@@ -184,7 +194,7 @@ func size(path string) int64 {
 
 // check refuses an operation once the path no longer names the file open opened: the writer would
 // commit into a deleted inode, and a new reader would find another file.
-func (s *Store) check() error {
+func (s *store) check() error {
 	info, err := os.Lstat(s.path)
 	if err != nil {
 		return &kindError{ErrReplaced, err}
@@ -195,60 +205,86 @@ func (s *Store) check() error {
 	return nil
 }
 
-// Tx is a transaction whose every statement runs under the context of its operation, so cancelling
+// txn is a transaction whose every statement runs under the context of its operation, so cancelling
 // the operation interrupts the statement that is running (database/sql's methods without a context
-// would run it to the end). A Tx is valid only inside the function it was given to; rows from Query
+// would run it to the end). A txn is valid only inside the function it was given to; rows from Query
 // must be closed there too.
-type Tx struct {
+type txn struct {
 	ctx context.Context
 	tx  *sql.Tx
 }
 
 // Exec runs a statement that returns no rows.
-func (t Tx) Exec(query string, args ...any) (sql.Result, error) {
+func (t txn) Exec(query string, args ...any) (sql.Result, error) {
 	return t.tx.ExecContext(t.ctx, query, args...)
 }
 
 // Query runs a statement that returns rows.
-func (t Tx) Query(query string, args ...any) (*sql.Rows, error) {
+func (t txn) Query(query string, args ...any) (*sql.Rows, error) {
 	return t.tx.QueryContext(t.ctx, query, args...)
 }
 
 // QueryRow runs a statement that returns at most one row.
-func (t Tx) QueryRow(query string, args ...any) *sql.Row {
+func (t txn) QueryRow(query string, args ...any) *sql.Row {
 	return t.tx.QueryRowContext(t.ctx, query, args...)
 }
 
 // Write runs fn in a write transaction and commits it. Writes are serialized: one at a time, but
 // concurrent callers get the writer in no particular order (database/sql hands a freed connection to
 // a random waiter), so an order between operations is the caller's to keep. Write returns nil only
-// when the commit succeeded. An error before COMMIT, or a busy, full or constraint error at COMMIT,
-// keeps nothing of fn's changes; an I/O error from COMMIT has an unknown outcome, and the caller reads
-// the state again. An error of fn's own comes back unchanged; one that SQLite or the context caused
-// comes back with its kind, wrapping the original.
-func (s *Store) Write(ctx context.Context, fn func(Tx) error) error {
+// when the commit succeeded and the path still names the file it went into. An error before COMMIT
+// keeps nothing of fn's changes; so does a COMMIT that the context's end prevented (ErrCanceled), or
+// one that failed busy, full or on a constraint. Any other error from COMMIT (an I/O error, ...)
+// also matches ErrOutcomeUnknown: the change may be durable or not, which only the next open of the
+// file shows. So does a commit into a file that was deleted, moved or replaced meanwhile
+// (ErrReplaced): SQLite commits into it without an error, but the library at the path lacks the
+// change. An error of fn's own comes back unchanged; one that SQLite or the context caused comes back
+// with its kind, wrapping the original.
+func (s *store) Write(ctx context.Context, fn func(txn) error) error {
 	if err := s.check(); err != nil {
 		return err
 	}
-	return run(ctx, s.write, nil, fn)
+	tx, err := begin(ctx, s.write, nil, fn)
+	if err != nil {
+		return err
+	}
+	s.beforeCommit()
+	err = tx.Commit()
+	switch {
+	case err == nil:
+		// The file may have been lost between the check before BEGIN and the commit.
+		if lost := s.check(); lost != nil {
+			return &kindError{ErrOutcomeUnknown, lost}
+		}
+		return nil
+	case errors.Is(err, sql.ErrTxDone) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+		// database/sql did not run COMMIT: the context ended first, and the transaction was rolled
+		// back (database/sql/sql.go, Tx.Commit checks the context before it commits).
+		return classify(errors.Join(ctx.Err(), err))
+	}
+	// COMMIT ran (modernc runs it under context.Background and rolls back a transaction SQLite left
+	// open), so its own result decides, whatever happened to the context meanwhile.
+	kind := classify(err)
+	if errors.Is(kind, ErrBusy) || errors.Is(kind, ErrFull) || errors.Is(kind, ErrConstraint) {
+		return kind
+	}
+	return &kindError{ErrOutcomeUnknown, kind}
 }
 
 // Read runs fn in a read-only transaction: one consistent snapshot, never blocked by the writer.
-func (s *Store) Read(ctx context.Context, fn func(Tx) error) error {
+func (s *store) Read(ctx context.Context, fn func(txn) error) error {
 	if err := s.check(); err != nil {
 		return err
 	}
 	return run(ctx, s.read, &sql.TxOptions{ReadOnly: true}, fn)
 }
 
-func run(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(Tx) error) error {
-	tx, err := db.BeginTx(ctx, opts)
+// run runs fn in a transaction and commits it: Read and the migration. A failed COMMIT is reported
+// with its kind; Write has its own rule for what a failed COMMIT means.
+func run(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(txn) error) error {
+	tx, err := begin(ctx, db, opts, fn)
 	if err != nil {
-		return classify(err)
-	}
-	if err := fn(Tx{ctx, tx}); err != nil {
-		_ = tx.Rollback() // the transaction is discarded; fn's error is the one that matters
-		return classify(err)
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		// A context cancelled during fn ends the transaction before Commit, which then reports only
@@ -259,13 +295,34 @@ func run(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(Tx) error
 	return nil
 }
 
+// begin starts a transaction and runs fn in it. When fn fails, the transaction is rolled back and
+// fn's error returned with its kind; when fn panics, it is rolled back before the panic goes on, so a
+// caller that recovers is not left with the connection held until its context ends.
+func begin(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(txn) error) (*sql.Tx, error) {
+	tx, err := db.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, classify(err)
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback() // the panic is what the caller must learn of
+			panic(p)
+		}
+	}()
+	if err := fn(txn{ctx, tx}); err != nil {
+		_ = tx.Rollback() // the transaction is discarded; fn's error is the one that matters
+		return nil, classify(err)
+	}
+	return tx, nil
+}
+
 // Close closes the read pool, checkpoints the whole WAL into the database file and truncates it,
 // then closes the writer. A checkpoint that another process's reader blocks is ErrBusy: nothing is
 // lost, the WAL stays and the next open uses it. On a full disk the checkpoint fails with ErrFull,
 // with the same outcome. On a read-only file it cannot run (ErrReadOnly), and nothing was written.
 // The checkpoint waits at most busyTimeout (5 s) for another process's reader. Close runs once;
 // later calls return its result.
-func (s *Store) Close() error {
+func (s *store) Close() error {
 	s.closeOnce.Do(func() {
 		errs := []error{s.read.Close()}
 		var busy, logged, done int

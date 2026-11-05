@@ -130,3 +130,18 @@ func TestErrorFormatterSendsAppErrorsAsJSONText(t *testing.T) {
 		t.Errorf("format(typed nil AppError) = %v", got)
 	}
 }
+
+// The cause of a coded error (a library error, say) reaches neither the AppError the frontend reads
+// nor diagnostics: it can carry full local paths (DATA-03), and only 017's redacting log may write
+// it.
+func TestErrorFormatterWritesNoCauseOfACodedError(t *testing.T) {
+	var diagnostics bytes.Buffer
+	format := ErrorFormatter(&diagnostics)
+	problem := contracts.NewAppError(contracts.CodeLibraryDiskFull, nil).WithCause(errors.New("disk I/O error in /Users/owner/Library/library.sqlite"))
+	if got, want := format(problem), `{"code":"library.diskFull","operationID":null,"torrentID":null,"params":{}}`; got != want {
+		t.Errorf("format(AppError with a cause) = %v, want %s", got, want)
+	}
+	if diagnostics.Len() != 0 {
+		t.Errorf("diagnostics = %q, want nothing", diagnostics.String())
+	}
+}
