@@ -4,17 +4,17 @@ A personal local BitTorrent client for macOS (the owner's own Apple Silicon Mac)
 
 ## Current state
 
-**Stage P1 has started.** There are specifications, a mockup, a plan, a decision register, the **first minimal `.app`** (task 003): a Wails window with a React button that calls a Go method, **one local quality gate** (task 004): `go tool devtool check`, **the Go–TypeScript contract** (task 005): DTOs, errors, idempotent operations and ordering rules, executable in both languages, **own test torrents with a closed local swarm** (task 006) on anacrolix/torrent v1.61.0, and **the engine lifecycle proven on that pin** (task 007): engine contract tests and a separate, temporary **EngineSpike.app** in which React shows a real transfer read through Go's own DTO, binding and event, and **the SQLite driver and durability mode** (task 008): `modernc.org/sqlite` with SQLite 3.53.4, WAL with fully synced commits, proven on real SQLite (failed commits, cancellation, another process's lock, SIGKILL, read-only folders, a full disk); the runtime check shows the bundled SQLite version, and **the engine storage and the rehash rule** (task 009): the payload goes exactly into the chosen folder, the verified-piece marks live in our own SQLite file with a loud failure instead of the engine's silent fallback to memory, and after a restart, a crash, a changed or moved file, or a pulled volume the application believes only what is provably as it left it, and **the upload stop measured** (task 010): upload stops with a confirmation from the engine's own counter while the download continues, the residual a peer still receives is measured, and the engine's stalls after a pause or under load have known causes and measured remedies, and **magnet metadata without payload** (task 011): a magnet's metadata is fetched and verified against its infohash with nothing written and no payload moving, and on confirmation the chosen folder is attached in place, never over a file already there, and metadata that would crash or stall the engine never reaches it: the engine parses only metadata that was checked first. The **macOS Trash and path protection** (task 012) is implemented in Go and tested (payload moved to the Trash with `NSFileManager`, the first cgo; reversible, one result per file, never `rm`; confined to the torrent's own folder with `os.Root`), and task 069 added coverage measurement for native code (cgo/Objective-C) to the gate, so `trash_darwin.m` is measured at 100%. There are no product features (torrents, library) yet.
+**Stage P1 has started.** There are specifications, a mockup, a plan, a decision register, the **first minimal `.app`** (task 003): a Wails window with a React button that calls a Go method, **one local quality gate** (task 004): `go tool devtool check`, **the Go–TypeScript contract** (task 005): DTOs, errors, idempotent operations and ordering rules, executable in both languages, **own test torrents with a closed local swarm** (task 006) on anacrolix/torrent v1.61.0, and **the engine lifecycle proven on that pin** (task 007): engine contract tests and a separate, temporary **EngineSpike.app** in which React shows a real transfer read through Go's own DTO, binding and event, and **the SQLite driver and durability mode** (task 008): `modernc.org/sqlite` with SQLite 3.53.4, WAL with fully synced commits, proven on real SQLite (failed commits, cancellation, another process's lock, SIGKILL, read-only folders, a full disk); the runtime check shows the bundled SQLite version, and **the engine storage and the rehash rule** (task 009): the payload goes exactly into the chosen folder, the verified-piece marks live in our own SQLite file with a loud failure instead of the engine's silent fallback to memory, and after a restart, a crash, a changed or moved file, or a pulled volume the application believes only what is provably as it left it, and **the upload stop measured** (task 010): upload stops with a confirmation from the engine's own counter while the download continues, the residual a peer still receives is measured, and the engine's stalls after a pause or under load have known causes and measured remedies, and **magnet metadata without payload** (task 011): a magnet's metadata is fetched and verified against its infohash with nothing written and no payload moving, and on confirmation the chosen folder is attached in place, never over a file already there, and metadata that would crash or stall the engine never reaches it: the engine parses only metadata that was checked first. The **macOS Trash and path protection** (task 012) is implemented in Go and tested (payload moved to the Trash with `NSFileManager`, the first cgo; reversible, one result per file, never `rm`; confined to the torrent's own folder with `os.Root`), and task 069 added coverage measurement for native code (cgo/Objective-C) to the gate, so `trash_darwin.m` is measured at 100%. **The transfer policy** (task 013) decides in one tested place what each torrent may download and upload and what its card says, and commands for one torrent now run strictly in the order they were accepted, so a slow or late answer never brings back an old state or a removed torrent. **The library** (task 014) exists: the app opens `library.sqlite` (schema 1: torrents, their files, payload records, settings, the operation journal) in its data folder before the window and closes it last; a file of another application or of a newer version is refused unchanged, and a failed migration keeps the old version and every row. **Its repositories** (task 015) store a confirmed import (record, identities, file selection and its operation as one change), the pause, the file selection, the settings and the operation journal; a change is confirmed only after its transaction committed, every library failure has one error code, and the gate proves that no code outside the library reaches SQL. Builds, `wails dev`, workspaces, tests, `/qa` and the gate never open the owner's library. There are no product features (torrents in the window) yet.
 
 | What | State |
 |---|---|
-| Tasks [001](product/tasks/001-scope-and-decision-register.md), [002](product/tasks/002-repository-and-agent-entrypoint.md), [003](product/tasks/003-wails-macos-build-spike.md), [004](product/tasks/004-reproducible-check-commands.md), [005](product/tasks/005-domain-dto-and-bridge-contract.md), [006](product/tasks/006-controlled-torrent-fixtures.md), [007](product/tasks/007-engine-api-lifecycle-spike.md), [008](product/tasks/008-sqlite-driver-durability-spike.md), [009](product/tasks/009-storage-and-completion-spike.md), [010](product/tasks/010-upload-stop-and-pause-spike.md), [011](product/tasks/011-magnet-metadata-storage-spike.md), [012](product/tasks/012-macos-trash-and-path-spike.md), [069](product/tasks/069-native-code-coverage-gate.md) | see [navigation](product/tasks/README.md#navigation-of-all-tasks) |
-| **Next tasks** | [013 — transfer policy](product/tasks/013-transfer-policy-state-machine.md), [014 — SQLite schema and migrations](product/tasks/014-sqlite-schema-migrations.md), [017 — local diagnostics](product/tasks/017-local-diagnostics-privacy.md), [035 — React bridge and resync](product/tasks/035-react-bridge-state-resync.md) |
-| Coverage of our own code | 100% Go (statements, raw counters, unit tests + `.app` run) and 100% TS (4 metrics per file), enforced by `go tool devtool check` — [report 004](docs/verification/004-reproducible-check-commands.md), [report 005](docs/verification/005-domain-dto-and-bridge-contract.md), [report 006](docs/verification/006-controlled-torrent-fixtures.md), [report 007](docs/verification/007-engine-api-lifecycle-spike.md), [report 008](docs/verification/008-sqlite-driver-durability-spike.md), [report 009](docs/verification/009-storage-and-completion-spike.md), [report 010](docs/verification/010-upload-stop-and-pause-spike.md), [report 011](docs/verification/011-magnet-metadata-storage-spike.md), [report 012](docs/verification/012-macos-trash-and-path-spike.md), [report 069](docs/verification/069-native-code-coverage-gate.md) |
+| Tasks [001](product/tasks/001-scope-and-decision-register.md), [002](product/tasks/002-repository-and-agent-entrypoint.md), [003](product/tasks/003-wails-macos-build-spike.md), [004](product/tasks/004-reproducible-check-commands.md), [005](product/tasks/005-domain-dto-and-bridge-contract.md), [006](product/tasks/006-controlled-torrent-fixtures.md), [007](product/tasks/007-engine-api-lifecycle-spike.md), [008](product/tasks/008-sqlite-driver-durability-spike.md), [009](product/tasks/009-storage-and-completion-spike.md), [010](product/tasks/010-upload-stop-and-pause-spike.md), [011](product/tasks/011-magnet-metadata-storage-spike.md), [012](product/tasks/012-macos-trash-and-path-spike.md), [069](product/tasks/069-native-code-coverage-gate.md), [013](product/tasks/013-transfer-policy-state-machine.md), [014](product/tasks/014-sqlite-schema-migrations.md), [015](product/tasks/015-transactional-repositories.md) | see [navigation](product/tasks/README.md#navigation-of-all-tasks) |
+| **Next tasks** | [016 — migration backup and corruption recovery](product/tasks/016-migration-backup-corruption-recovery.md), [017 — local diagnostics](product/tasks/017-local-diagnostics-privacy.md), [018 — torrent engine adapter](product/tasks/018-torrent-engine-adapter.md), [035 — React bridge and resync](product/tasks/035-react-bridge-state-resync.md) |
+| Coverage of our own code | 100% Go (statements, raw counters, unit tests + `.app` run) and 100% TS (4 metrics per file), enforced by `go tool devtool check` — [report 004](docs/verification/004-reproducible-check-commands.md), [report 005](docs/verification/005-domain-dto-and-bridge-contract.md), [report 006](docs/verification/006-controlled-torrent-fixtures.md), [report 007](docs/verification/007-engine-api-lifecycle-spike.md), [report 008](docs/verification/008-sqlite-driver-durability-spike.md), [report 009](docs/verification/009-storage-and-completion-spike.md), [report 010](docs/verification/010-upload-stop-and-pause-spike.md), [report 011](docs/verification/011-magnet-metadata-storage-spike.md), [report 012](docs/verification/012-macos-trash-and-path-spike.md), [report 069](docs/verification/069-native-code-coverage-gate.md), [report 013](docs/verification/013-transfer-policy-state-machine.md), [report 014](docs/verification/014-sqlite-schema-migrations.md), [report 015](docs/verification/015-transactional-repositories.md) |
 
 ## Stack
 
-React 19 + TypeScript 7 (strict) and Vite 8 · Wails v2.16.0 (system WebView) · Go 1.27.2 · [anacrolix/torrent](https://github.com/anacrolix/torrent) (version pinned by 007) · SQLite through a repository: modernc.org/sqlite v1.60.1, SQLite 3.53.4 ([sqlite-driver](docs/decisions/sqlite-driver.md)). Exact versions, the **update policy** (latest stable version at least 14 days old; Go/Node patch releases — immediately) and reasons — [toolchain-versions](docs/decisions/toolchain-versions.md); macOS target and bundle ID — [macos-target](docs/decisions/macos-target.md).
+React 19 + TypeScript 7 (strict) and Vite 8 · Wails v2.16.0 (system WebView) · Go 1.27.3 · [anacrolix/torrent](https://github.com/anacrolix/torrent) (version pinned by 007) · SQLite through a repository: modernc.org/sqlite v1.60.1, SQLite 3.53.4 ([sqlite-driver](docs/decisions/sqlite-driver.md)). Exact versions, the **update policy** (latest stable version at least 14 days old; Go/Node patch releases — immediately) and reasons — [toolchain-versions](docs/decisions/toolchain-versions.md); macOS target and bundle ID — [macos-target](docs/decisions/macos-target.md).
 
 ## Documents
 
@@ -45,19 +45,23 @@ product/                      everything about the product concept and plan:
   ANACROLIX_TORRENT_TECHNICAL_RESEARCH.md, MOCKUP.html   specifications and mockup
   tasks/                      plan and 68 numbered tasks
   archive/                    historical materials, read-only
-main.go, main_test.go         Wails entry point: embedded frontend/dist, run(start, stderr, ledger)
-go.mod, go.sum                Go 1.27.2, Wails v2.16.0 (library + CLI as go tool), anacrolix/torrent v1.61.0 (tests and the engine spike; not the product)
+main.go, main_test.go         Wails entry point: embedded frontend/dist, run(system, ledger): SQLite version, data folder, library, window, close
+buildmode_*.go                the build modes: application, wails dev (needs OCTOPUS_DATA_DIR), bindings generator (opens nothing)
+go.mod, go.sum                Go 1.27.3, Wails v2.16.0 (library + CLI as go tool), anacrolix/torrent v1.61.0 (tests and the engine spike; not the product)
 wails.json                    Wails configuration (npm ci, npm run build)
 internal/app/                 Wails facade (AppAPI): GetRuntimeInfo, GetLibrarySnapshot, GetOperation, ErrorFormatter
 internal/app/contracts/       bridge DTOs, AppError, strict requests, shared JSON examples (testdata/)
-internal/app/operations/      idempotent operation ledger
+internal/app/operations/      idempotent operation ledger; ordering keys per torrent (task 013)
+internal/commandorder/        per-key command order: commands for one torrent run in acceptance order (task 013)
+internal/transfer/            transfer policy: permissions, display status, policy registry and apply step (task 013; linked from 025)
 internal/torrentengine/       engine contract tests on the pinned version (the adapter comes in 018)
 internal/torrentengine/testutil/  fixture: own v1/v2/hybrid test torrents (testdata/); swarm: closed loopback swarm
 internal/torrentengine/filestore/   engine storage: guard, marks completion, session record (task 009; the adapter comes in 018)
 internal/torrentengine/classicio/   restarts the process with classic file IO (task 009)
 internal/files/               the rehash rule and file fingerprints (task 009)
 internal/testutil/volume/     small disk images for tests: full, pulled, other formats (tasks 008, 009)
-internal/library/              SQLite: Open/Write/Read, durability settings, error kinds (task 008), piece-completion marks (009); schema from 014
+internal/library/              SQLite: durability settings, Write/Read, error kinds (task 008), piece-completion marks (009); schemas, migrations, OpenLibrary and schema 1 (014); repositories and the error mapping (015)
+internal/datadir/              the data folder: default, OCTOPUS_DATA_DIR override, validation (task 014)
 cmd/engine-spike/, internal/enginespike/   temporary EngineSpike.app (task 007, deleted by 034)
 cmd/devtool/, internal/devtool/   quality gate, plan and doc checks, workspace setup/run, run as go tool devtool
 .claude/, .codex/             agents, commands, hook and action instructions for Claude Code and Codex
@@ -72,7 +76,7 @@ build/darwin/, build/appicon.png   Info.plist (bundle ID, minimum macOS), icon
 docs/                         policy, ADRs, evidence, and docs by domain: app, bridge, frontend, tooling, development
 ```
 
-**Not created yet** — from [architecture §3](product/APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first): the engine adapter in `internal/torrentengine/` (only its contract tests and `testutil/` exist), the library's schema and repositories (014/015), `internal/files/`, `internal/automation/`, `internal/platform/`, `internal/diagnostics/`, `frontend/src/{state,i18n,styles}/`.
+**Not created yet** — from [architecture §3](product/APPLICATION_ARCHITECTURE.md#3-repository-structure-for-ai-first): the engine adapter in `internal/torrentengine/` (only its contract tests and `testutil/` exist), `internal/automation/`, `internal/diagnostics/`, `frontend/src/{state,i18n,styles}/`.
 
 Tracing a scenario from the UI to Go: [desktop shell](docs/app/desktop-shell.md) — the button in `frontend/src/features/runtime-check` → `frontend/src/bridge/runtimeInfo.ts` → `frontend/wailsjs/go/app/App.js` → `internal/app.App.GetRuntimeInfo`. For a future requirement: [TR-01](product/PROJECT_REQUIREMENTS.md#22-downloading-and-seeding) → [matrix](product/tasks/README.md#full-coverage-of-the-80-requirements) → [025](product/tasks/025-pause-resume-application.md) → `internal/app` → `internal/torrentengine` / `internal/library`.
 
@@ -84,7 +88,7 @@ M4 / macOS 27.0.1 in tasks [003](docs/verification/003-wails-macos-build-spike.m
 path.
 
 **Development prerequisites** (the finished `.app` does not need them): Xcode Command Line Tools
-(`xcode-select --install`), Go ≥ 1.27 (`brew install go`; the exact 1.27.2 is pulled in by `go.mod`),
+(`xcode-select --install`), Go ≥ 1.27 (`brew install go`; the exact 1.27.3 is pulled in by `go.mod`),
 Node.js ≥ 22.12 with npm ≥ 11.20 (verified 26.11.1 / 11.20.0; `frontend/.npmrc` sets
 `min-release-age=14`, so npm will not install a version younger than 14 days). A global Wails CLI is
 **not needed**: `go tool wails`, `go tool govulncheck` and `go tool devtool` take their versions from
@@ -102,7 +106,7 @@ go tool devtool check deps       # only the network steps: release age, npm audi
 It runs, in order and never stopping early: `npm ci`, npm's effective cooldown, Go's effective module
 settings (default proxy and checksum database, no exemptions), typecheck, lint
 (Oxlint, type-aware), frontend tests with an **independent** 100% inventory check (all four metrics,
-every own file by raw counts), frontend build, `gofmt`, `go vet`, regenerated Wails bindings
+every own file by raw counts), frontend build, `gofmt`, `go vet` (also with `-tags dev` and `-tags bindings`), regenerated Wails bindings
 compared by content, `go test -race` with raw counters, an **instrumented `.app` run** (it opens an
 OctopusTorrent window for a few seconds and quits it through an Apple Event, so `main()` is covered),
 the merged Go profile with no zero block and a complete inventory, **native (cgo/Objective-C) coverage** (clang source coverage of every own `.m`/`.c`, 100% of regions), escape hatches (ignore directives,
@@ -110,7 +114,7 @@ lint disables, `@ts-` comments, `//nolint`, skipped or conditional tests), shell
 hand over to `devtool`, the release build,
 documentation links, the task plan, the release age of every locked npm version and Go module (and
 that each locked npm artifact is the registry's: `resolved` and `integrity`), `npm audit`, `govulncheck`, a report of updates out of
-quarantine, and a check that no file changed during the run. Exit 0 only on `GATE PASSED` (or
+quarantine, a check that no file changed during the run, and a check that the owner's data folder did not change and no build opened a library (every Wails command and `.app` run gets its own `OCTOPUS_DATA_DIR`). Exit 0 only on `GATE PASSED` (or
 `GATE INCOMPLETE` in a partial mode). Details: [quality gate](docs/tooling/quality-gate.md).
 
 | The full gate needs | Why | Without it |
@@ -129,7 +133,7 @@ engine (tasks 007, 018) and UI tests through the test bridge (task 035). Manual 
 ```sh
 go test -race ./internal/app -run TestGetRuntimeInfoReportsCompiledGoRuntime -v
 go test -race -count=1 ./internal/torrentengine/...   # test torrents, the loopback swarm, engine contract, storage, upload-stop and magnet tests, about 100 s
-go test -race -count=1 ./internal/library             # real SQLite: durability, locks, read-only, a full disk image, about 8 s
+go test -race -count=1 ./internal/library             # real SQLite: durability, locks, read-only, a full disk image, schemas and migrations, about 31 s
 npm --prefix frontend test -- src/features/runtime-check/RuntimeCheck.test.tsx
 npm --prefix frontend run lint -- src/features/runtime-check/RuntimeCheck.tsx
 ```
@@ -140,7 +144,7 @@ npm --prefix frontend run lint -- src/features/runtime-check/RuntimeCheck.tsx
 go tool wails doctor                          # environment check
 go tool wails generate module                 # bindings after a Go facade change (committed)
 go tool wails build -clean -trimpath          # release build → build/bin/OctopusTorrent.app (arm64, ad-hoc)
-go tool wails dev                             # development with frontend hot reload
+OCTOPUS_DATA_DIR="$PWD/build/workspace-data" go tool wails dev   # development with hot reload; refuses to start without its own data folder
 go tool devtool check-docs                    # documentation links and agent-instruction pointers
 go tool devtool check-plan                    # the task plan; plan-nav regenerates its navigation table
 go tool devtool plan-nav

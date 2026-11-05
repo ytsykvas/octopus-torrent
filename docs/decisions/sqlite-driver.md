@@ -29,8 +29,10 @@ Two constraints shape the answer:
   - It bundles **SQLite 3.53.4**.
   - It is C transpiled to Go, so it adds no C code and no dynamic library.
   - It is used only through `database/sql`, inside `internal/library`.
-- **Every database is opened by `library.Open(ctx, absolutePath)`** with these settings. Each is read
-  back by a test on every pooled connection:
+- **Every database is opened with these settings** — since 014 through its schema, by
+  `library.OpenLibrary` or `library.OpenCompletion` ([library-schema-and-data-folder](library-schema-and-data-folder.md));
+  008's exported `library.Open` is gone. Each setting is read back by a test on every pooled
+  connection:
 
   | Setting | Value | Why |
   |---|---|---|
@@ -49,19 +51,27 @@ Two constraints shape the answer:
     of commands for one torrent (STACK-03) comes from the service's per-torrent queue (013/025), not
     from the store.
   - **Readers:** a separate pool of 4 read-only connections. Each `Read` is one consistent snapshot.
-  - **Checkpoints:** only the writer checkpoints, automatically and with `wal_checkpoint(TRUNCATE)`
-    at `Close`. This is a structural guard against the WAL-reset race, in addition to the fixed
-    version.
-  - **No network or engine wait inside a transaction.** 015 enforces this for repositories.
+  - **Checkpoints:** only a connection that writes checkpoints: the writer, automatically and with
+    `wal_checkpoint(TRUNCATE)` at `Close`, and (since 014) the connection that opened and migrated the
+    file, when it closes as the file's last one. This is a structural guard against the WAL-reset race,
+    in addition to the fixed version.
+  - **No network or engine wait inside a transaction.** Since 015 this is structural: each
+    repository method is one transaction over prepared values and takes no callback
+    ([library-repositories](library-repositories.md)).
 - **API** (014/015 build on it, and add schema and repositories):
-  - `Write(ctx, fn func(Tx) error)` and `Read(ctx, fn)`.
-  - `library.Tx` runs every statement under the operation's context, so a cancel interrupts the
+  - `Write(ctx, fn func(Tx) error)` and `Read(ctx, fn)`. Since 015 the runner is unexported
+    (`store`, `txn`), so no code outside `internal/library` can run a statement, and the gate's
+    `product isolation` step fails on any other own package that imports SQL.
+  - `library.Tx` (`txn` since 015) runs every statement under the operation's context, so a cancel interrupts the
     running statement. database/sql's context-free methods would let it run to the end; the spike
     hung on exactly that.
   - `Write` returns nil only when the commit succeeded. An error before `COMMIT`, or a busy, full or
-    constraint error at `COMMIT`, keeps nothing. An I/O error from `COMMIT` (`SQLITE_IOERR`, not
-    classified yet; 015 maps it) has an unknown outcome: the next open may recover that transaction,
-    so the caller reads the state again. An error of
+    constraint error at `COMMIT`, keeps nothing. Any other error from `COMMIT` (since 015: `ErrIO`
+    for `SQLITE_IOERR`) is also `ErrOutcomeUnknown`: the next open may recover that transaction, so
+    the state is known again only after it, not by reading again now. A cancel plus a failed
+    `COMMIT` was `ErrCanceled` in 008; since 015 `Write` reports `ErrCanceled` only when database/sql
+    did not run `COMMIT`, and a `COMMIT` that ran by its own result
+    ([the rule](library-repositories.md#what-a-failed-commit-means-storewrite)). An error of
     `fn`'s own comes back unchanged; one that SQLite or the context caused comes back with its kind,
     wrapping the original.
   - A `Tx` is valid only inside `fn`. Opening a connection runs its PRAGMAs without a context,
@@ -70,7 +80,9 @@ Two constraints shape the answer:
   `ErrBusy`, `ErrFull`, `ErrCannotOpen`, `ErrReadOnly`, `ErrCanceled`, `ErrConstraint`,
   `ErrCorrupt` (not a database, or a damaged page), and `ErrReplaced`, which is not SQLite's: the path no
   longer names the file `Open` opened. Each wraps the driver's error, so SQLite's own
-  message is kept for diagnostics. Mapping to `AppError` belongs to 015.
+  message is kept for diagnostics. Since 015 also `ErrIO` (`SQLITE_IOERR`) and
+  `ErrOutcomeUnknown`; the one mapping to `AppError` is `library.Problem`
+  ([library-repositories](library-repositories.md#one-mapping-of-errors-to-apperror)).
 - **Never reset a database.**
   - `Open` takes only an absolute, clean path (no `.`/`..`, no doubled separator, no NUL byte).
   - It creates the file itself, `0600` and with `O_EXCL`, only where nothing exists, so an existing file
@@ -80,23 +92,26 @@ Two constraints shape the answer:
     would delete that WAL, and with it the commits.
   - `Write` and `Read` first check that the path still names the file `Open` opened (device and
     inode). Otherwise the writer would commit into a deleted inode and report success, and a new
-    reader would find another file; both get `ErrReplaced`.
+    reader would find another file; both get `ErrReplaced`. Since 015 `Write` checks again after a
+    successful `COMMIT`: a file deleted, moved or replaced while the transaction ran is
+    `ErrOutcomeUnknown` + `ErrReplaced`, never nil.
   - Every refusal leaves the file's bytes and inode unchanged: a file that is not a database, a
     read-only folder or file, a full disk, an empty file beside a WAL. Tests prove each case.
 - **The data directory contract.** It is recorded here and in
   [architecture §6](../../product/APPLICATION_ARCHITECTURE.md#6-sqlite-and-restore). Its first reader,
-  014 or 028, implements it.
+  014, implemented it ([library-schema-and-data-folder](library-schema-and-data-folder.md#the-data-folder-internaldatadir)):
+  `internal/datadir`, the start in `main.go`, `workspace run`, the gate's folders.
   - **Default:** `~/Library/Application Support/dev.tsykvas.octopustorrent/library.sqlite`. The
     folder is named by the bundle ID.
   - **Override:** `OCTOPUS_DATA_DIR`. Go validates the folder: absolute and clean, symlinks resolved,
-    a directory owned by the current user and not writable by group or others, not inside a torrent
+    a directory owned by the current user and not writable by group or others (014: not open to them at all), not inside a torrent
     save folder. The application creates it `0700`. The library is
     `$OCTOPUS_DATA_DIR/library.sqlite`.
   - **Who sets the override:** `go tool devtool workspace run` sets it per workspace, the gate's
     `.app` run sets it to a temporary folder, and tests always use `t.TempDir()`. A workspace, a test
     or the gate therefore never opens the owner's library.
-  - **What 008 does not do:** it gives the product no data directory. The product opens only
-    `:memory:`, to report its SQLite version.
+  - **What 008 did not do:** give the product a data directory; it opened only `:memory:`, to report
+    its SQLite version. Since 014 the application opens `library.sqlite` there before its window.
 
 ## Alternatives considered
 
@@ -148,22 +163,22 @@ Two constraints shape the answer:
     v1.0.0. All are older than 14 days.
   - The product binary now links the driver.
 - **One SQLite engine in the product.** The engine's own C SQLite (crawshaw, 3.49.1) is not linked:
-  [009](engine-storage.md) keeps the verified-piece marks in our own file, opened by `library.Open`
-  (`<dataDir>/piece-completion.sqlite`), and the product builds with `nosqlite,noboltdb`.
+  [009](engine-storage.md) keeps the verified-piece marks in our own file, opened by
+  `library.OpenCompletion` (`<dataDir>/piece-completion.sqlite`), and the product builds with
+  `nosqlite,noboltdb`.
   - **Correction (009):** this ADR first said the engine opens `.torrent.db` in the default rollback
     journal, which the WAL-reset bug does not affect. That is wrong: crawshaw opens with
     `OpenFlagsDefault`, which includes WAL (`crawshaw/openflags.go:52-54`, `sqlite.go:133,173-185`), and
     3.49.1 is inside the bug's range. It does not matter now, because that store is not used.
   - If a second SQLite engine ever returns, the two must never open the same file.
-- **The gate's data-directory duty**, from [quality-gate](quality-gate.md#consequences), moves to the
-  first reader of the data directory, 014 or 028. It now has a concrete form: `open --env
-  OCTOPUS_DATA_DIR=<temporary folder>`, and the gate fails if the folder stays empty while the
-  default folder changes.
+- **The gate's data-directory duty**, from [quality-gate](quality-gate.md#consequences), was done by
+  014: every `.app` run gets `open --env OCTOPUS_DATA_DIR=<its own folder>`, the product must leave its
+  library there, and the gate fails if the owner's default folder changes.
 - **`fullfsync` is a deliberate cost.** Bulk writes must batch rows into one transaction (014/015),
   not commit row by row. 009 measured a commit at 4–11 ms whatever its size, so the marks store writes
   batches of up to 256 rows from one goroutine.
-- **A second database through `library.Open`:** the marks file `piece-completion.sqlite` (table
-  `piece_completion`, `user_version` 1), opened by `library.OpenCompletion`.
+- **A second database:** the marks file `piece-completion.sqlite` (table `piece_completion`), opened
+  by `library.OpenCompletion`, under 014's migration policy since then.
 - **Close may report `ErrBusy`** while another process reads the WAL, and `ErrFull` on a full disk.
   In both cases nothing is lost: the WAL stays and the next `Open` uses it.
 - **016 builds backup on what 008 verified:**

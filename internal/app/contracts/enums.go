@@ -43,6 +43,9 @@ const (
 // ImportSources lists every import source.
 var ImportSources = []ImportSource{SourceFile, SourceFinder, SourceDrop, SourceMagnet, SourceURL, SourceWatchFolder}
 
+// Valid reports whether s is one of the import sources.
+func (s ImportSource) Valid() bool { return slices.Contains(ImportSources, s) }
+
 // ImportState is the state of an import preview before confirmation.
 type ImportState string
 
@@ -114,6 +117,10 @@ var OperationKinds = []OperationKind{
 	OperationPauseTorrents, OperationResumeTorrents, OperationSetFilesWanted, OperationConfirmImport,
 	OperationRemoveTorrents, OperationUpdateSettings,
 }
+
+// Valid reports whether k is one of the operation kinds. The library checks a kind with it before it
+// writes, because SQLite checks only that a kind is not empty (task 014, owner decision).
+func (k OperationKind) Valid() bool { return slices.Contains(OperationKinds, k) }
 
 // OperationState is where an operation is in its lifecycle. States only move forward:
 // accepted → running → one of succeeded, failed, cancelled.

@@ -110,7 +110,8 @@ UI validated (STACK-01). The TypeScript encoders write exactly the keys of each 
   only when nothing took effect); a finished one keeps its final state. A mutation that can be
   partly done — removing files of several torrents (031/032), confirming an import (023) — is not
   cancellable once it runs: it finishes, and a partial result is `failed` with a code whose params
-  list what was done. Those tasks add the codes.
+  list what was done. Those tasks add the codes. Pause, resume, setFilesWanted and updateSettings
+  are not cancellable once running either (013): only quit cuts their apply short.
 - The ledger (`internal/app/operations`) is in memory, one per run, and never evicts (an evicted
   ID would let a retry run again); persistence of import and deletion operations is the Operations
   table of 014. It owns every operation goroutine: Wails `OnShutdown` cancels them and waits at
@@ -118,13 +119,14 @@ UI validated (STACK-01). The TypeScript encoders write exactly the keys of each 
 - `operation.notFound` carries the current `runtimeID`. From the runtime that accepted the
   operation it means "never accepted" (resending with the same ID is safe); from another runtime
   Go restarted and the outcome is **unknown**: read the full state, never resend because of it.
-- **Order (STACK-03).** The ledger itself does not order work: every accepted operation gets its own
-  goroutine, so acceptance order is lost once `Start` returns, and serializing inside the mutation
-  (a per-torrent lock) could still let a later command win. Commands for one torrent must be
-  ordered **at acceptance**: task 013 extends `Start` with ordering keys (the sorted torrent IDs of
-  the request; an operation runs when the previous one holding any of its keys has finished; keys
-  are taken in sorted order, so multi-torrent commands cannot deadlock). This is a planned change of
-  the ledger API, owned by 013.
+- **Order (STACK-03).** Serializing inside the mutation (a per-torrent lock) could let a later
+  command win, so commands for one torrent are ordered **at acceptance** (implemented in 013,
+  [transfer-status-model](transfer-status-model.md#the-order-of-commands-commandorder)):
+  `Start(id, kind, fingerprint, keys, mutation)` joins the operation to the queue of every key
+  (`commandorder.Torrents(torrentIDs)`, or `commandorder.Settings`) at once; it runs when every
+  operation accepted earlier with one of its keys has finished. Joins form one total order, so
+  multi-torrent commands cannot deadlock; a key set mixing the settings key and torrent keys is
+  refused.
 - **One acceptance path.** The first command (024/025) adds a single `accept(kind, request,
   mutation)` that validates the request, takes its operation ID from the request (an
   `operationID()` method on `Request`), computes the fingerprint and starts the mutation; facade
@@ -150,6 +152,17 @@ UI validated (STACK-01). The TypeScript encoders write exactly the keys of each 
 | `operation.notFound` | Go | `runtimeID` |
 | `operation.cancelled` | Go | — |
 | `internal.unexpected` | Go (any error without a code) | — |
+| `torrent.notFound` | Go, `library.Problem` (015): the library has no such torrent | — (`torrentID` set) |
+| `torrent.duplicate` | Go, `library.Problem` (015): the library already has a torrent with this infohash; 021 may refine it | — (`torrentID` = the existing record) |
+| `library.busy` | Go, `library.Problem` (015): another connection holds the library's lock | — |
+| `library.diskFull` | Go, `library.Problem` (015) | — |
+| `library.readOnly` | Go, `library.Problem` (015) | — |
+| `library.unavailable` | Go, `library.Problem` (015): the library cannot be opened, was deleted, moved or replaced, or a disk I/O error | — |
+| `library.damaged` | Go, `library.Problem` (015) | — |
+| `library.outcomeUnknown` | Go, `library.Problem` (015): a commit failed after it may have written; the next start decides | — |
+| `library.newerVersion` | Go, `library.Problem` (015): written by a newer version of the application | — |
+| `library.notALibrary` | Go, `library.Problem` (015): another application's file, or another purpose | — |
+| `library.migrationFailed` | Go, `library.Problem` (015): the old version and every row were kept | — |
 | `bridge.callFailed` | TypeScript (the call failed before Go answered) | `detail` (diagnostics only) |
 | `contract.invalidDto` | TypeScript (a Go answer broke the contract) | `path`, `reason` |
 
@@ -157,7 +170,9 @@ Transport: the Wails v2.16 JavaScript runtime rejects a failed call with `new Er
 (`internal/frontend/runtime/desktop/calls.js:181`), so an object would arrive as
 `"[object Object]"`. `options.App.ErrorFormatter` (`app.ErrorFormatter(stderr)`) therefore returns
 the **JSON text** of the `AppError`, and writes the cause of any error without a code to stderr
-(local diagnostics take over in 017), never to the UI; the bridge parses `Error.message`, and any other rejection becomes
+(local diagnostics take over in 017), never to the UI. The cause attached to a coded error (since
+015, `AppError.WithCause`) is never encoded and never written to stderr: it can carry full local
+paths, which only 017's redacting log may write (DATA-03); the bridge parses `Error.message`, and any other rejection becomes
 `bridge.callFailed`. `describeError` maps a known code to the message key `error.<code>` with its
 params and an English fallback; an unknown code gets `error.unknown` with the code (texts move to
 the dictionaries in 041). Each task that adds a code adds it to this table, to `contracts/errors.go`,

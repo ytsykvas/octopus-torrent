@@ -23,6 +23,12 @@ sequence that triggers it.
 - Deletion goes to the macOS Trash through the platform adapter, only for the confirmed list, and a
   partial failure reports what remained (DEL-04).
 - Temporary files are created with restrictive permissions and removed on every path.
+- Only the owner's app opens the owner's data folder: every new launcher (a gate step, a script, an
+  agent, a test, a Wails command) passes its own `OCTOPUS_DATA_DIR`, and a database opens only
+  through `library.OpenLibrary`/`OpenCompletion` (the schema check before any write). The gate's
+  `data folders` step notices a change only after the fact.
+- A coded error's cause (`AppError.Unwrap`) written to stderr, a log or the UI: it can carry full
+  local paths, and only 017's redacting log may write it (DATA-03).
 
 ### The Wails boundary
 

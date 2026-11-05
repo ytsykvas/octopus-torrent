@@ -222,3 +222,72 @@ func TestOnlyTheLastOperationStatesAreFinished(t *testing.T) {
 		}
 	}
 }
+
+// The cause of an error stays with it for diagnostics and errors.Is, and never crosses the bridge:
+// it may name local paths or carry SQLite's own message.
+func TestAnAppErrorKeepsItsCauseOutOfItsJSON(t *testing.T) {
+	cause := errors.New("disk I/O error in /Users/someone/library.sqlite")
+	e := NewAppError(CodeLibraryDiskFull, nil).WithCause(cause)
+	if !errors.Is(e, cause) || errors.Unwrap(e) != cause {
+		t.Errorf("errors.Unwrap(%v) = %v, want the cause", e, errors.Unwrap(e))
+	}
+	encoded, _ := json.Marshal(e)
+	if string(encoded) != `{"code":"library.diskFull","operationID":null,"torrentID":null,"params":{}}` {
+		t.Errorf("AppError JSON with a cause = %s", encoded)
+	}
+	if errors.Unwrap(NewAppError(CodeInternalUnexpected, nil)) != nil {
+		t.Error("an AppError without a cause unwraps to something")
+	}
+}
+
+// Settings that Go builds (the library reads them back) are checked by the same rules as a request's,
+// with field names of their own.
+func TestSettingsAreValidatedOnTheirOwn(t *testing.T) {
+	path, relative := "/Users/owner/Downloads", "Downloads"
+	one, zero := BytesPerSecond(1), BytesPerSecond(0)
+	valid := Settings{DefaultSavePath: &path, Theme: ThemeDark, Language: "uk", DownloadLimit: &one, UploadLimit: &one}
+	if p := valid.Validate(); p != nil {
+		t.Errorf("Validate(%+v) = %v", valid, p)
+	}
+	for field, change := range map[string]func(*Settings){
+		"defaultSavePath": func(s *Settings) { s.DefaultSavePath = &relative },
+		"theme":           func(s *Settings) { s.Theme = "sepia" },
+		"language":        func(s *Settings) { s.Language = "ru" },
+		"downloadLimit":   func(s *Settings) { s.DownloadLimit = &zero },
+		"uploadLimit":     func(s *Settings) { s.UploadLimit = &zero },
+	} {
+		s := valid
+		change(&s)
+		if p := s.Validate(); p == nil || p.Code != CodeRequestInvalid || p.Params["field"] != field {
+			t.Errorf("Validate with a bad %s = %v", field, p)
+		}
+	}
+}
+
+func TestAFolderPathIsCheckedForAnyField(t *testing.T) {
+	if p := CheckFolderPath("savePath", "/Volumes/Data/Torrents"); p != nil {
+		t.Errorf("CheckFolderPath(a clean absolute folder) = %v", p)
+	}
+	if p := CheckFolderPath("savePath", "/"); p == nil || p.Params["field"] != "savePath" || p.Params["reason"] != ReasonFormat {
+		t.Errorf("CheckFolderPath(\"/\") = %v", p)
+	}
+}
+
+func TestImportSourcesAndOperationKindsKnowTheirValues(t *testing.T) {
+	for _, s := range ImportSources {
+		if !s.Valid() {
+			t.Errorf("%q.Valid() = false", s)
+		}
+	}
+	for _, k := range OperationKinds {
+		if !k.Valid() {
+			t.Errorf("%q.Valid() = false", k)
+		}
+	}
+	if ImportSource("email").Valid() || ImportSource("").Valid() {
+		t.Error("an import source outside the vocabulary is valid")
+	}
+	if OperationKind("relocateData").Valid() || OperationKind("").Valid() {
+		t.Error("an operation kind outside the vocabulary is valid")
+	}
+}

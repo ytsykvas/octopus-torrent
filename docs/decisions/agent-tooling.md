@@ -116,5 +116,6 @@ Claude Code. The removal was verified by a probe that the hook no longer interce
   and the release-age check in `internal/devtool` ([quality-gate](quality-gate.md)); `/check` runs it.
 - Every workspace (and every test) gets its own library location, never the owner's real library.
   [008](../../product/tasks/008-sqlite-driver-durability-spike.md) fixed the contract
-  ([sqlite-driver](sqlite-driver.md)): `OCTOPUS_DATA_DIR`, which `workspace run` will set per
-  workspace; the first task that reads the data directory (014 or 028) implements both sides.
+  ([sqlite-driver](sqlite-driver.md)): `OCTOPUS_DATA_DIR`. 014 implemented both sides: `workspace
+  run` sets `<worktree>/build/workspace-data` (replacing an inherited value), and the development build
+  refuses to start without the variable ([library-schema-and-data-folder](library-schema-and-data-folder.md)).

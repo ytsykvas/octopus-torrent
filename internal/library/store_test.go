@@ -53,12 +53,15 @@ func TestEveryConnectionHasTheDurabilitySettings(t *testing.T) {
 	}
 }
 
+// deferredKey is rowsSchema with a foreign key that only COMMIT checks.
+var deferredKey = with(rowsSchema, `CREATE TABLE parent(id INTEGER PRIMARY KEY);
+	CREATE TABLE child(id INTEGER PRIMARY KEY, parent INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)`)
+
 func TestAFailedCommitIsAnErrorAndKeepsNothing(t *testing.T) {
-	s, path := withTable(t)
-	must(t, s, "CREATE TABLE parent(id INTEGER PRIMARY KEY)")
-	must(t, s, "CREATE TABLE child(id INTEGER PRIMARY KEY, parent INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)")
+	path := filepath.Join(t.TempDir(), "library.sqlite")
+	s := openWith(t, path, defaults, deferredKey)
 	// The deferred key is only checked by COMMIT: every statement succeeds, the commit fails.
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		if _, err := tx.Exec("INSERT INTO rows(n) VALUES (1)"); err != nil {
 			return err
 		}
@@ -77,7 +80,7 @@ func TestAFailedCommitIsAnErrorAndKeepsNothing(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, openStore(t, path)); n != 0 {
+	if n := count(t, openWith(t, path, defaults, deferredKey)); n != 0 {
 		t.Fatalf("after a failed commit and a reopen, %d rows exist, want 0", n)
 	}
 }
@@ -87,7 +90,7 @@ func TestACancelledReadEndsPromptlyAndTheConnectionStaysUsable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	err := s.Read(ctx, func(tx Tx) error {
+	err := s.Read(ctx, func(tx txn) error {
 		var n int
 		return tx.QueryRow("WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c) SELECT COUNT(*) FROM c").Scan(&n)
 	})
@@ -105,7 +108,7 @@ func TestACancelledReadEndsPromptlyAndTheConnectionStaysUsable(t *testing.T) {
 func TestACancelledWriteCommitsNothing(t *testing.T) {
 	s, _ := withTable(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	err := s.Write(ctx, func(tx Tx) error {
+	err := s.Write(ctx, func(tx txn) error {
 		if _, err := tx.Exec("INSERT INTO rows(n) VALUES (1)"); err != nil {
 			return err
 		}
@@ -129,7 +132,7 @@ func TestACancelledContextIsRefusedBeforeTheTransaction(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	called := false
-	err := s.Write(ctx, func(Tx) error { called = true; return nil })
+	err := s.Write(ctx, func(txn) error { called = true; return nil })
 	if !errors.Is(err, ErrCanceled) || called {
 		t.Fatalf("Write(cancelled) = %v, fn called %v; want ErrCanceled without a call", err, called)
 	}
@@ -142,7 +145,7 @@ func TestALockedDatabaseIsBusyAfterTheTimeout(t *testing.T) {
 	held, release := make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- other.Write(context.Background(), func(tx Tx) error {
+		done <- other.Write(context.Background(), func(tx txn) error {
 			close(held)
 			<-release
 			_, err := tx.Exec("INSERT INTO rows(n) VALUES (1)")
@@ -151,7 +154,7 @@ func TestALockedDatabaseIsBusyAfterTheTimeout(t *testing.T) {
 	}()
 	<-held
 	start := time.Now()
-	err := s.Write(deadline(t, 5*time.Second), func(Tx) error { return nil })
+	err := s.Write(deadline(t, 5*time.Second), func(txn) error { return nil })
 	took := time.Since(start)
 	close(release)
 	if !errors.Is(err, ErrBusy) {
@@ -189,7 +192,7 @@ func TestReadersNeverWaitForTheWriterNorSeeAHalfTransaction(t *testing.T) {
 				default:
 				}
 				var n int
-				err := s.Read(ctx, func(tx Tx) error {
+				err := s.Read(ctx, func(tx txn) error {
 					return tx.QueryRow("SELECT COUNT(*) FROM rows").Scan(&n)
 				})
 				switch {
@@ -210,7 +213,7 @@ func TestReadersNeverWaitForTheWriterNorSeeAHalfTransaction(t *testing.T) {
 	}
 	start := time.Now()
 	for i := range commits {
-		err := s.Write(ctx, func(tx Tx) error {
+		err := s.Write(ctx, func(tx txn) error {
 			_, err := tx.Exec("INSERT INTO rows(n) VALUES (?), (?)", i, i)
 			return err
 		})
@@ -236,7 +239,7 @@ func TestWritesDuringCheckpointsKeepEveryCommit(t *testing.T) {
 	const commits = 300
 	ctx := deadline(t, 60*time.Second)
 	// A second connection checkpoints all the time: the access pattern of the WAL-reset race.
-	other := sql.OpenDB(connector{dsn(path, defaults.busyTimeout)})
+	other := sql.OpenDB(connector{dsn(path, defaults.busyTimeout, foreignKeysOn)})
 	defer other.Close()
 	stop, stopped := make(chan struct{}), make(chan int)
 	go func() {
@@ -254,7 +257,7 @@ func TestWritesDuringCheckpointsKeepEveryCommit(t *testing.T) {
 		}
 	}()
 	for i := range commits {
-		err := s.Write(ctx, func(tx Tx) error {
+		err := s.Write(ctx, func(tx txn) error {
 			_, err := tx.Exec("INSERT INTO rows(n) VALUES (?)", i)
 			return err
 		})
@@ -283,7 +286,7 @@ func TestWritesDuringCheckpointsKeepEveryCommit(t *testing.T) {
 func TestANewDatabaseInAReadOnlyFolderIsRefusedAndCreatesNothing(t *testing.T) {
 	dir := t.TempDir()
 	readOnly(t, dir)
-	_, err := Open(deadline(t, 5*time.Second), filepath.Join(dir, "library.sqlite"))
+	_, err := openRows(deadline(t, 5*time.Second), filepath.Join(dir, "library.sqlite"))
 	if !errors.Is(err, ErrCannotOpen) {
 		t.Fatalf("Open in a read-only folder = %v, want ErrCannotOpen", err)
 	}
@@ -302,7 +305,7 @@ func TestAnExistingDatabaseInAReadOnlyFolderIsNotReset(t *testing.T) {
 	readOnly(t, filepath.Dir(path))
 	// WAL needs the -wal and -shm files next to the database; SQLite refuses the folder up front
 	// (SQLITE_READONLY_DIRECTORY) instead of failing a later write.
-	_, err := Open(deadline(t, 5*time.Second), path)
+	_, err := openRows(deadline(t, 5*time.Second), path)
 	if !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("Open = %v, want ErrReadOnly", err)
 	}
@@ -327,16 +330,18 @@ func TestAReadOnlyWALFileOpensAndRefusesTheWrite(t *testing.T) {
 	if n := count(t, again); n != 1 {
 		t.Fatalf("%d rows, want 1", n)
 	}
-	err := again.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := again.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		_, err := tx.Exec("INSERT INTO rows(n) VALUES (2)")
 		return err
 	})
 	if !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("Write to a read-only file = %v, want ErrReadOnly", err)
 	}
-	// Nothing was written, so the closing checkpoint has nothing to copy.
-	if err := again.Close(); err != nil {
-		t.Fatalf("Close of a read-only file = %v", err)
+	// Nothing was written, so the closing checkpoint has nothing to copy, but it cannot run: the
+	// connection that opened the file created the WAL index with the file's mode, so the writer may
+	// only read it.
+	if err := again.Close(); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("Close of a read-only file = %v, want ErrReadOnly", err)
 	}
 	if identify(t, path) != before {
 		t.Fatal("the database file changed")
@@ -345,20 +350,16 @@ func TestAReadOnlyWALFileOpensAndRefusesTheWrite(t *testing.T) {
 
 func TestAReadOnlyFileThatIsNotWALIsRefused(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "library.sqlite")
-	db := sql.OpenDB(connector{dsn(path, defaults.busyTimeout)})
-	if _, err := db.Exec("CREATE TABLE rows(n)"); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	// Our own database at its current version, in the rollback journal it would have been left in by
+	// a copy or a restore.
+	foreignDB(t, path, fmt.Sprintf("PRAGMA application_id = %d", rowsSchema.applicationID), "PRAGMA user_version = 1", rowsSchema.migrations[0])
 	before := identify(t, path)
 	if err := os.Chmod(path, 0o444); err != nil {
 		t.Fatal(err)
 	}
 	// Switching a read-only file to WAL cannot be written; Open must say so instead of running in
 	// another journal mode with other guarantees.
-	_, err := Open(deadline(t, 5*time.Second), path)
+	_, err := openRows(deadline(t, 5*time.Second), path)
 	if !errors.Is(err, ErrReadOnly) {
 		t.Fatalf("Open = %v, want ErrReadOnly", err)
 	}
@@ -374,7 +375,7 @@ func TestAFileThatIsNotADatabaseIsRefusedAndKept(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := identify(t, path)
-	_, err := Open(deadline(t, 5*time.Second), path)
+	_, err := openRows(deadline(t, 5*time.Second), path)
 	if !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("Open = %v, want ErrCorrupt", err)
 	}
@@ -406,7 +407,7 @@ func TestADamagedPageIsReportedAsCorrupt(t *testing.T) {
 		t.Fatal(err)
 	}
 	again := openStore(t, path)
-	err = again.Read(deadline(t, 5*time.Second), func(tx Tx) error {
+	err = again.Read(deadline(t, 5*time.Second), func(tx txn) error {
 		var sum int
 		return tx.QueryRow("SELECT SUM(LENGTH(data)) FROM rows").Scan(&sum)
 	})
@@ -422,7 +423,6 @@ func TestAPathWithSpecialCharactersIsTheFileOpened(t *testing.T) {
 	}
 	path := filepath.Join(dir, "library.sqlite")
 	s := openStore(t, path)
-	must(t, s, "CREATE TABLE rows(id INTEGER PRIMARY KEY)")
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -432,15 +432,15 @@ func TestAPathWithSpecialCharactersIsTheFileOpened(t *testing.T) {
 }
 
 func TestARelativePathIsRefused(t *testing.T) {
-	if _, err := Open(context.Background(), "library.sqlite"); err == nil || !strings.Contains(err.Error(), "absolute") {
-		t.Fatalf("Open(relative) = %v, want an error naming an absolute path", err)
+	if _, err := openRows(context.Background(), "library.sqlite"); err == nil || !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("openRows(relative) = %v, want an error naming an absolute path", err)
 	}
 }
 
 func TestAFunctionsOwnErrorRollsBackAndIsReturnedUnchanged(t *testing.T) {
 	s, _ := withTable(t)
 	own := errors.New("the caller's own reason")
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		if _, err := tx.Exec("INSERT INTO rows(n) VALUES (1)"); err != nil {
 			return err
 		}
@@ -454,6 +454,32 @@ func TestAFunctionsOwnErrorRollsBackAndIsReturnedUnchanged(t *testing.T) {
 	}
 }
 
+// A function that panics rolls its transaction back before the panic goes on: a caller that
+// recovers it (the ledger, task 028) is not left with a writer held until the context ends.
+func TestAPanickingFunctionRollsBackAndFreesTheWriter(t *testing.T) {
+	s, _ := withTable(t)
+	// Ends only when the test does: until then nothing but the rollback frees the writer.
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	func() {
+		defer func() {
+			if p := recover(); p != "the caller's bug" {
+				t.Fatalf("recovered %v, want the function's own panic", p)
+			}
+		}()
+		_ = s.Write(ctx, func(tx txn) error {
+			if _, err := tx.Exec("INSERT INTO rows(n) VALUES (1)"); err != nil {
+				return err
+			}
+			panic("the caller's bug")
+		})
+	}()
+	must(t, s, "INSERT INTO rows(n) VALUES (2)")
+	if n := count(t, s); n != 1 {
+		t.Fatalf("%d rows stored, want 1 (the panicking change rolled back)", n)
+	}
+}
+
 func TestClosingTwiceAndUsingAClosedStore(t *testing.T) {
 	s, _ := withTable(t)
 	if err := s.Close(); err != nil {
@@ -462,10 +488,10 @@ func TestClosingTwiceAndUsingAClosedStore(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatalf("a second Close = %v", err)
 	}
-	if err := s.Write(context.Background(), func(Tx) error { return nil }); err == nil {
+	if err := s.Write(context.Background(), func(txn) error { return nil }); err == nil {
 		t.Error("Write after Close succeeded")
 	}
-	if err := s.Read(context.Background(), func(Tx) error { return nil }); err == nil {
+	if err := s.Read(context.Background(), func(txn) error { return nil }); err == nil {
 		t.Error("Read after Close succeeded")
 	}
 }
@@ -477,7 +503,7 @@ func TestCloseReportsACheckpointBlockedByAnotherReader(t *testing.T) {
 	held, release := make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- other.Read(context.Background(), func(tx Tx) error {
+		done <- other.Read(context.Background(), func(tx txn) error {
 			var n int
 			if err := tx.QueryRow("SELECT COUNT(*) FROM rows").Scan(&n); err != nil {
 				return err
@@ -510,7 +536,7 @@ func TestAJournalModeOtherThanWALIsRefused(t *testing.T) {
 	// Only reads the mode: a new database answers "delete", as SQLite does when it keeps a mode.
 	set := defaults
 	set.walPragma = "PRAGMA journal_mode"
-	_, err := open(deadline(t, 5*time.Second), filepath.Join(t.TempDir(), "library.sqlite"), set)
+	_, err := open(deadline(t, 5*time.Second), filepath.Join(t.TempDir(), "library.sqlite"), set, rowsSchema)
 	if err == nil || !strings.Contains(err.Error(), `kept journal_mode "delete"`) {
 		t.Fatalf("Open = %v, want the kept mode named", err)
 	}
@@ -520,7 +546,7 @@ func TestQueryReadsEveryRowUnderTheOperationsContext(t *testing.T) {
 	s, _ := withTable(t)
 	must(t, s, "INSERT INTO rows(n) VALUES (1), (2), (3)")
 	var got []int
-	err := s.Read(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Read(deadline(t, 5*time.Second), func(tx txn) error {
 		rows, err := tx.Query("SELECT n FROM rows ORDER BY n")
 		if err != nil {
 			return err

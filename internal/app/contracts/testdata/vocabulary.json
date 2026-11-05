@@ -7,6 +7,6 @@
   "removeModes": ["recordOnly", "withFiles"],
   "operationKinds": ["pauseTorrents", "resumeTorrents", "setFilesWanted", "confirmImport", "removeTorrents", "updateSettings"],
   "operationStates": ["accepted", "running", "succeeded", "failed", "cancelled"],
-  "goErrorCodes": ["request.invalid", "operation.idConflict", "operation.notFound", "operation.cancelled", "internal.unexpected"],
+  "goErrorCodes": ["request.invalid", "operation.idConflict", "operation.notFound", "operation.cancelled", "internal.unexpected", "torrent.notFound", "torrent.duplicate", "library.busy", "library.diskFull", "library.readOnly", "library.unavailable", "library.damaged", "library.outcomeUnknown", "library.newerVersion", "library.notALibrary", "library.migrationFailed"],
   "bridgeErrorCodes": ["bridge.callFailed", "contract.invalidDto"]
 }

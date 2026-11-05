@@ -3,6 +3,7 @@ package devtool
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"slices"
 	"strings"
@@ -19,14 +20,18 @@ type System interface {
 	Run(name string, args ...string) error
 	// Output starts a program and returns its standard output.
 	Output(name string, args ...string) (string, error)
-	// Exec replaces the current process with the program at path; it returns only on failure.
-	Exec(path string, argv []string) error
+	// Exec replaces the current process with the program at path, its environment the caller's with
+	// each NAME=value of env set over it; it returns only on failure.
+	Exec(path string, argv []string, env ...string) error
 	// Capture starts a program and returns its standard output and error combined.
 	Capture(name string, args ...string) (string, error)
 	RemoveAll(path string) error
 	MkdirAll(path string) error
 	// ReadDir returns the names of the entries in a directory.
 	ReadDir(path string) ([]string, error)
+	// Lstat describes a path without following a symlink.
+	Lstat(path string) (fs.FileInfo, error)
+	UserHomeDir() (string, error)
 	Sleep(d time.Duration)
 	// Get downloads a URL; a status other than 200 is an error.
 	Get(url string) ([]byte, error)

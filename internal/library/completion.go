@@ -2,17 +2,16 @@ package library
 
 import (
 	"context"
-	"errors"
+	_ "embed" // the migrations are embedded
 	"fmt"
 )
 
-// ErrUnsupportedVersion reports a database that is not a piece-completion store of this version:
-// a newer one, or one that holds other tables. It is never ErrCorrupt, so a caller that rebuilds
-// a damaged store cannot destroy a library written by a newer application.
-var ErrUnsupportedVersion = errors.New("the database is not a piece-completion store of a version this application reads")
+//go:embed migrations/completion/0001_piece_completion.sql
+var completionV1 string
 
-// completionVersion is the PRAGMA user_version of a piece-completion store.
-const completionVersion = 1
+// completionSchema is the piece-completion store's: application_id "OTPC", one migration per file of
+// migrations/completion, in order.
+var completionSchema = schema{name: "piece-completion", applicationID: 0x4F545043, migrations: []string{completionV1}}
 
 // Mark is the verified state of one piece of one torrent: complete means its hash matched.
 type Mark struct {
@@ -23,43 +22,20 @@ type Mark struct {
 
 // CompletionStore keeps the engine's per-piece completion marks in its own database file, apart
 // from the library. Marks are advisory: they never decide on their own that data is correct (task
-// 009). The schema precedes the migration policy of task 014.
+// 009). Its schema follows the migration policy of task 014.
 type CompletionStore struct {
-	store *Store
+	store *store
 }
 
-// OpenCompletion opens, or creates, the store at an absolute path with the settings of Open. A file
-// that is a database of another version or purpose is refused, unchanged.
+// OpenCompletion opens, creates or migrates the store at an absolute, clean path. A file that is not
+// a piece-completion store, or one of a newer version, is refused unchanged (ErrUnknownSchema,
+// ErrUnsupportedVersion).
 func OpenCompletion(ctx context.Context, path string) (*CompletionStore, error) {
-	s, err := Open(ctx, path)
+	s, err := open(ctx, path, defaults, completionSchema)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.Write(ctx, ensureCompletionSchema); err != nil {
-		return nil, errors.Join(err, s.Close())
-	}
 	return &CompletionStore{s}, nil
-}
-
-func ensureCompletionSchema(tx Tx) error {
-	var version, tables, ours int
-	err := tx.QueryRow(`SELECT (SELECT user_version FROM pragma_user_version),
-		(SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'),
-		(SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'piece_completion')`).Scan(&version, &tables, &ours)
-	empty := version == 0 && tables == 0
-	if err == nil && empty {
-		_, err = tx.Exec(fmt.Sprintf(`CREATE TABLE piece_completion(
-			infohash BLOB NOT NULL, piece INTEGER NOT NULL, complete INTEGER NOT NULL,
-			PRIMARY KEY(infohash, piece)) WITHOUT ROWID;
-			PRAGMA user_version = %d`, completionVersion))
-	}
-	if err != nil {
-		return err
-	}
-	if empty || version == completionVersion && tables == 1 && ours == 1 {
-		return nil
-	}
-	return fmt.Errorf("%w: user_version %d, %d tables", ErrUnsupportedVersion, version, tables)
 }
 
 // SaveMarks writes the marks in one transaction: all of them are kept or none. A later mark of the
@@ -73,7 +49,7 @@ func (c *CompletionStore) SaveMarks(ctx context.Context, marks []Mark) error {
 	if len(marks) == 0 {
 		return classify(ctx.Err())
 	}
-	return c.store.Write(ctx, func(tx Tx) error {
+	return c.store.Write(ctx, func(tx txn) error {
 		for _, m := range marks {
 			if _, err := tx.Exec(`INSERT INTO piece_completion(infohash, piece, complete) VALUES (?, ?, ?)
 				ON CONFLICT(infohash, piece) DO UPDATE SET complete = excluded.complete`,
@@ -88,7 +64,7 @@ func (c *CompletionStore) SaveMarks(ctx context.Context, marks []Mark) error {
 // LoadMarks returns every saved mark of the torrent. A piece with no mark is absent from the map.
 func (c *CompletionStore) LoadMarks(ctx context.Context, infoHash [20]byte) (map[int]bool, error) {
 	marks := map[int]bool{}
-	err := c.store.Read(ctx, func(tx Tx) error {
+	err := c.store.Read(ctx, func(tx txn) error {
 		rows, err := tx.Query("SELECT piece, complete FROM piece_completion WHERE infohash = ?", infoHash[:])
 		if err != nil {
 			return err
@@ -110,7 +86,7 @@ func (c *CompletionStore) LoadMarks(ctx context.Context, infoHash [20]byte) (map
 	return marks, nil
 }
 
-// Close checkpoints and closes the store; its error is the Store's.
+// Close checkpoints and closes the store; its error is the store's.
 func (c *CompletionStore) Close() error {
 	return c.store.Close()
 }

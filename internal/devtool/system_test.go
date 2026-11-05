@@ -51,9 +51,48 @@ func TestOSSystemOutputCapturesStdout(t *testing.T) {
 // Replacing the test process is proven by the cmd/devtool binary test; here only the failure path
 // can run in-process.
 func TestOSSystemExecFailsForAMissingProgram(t *testing.T) {
-	err := OSSystem{}.Exec(filepath.Join(t.TempDir(), "missing"), []string{"missing"})
+	err := OSSystem{}.Exec(filepath.Join(t.TempDir(), "missing"), []string{"missing"}, "OCTOPUS_DATA_DIR=/x")
 	if err == nil || !strings.Contains(err.Error(), "no such file") {
 		t.Errorf("Exec(missing) = %v, want a no-such-file error", err)
+	}
+}
+
+// A process environment keeps the first of two equal names, so an inherited variable must be
+// replaced, not followed by the new value.
+func TestMergeEnvReplacesAnInheritedVariable(t *testing.T) {
+	got := mergeEnv([]string{"HOME=/Users/me", "OCTOPUS_DATA_DIR=/Users/me/real", "PATH=/bin", "NOEQUALS"},
+		[]string{"OCTOPUS_DATA_DIR=/work/tree/build/workspace-data", "EXTRA=1"})
+	want := []string{"HOME=/Users/me", "PATH=/bin", "NOEQUALS", "OCTOPUS_DATA_DIR=/work/tree/build/workspace-data", "EXTRA=1"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("mergeEnv = %q, want %q", got, want)
+	}
+	if got := mergeEnv([]string{"A=1"}, nil); strings.Join(got, " ") != "A=1" {
+		t.Errorf("mergeEnv without extra = %q, want the base", got)
+	}
+}
+
+func TestOSSystemDescribesPathsAndTheHomeFolder(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "library.sqlite")
+	if err := os.WriteFile(path, []byte("12345"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(path, link); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := (OSSystem{}).Lstat(path); err != nil || info.Size() != 5 {
+		t.Errorf("Lstat = %v, %v; want 5 bytes", info, err)
+	}
+	if info, err := (OSSystem{}).Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("Lstat of a symlink = %v, %v; want the link itself", info, err)
+	}
+	if _, err := (OSSystem{}).Lstat(filepath.Join(dir, "missing")); !os.IsNotExist(err) {
+		t.Errorf("Lstat(missing) = %v, want not-exist", err)
+	}
+	t.Setenv("HOME", dir)
+	if home, err := (OSSystem{}).UserHomeDir(); err != nil || home != dir {
+		t.Errorf("UserHomeDir = %q, %v; want %s", home, err, dir)
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 
+	"octopustorrent/internal/datadir"
 	"octopustorrent/internal/library"
 	"octopustorrent/internal/torrentengine/testutil/swarm"
 	"octopustorrent/internal/torrentengine/transferswitch"
@@ -146,9 +147,9 @@ func mustWrite(t *testing.T, path, content string) {
 	}
 }
 
-// guardedLibrary is a stand-in for the owner's library database: a real library file with one row, in
-// the data folder. The scenarios in which something goes wrong (a crash, a refused write, a pulled
-// volume) prove that the library is still there.
+// guardedLibrary is a stand-in for the owner's library database: a real library, created by
+// OpenLibrary in the data folder. The scenarios in which something goes wrong (a crash, a refused
+// write, a pulled volume) prove that the library is still there.
 type guardedLibrary struct {
 	t      *testing.T
 	path   string
@@ -158,23 +159,12 @@ type guardedLibrary struct {
 // libraryIn creates the library database in dataDir and closes it.
 func libraryIn(t *testing.T, dataDir string) *guardedLibrary {
 	t.Helper()
-	path := filepath.Join(dataDir, "library.sqlite")
-	ctx := deadline(t, closeLimit)
-	s, err := library.Open(ctx, path)
+	path := filepath.Join(dataDir, datadir.LibraryFile)
+	lib, err := library.OpenLibrary(deadline(t, closeLimit), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = s.Write(ctx, func(tx library.Tx) error {
-		if _, err := tx.Exec("CREATE TABLE torrents(id INTEGER PRIMARY KEY, name TEXT)"); err != nil {
-			return err
-		}
-		_, err := tx.Exec("INSERT INTO torrents(name) VALUES ('kept')")
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Close(); err != nil {
+	if err := lib.Close(); err != nil {
 		t.Fatal(err)
 	}
 	g := &guardedLibrary{t: t, path: path}
@@ -199,20 +189,16 @@ func (g *guardedLibrary) unchanged() {
 	}
 }
 
-// intact requires it to be unchanged, to open, and to hold its row.
+// intact requires it to be unchanged and to open as a library.
 func (g *guardedLibrary) intact() {
 	g.t.Helper()
 	g.unchanged()
-	ctx := deadline(g.t, closeLimit)
-	s, err := library.Open(ctx, g.path)
+	lib, err := library.OpenLibrary(deadline(g.t, closeLimit), g.path)
 	if err != nil {
 		g.t.Fatalf("the library does not open: %v", err)
 	}
-	defer s.Close()
-	var name string
-	err = s.Read(ctx, func(tx library.Tx) error { return tx.QueryRow("SELECT name FROM torrents").Scan(&name) })
-	if err != nil || name != "kept" {
-		g.t.Fatalf("the library row = %q, %v", name, err)
+	if err := lib.Close(); err != nil {
+		g.t.Fatalf("the library does not close: %v", err)
 	}
 }
 

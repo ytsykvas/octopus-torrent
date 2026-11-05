@@ -30,7 +30,7 @@ silently bypasses), there was no linter, and dependency age was checked by a one
   refused, another OctopusTorrent running) is a mandatory `not_run` and fails the full gate. A tier that
   does not exist yet — real-engine integration (018), test-bridge UI tests (035) — is printed as
   `not_run (not implemented yet)` and does not block; the line disappears when the tier is built.
-- **TS coverage, independent of the tool.** Vitest 5.0.3 with `@vitest/coverage-v8` 5.0.3 (pinned,
+- **TS coverage, independent of the tool.** Vitest 5.0.5 with `@vitest/coverage-v8` 5.0.5 (pinned,
   four metrics, `perFile` thresholds 100) writes `coverage-summary.json`; the gate then derives the
   inventory from the repository listing (every `frontend/src/**/*.ts(x)` except tests, the test setup
   and `.d.ts`) and requires every file in the report with `covered == total` on lines, statements,
@@ -48,7 +48,7 @@ silently bypasses), there was no linter, and dependency age was checked by a one
   modifier such as `.concurrent`) `.skip|only|todo|skipIf|runIf|fails`, and `xit|xtest|xdescribe`; in
   Go, `//nolint` anywhere and `t.Skip` in tests.
 - **Analyzers.** Go: `gofmt -l .` must be empty, `go vet ./...`. TS: `tsc --noEmit` (strict, plus
-  `noImplicitReturns`) and Oxlint 1.86.0 with oxlint-tsgolint 7.0.2003 (`oxlint --type-aware
+  `noImplicitReturns`) and Oxlint 1.89.0 with oxlint-tsgolint 7.0.2004 (`oxlint --type-aware
   --deny-warnings`, `frontend/.oxlintrc.json`): categories correctness and suspicious are errors, perf
   is a warning that fails through `--deny-warnings`, React hooks rules are errors; the `jsx-a11y`
   plugin is on, and `typescript/ban-ts-comment`, `no-explicit-any` and `no-non-null-assertion` are
@@ -108,13 +108,15 @@ absolute path passes the gate.
   accepted. New tiers (engine integration, test-bridge UI tests, real `.app` scenarios) replace their
   `not_run` lines when their tasks build them.
 - Changing a threshold, an analyzer rule or an inventory rule is a change to this ADR.
-- **The `.app` run must not touch the owner's data.** Today `main()` only opens a window. Once startup
-  opens the library, logs and the engine ([architecture §6](../../product/APPLICATION_ARCHITECTURE.md#6-sqlite-and-restore)),
-  every `check` would open the owner's real library and resume real torrents, and would collide with
-  the single-instance lock. The first task that gives the application a data directory (014, 015 or
-  028, whichever comes first; 008 opens only an in-memory database) must make the gate launch it with
-  an isolated data directory and save folder (`open --env OCTOPUS_DATA_DIR=…`, the variable fixed by
-  [sqlite-driver](sqlite-driver.md)) and fail if the override is not honoured.
+- **The `.app` run must not touch the owner's data.** Once startup opens the library, logs and the
+  engine ([architecture §6](../../product/APPLICATION_ARCHITECTURE.md#6-sqlite-and-restore)), a `check`
+  would otherwise open the owner's real library and resume real torrents, and would collide with the
+  single-instance lock. Done by 014, which opened the library at start
+  ([library-schema-and-data-folder](library-schema-and-data-folder.md#isolation-from-the-owners-library)):
+  each `.app` run gets its own `OCTOPUS_DATA_DIR` and must leave its library there, every Wails command
+  gets an empty tool folder that must stay empty, and the last step fails if the owner's folder
+  changed. The isolated save folder is still to come with the first task that resumes torrents at
+  start (028/029).
 - **Exit 0 for `GATE INCOMPLETE`** in the partial modes is deliberate: they are the TDD loop and the
   network-free run, and the last line says the gate is incomplete. Acceptance is only `GATE PASSED`
   from the full `check`, which exits 1 on any mandatory `not_run`. A caller that needs to tell the two

@@ -94,7 +94,8 @@ real SQLite, never a fake:
   A peer of a transfer that must complete uses the product's keep-alive interval
   (`swarm.Options{KeepAliveTimeout: transferswitch.WakeInterval}`): with the engine default a fresh
   transfer stands still now and then under `-race` (findings 22 and 26, [global-upload-stop](../decisions/global-upload-stop.md)).
-- Statements run through `library.Tx`, so they honour the operation's context.
+- Statements run through the library's unexported transaction type (`txn`, task 015), so they
+  honour the operation's context.
 
 ## Commands
 

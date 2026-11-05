@@ -44,7 +44,7 @@ The decision and the alternatives are in the ADR [engine-storage](../decisions/e
 - **Side effects.** The guard and the storage write the payload files; `Completion` writes only its database;
   `Seal` syncs the written files. Nothing deletes anything.
 - **After a crash.** There is no record, so the next start verifies everything.
-- **Reused.** `library.Open` for the marks database, the 006 fixtures and swarm for every scenario, the
+- **Reused.** `library.Open` (since 014 `library.OpenCompletion`) for the marks database, the 006 fixtures and swarm for every scenario, the
   008 child-process and disk-image patterns (now `internal/testutil/volume`), the 007 completion contracts.
 - **Refactored.** The `hdiutil` helpers of `internal/library/disk_test.go` moved to `internal/testutil/volume`;
   `swarm.Main` shares its body with the new `swarm.MainClassicIO`.

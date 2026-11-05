@@ -10,9 +10,11 @@ import (
 
 const (
 	appDir     = "/work/repo/build/coverage/go-app"
+	toolEnv    = "OCTOPUS_DATA_DIR=/work/repo/build/tool-data"
+	appData    = "/work/repo/build/coverage/app-data/OctopusTorrent"
 	isRunning  = `osascript -e application id "dev.tsykvas.octopustorrent" is running`
-	appBuild   = "env -C . GOFLAGS=-cover -covermode=atomic -coverpkg=octopustorrent/... go tool wails build -s -trimpath"
-	appOpen    = "open -n --env GOCOVERDIR=" + appDir + " /work/repo/build/bin/OctopusTorrent.app"
+	appBuild   = "env -C . " + toolEnv + " GOFLAGS=-cover -covermode=atomic -coverpkg=octopustorrent/... go tool wails build -s -trimpath"
+	appOpen    = "open -n --env GOCOVERDIR=" + appDir + " --env OCTOPUS_DATA_DIR=" + appData + " /work/repo/build/bin/OctopusTorrent.app"
 	appPgrep   = "pgrep -f ^/work/repo/build/bin/OctopusTorrent\\.app/Contents/MacOS/"
 	appQuit    = `osascript -e tell application id "dev.tsykvas.octopustorrent" to quit`
 	appAlive   = "ps -p 4242"
@@ -44,7 +46,11 @@ func appRun() *fakeSystem {
 			engineSpikeQuit:    {{out: cancelled, err: exitStatus1}},
 			engineSpikeAlive:   {{err: exitStatus1}},
 		},
-		dirs: map[string][]string{appDir: {"covcounters.abc.4242.1", "covmeta.abc", "covcounters.ghi.6363.1"}},
+		dirs: map[string][]string{
+			appDir: {"covcounters.abc.4242.1", "covmeta.abc", "covcounters.ghi.6363.1"},
+			// The product opened its library in the folder it was given and closed it at quit.
+			appData: {"library.sqlite"},
+		},
 	}
 }
 
@@ -95,6 +101,14 @@ func TestAppCoverageRunReportsEveryFailure(t *testing.T) {
 		// Counters of another process (an earlier app of the run) do not count for this one.
 		"counters of another pid": {func(s *fakeSystem) { s.dirs[appDir] = []string{"covcounters.abc.4243.1"} }, statusFail, "no coverage counters"},
 		"unreadable dir":          {func(s *fakeSystem) { s.dirErr = errors.New("permission denied") }, statusFail, "no coverage counters"},
+		// The override was not honoured: the library is somewhere else, perhaps in the owner's folder.
+		"no library": {func(s *fakeSystem) { s.dirs[appData] = nil }, statusFail,
+			"OctopusTorrent: the .app left no library.sqlite in " + appData},
+		// The library was not closed last: the process ended with its WAL open.
+		"library left open": {func(s *fakeSystem) {
+			s.dirs[appData] = []string{"library.sqlite", "library.sqlite-shm", "library.sqlite-wal"}
+		},
+			statusFail, "OctopusTorrent: the library was not closed at quit: library.sqlite-shm, library.sqlite-wal"},
 	}
 	for name, c := range cases {
 		sys := appRun()
@@ -111,8 +125,8 @@ func TestAppCoverageRunReportsEveryFailure(t *testing.T) {
 
 const (
 	spikeRunning = `osascript -e application id "dev.example.spike" is running`
-	spikeBuild   = "env -C cmd/spike GOFLAGS=-cover -covermode=atomic -coverpkg=octopustorrent/... go tool wails build -s -trimpath"
-	spikeOpen    = "open -n --env GOCOVERDIR=" + appDir + " /work/repo/cmd/spike/build/bin/Spike.app"
+	spikeBuild   = "env -C cmd/spike " + toolEnv + " GOFLAGS=-cover -covermode=atomic -coverpkg=octopustorrent/... go tool wails build -s -trimpath"
+	spikeOpen    = "open -n --env GOCOVERDIR=" + appDir + " --env OCTOPUS_DATA_DIR=/work/repo/build/coverage/app-data/Spike /work/repo/cmd/spike/build/bin/Spike.app"
 	spikePgrep   = "pgrep -f ^/work/repo/cmd/spike/build/bin/Spike\\.app/Contents/MacOS/"
 	spikeQuit    = `osascript -e tell application id "dev.example.spike" to quit`
 	spikeAlive   = "ps -p 5151"
@@ -136,6 +150,7 @@ func twoApps(t *testing.T) *fakeSystem {
 func TestAppCoverageRunBuildsLaunchesAndQuitsEveryWailsApp(t *testing.T) {
 	sys := twoApps(t)
 	got := appCoverageRun(sys, "/work/repo", appDir, "octopustorrent")
+	// The spike opens no library: its data folder stays empty, and it passes.
 	if got.status != statusPass || !strings.Contains(got.detail, "OctopusTorrent (pid 4242)") || !strings.Contains(got.detail, "Spike (pid 5151)") {
 		t.Fatalf("appCoverageRun = %+v, want pass naming both apps", got)
 	}
@@ -202,7 +217,7 @@ func TestWailsAppsMatchTheCommittedProjects(t *testing.T) {
 			t.Errorf("%s: %v", a.Name, err)
 		}
 	}
-	if wailsApps[0].Dir != "." {
-		t.Error("the product must be the first Wails app")
+	if wailsApps[0].Dir != "." || !wailsApps[0].OpensLibrary {
+		t.Error("the product must be the first Wails app, and it opens the library")
 	}
 }

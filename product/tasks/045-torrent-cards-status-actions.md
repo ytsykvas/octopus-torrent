@@ -54,6 +54,8 @@ Respect the boundaries of our own DTOs, the repository and the engine adapter. A
 
 **From 005** ([api-contract](../../docs/decisions/api-contract.md)): render torrent names isolated from bidi and control characters (`<bdi>`, controls stripped).
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): the card shows `status` and `manualPaused` from the snapshot as Go computed them (`transfer.DisplayStatus`); never derive them in React. The action is "Start" when `manualPaused`, also for a torrent shown as `error` or `checking`. Do not send a second Start/Stop for a torrent while the previous call has not returned (see 035).
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, write down the change plan and the required refactoring. This also applies to continuing this task.

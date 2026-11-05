@@ -14,12 +14,14 @@ func TestAFullDiskFailsTheWriteAndKeepsWhatWasCommitted(t *testing.T) {
 	mount := smallVolume(t)
 	path := filepath.Join(mount, "library.sqlite")
 	s := tableAt(t, path, defaults)
+	// Rows of 4 KiB: the WAL holds pages past the end of the database file, which the closing
+	// checkpoint must append.
 	for i := range 20 {
-		must(t, s, "INSERT INTO rows(n) VALUES (?)", i)
+		must(t, s, "INSERT INTO rows(n, data) VALUES (?, zeroblob(4096))", i)
 	}
 	before := identify(t, path)
 	filler := volume.Fill(t, mount)
-	err := s.Write(deadline(t, 10*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 10*time.Second), func(tx txn) error {
 		_, err := tx.Exec("INSERT INTO rows(n, data) VALUES (-1, zeroblob(1048576))")
 		return err
 	})
@@ -51,7 +53,7 @@ func TestAFullDiskFailsTheWriteAndKeepsWhatWasCommitted(t *testing.T) {
 func TestAPageLimitFailsTheWriteLikeAFullDisk(t *testing.T) {
 	s, _ := withTable(t)
 	must(t, s, "INSERT INTO rows(n) VALUES (1)")
-	err := s.Write(deadline(t, 5*time.Second), func(tx Tx) error {
+	err := s.Write(deadline(t, 5*time.Second), func(tx txn) error {
 		if _, err := tx.Exec("PRAGMA max_page_count = 8"); err != nil {
 			return err
 		}

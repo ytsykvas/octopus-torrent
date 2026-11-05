@@ -68,7 +68,9 @@ func (a *App) GetOperation(operationID string) (contracts.OperationStatus, error
 // ErrorFormatter returns the Wails error formatter. The Wails JavaScript runtime rejects a call
 // with new Error(formatted), which keeps only text, so the AppError crosses as its JSON text and the
 // bridge parses Error.message. An error without a code of its own becomes internal.unexpected; its
-// cause is written to diagnostics (stderr until local diagnostics, task 017) and never to the UI.
+// cause is written to diagnostics (stderr until local diagnostics, task 017) and never to the UI. A
+// coded error's own cause (AppError.WithCause, a library error's) is written nowhere: it can carry
+// full local paths, which only task 017's redacting log may write (DATA-03).
 func ErrorFormatter(diagnostics io.Writer) func(error) any {
 	return func(err error) any {
 		var problem *contracts.AppError

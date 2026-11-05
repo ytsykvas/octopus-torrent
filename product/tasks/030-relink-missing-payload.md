@@ -57,6 +57,8 @@ Locating and rechecking existing data is agreed. Do not add arbitrary moving of 
 
 **From 009** ([engine-storage](../../docs/decisions/engine-storage.md)): your input is `Decision.Missing` from `files.Decide`. After the owner picks a location, the files there are not trusted: run `Decide` without a record (everything is verified) and let the engine hash. A volume that was only replugged (another device number) is not missing: it is verified in full.
 
+**From 013** ([transfer-status-model](../../docs/decisions/transfer-status-model.md), [feature](../../docs/app/transfer-policy.md)): relinking is `PhaseRelinking` (nothing transfers; the status `relinking` outranks the fault), then `PhaseChecking` for the new location, then `PhaseReady`; clear `PayloadFault` only after the check. A cancelled relink returns to `PhaseReady` with the fault kept (`error`). The check of the new location runs outside every step (steps are short); only the phase changes are steps.
+
 ## Mandatory TDD cycle and architecture review
 
 At the start of every session, follow the [agent rules](../../AGENTS.md): read the current architecture and feature documentation, find code to reuse, record the plan for the change and the required refactoring. This also applies when continuing this task.
